@@ -14,6 +14,7 @@ gen-*.go
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 coverage.txt
+coverage.html
 
 # Test report for sonar.
 report.json
@@ -42,3 +43,9 @@ bin
 
 # A file name used for the compiled binary when testing during development.
 celerity-provider-aws
+
+# Yarn depedencies and generated node files used for commitlint tooling.
+.yarn
+node_modules
+*.cjs
+*.mjs
