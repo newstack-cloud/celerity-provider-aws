@@ -22,7 +22,7 @@ import (
 	"github.com/two-hundred/celerity/libs/blueprint/provider"
 )
 
-// AWSConfigLoader defines the interface for loading AWS configurations
+// AWSConfigLoader defines the interface for loading AWS configurations.
 type AWSConfigLoader interface {
 	LoadDefaultConfig(
 		ctx context.Context,
@@ -30,7 +30,7 @@ type AWSConfigLoader interface {
 	) (aws.Config, error)
 }
 
-// DefaultAWSConfigLoader implements AWSConfigLoader using the AWS SDK
+// DefaultAWSConfigLoader implements AWSConfigLoader using the AWS SDK.
 type DefaultAWSConfigLoader struct{}
 
 func (l *DefaultAWSConfigLoader) LoadDefaultConfig(

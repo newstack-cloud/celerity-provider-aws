@@ -316,7 +316,7 @@ func functionCodeConfigToMappingNode(
 	// For code source fields for a `Zip` package type, the source config is
 	// not available in the FunctionCodeLocation
 	// in the response when fetching the function, a pre-signed URL is returned instead.
-	// When retrieving external state for resources, if fields in the spec are not avialable
+	// When retrieving external state for resources, if fields in the spec are not available
 	// in the upstream provider response, they will be set to the value in the input spec.
 	if s3Bucket, hasBucket := inputSpecCode.Fields["s3Bucket"]; hasBucket {
 		fields["s3Bucket"] = s3Bucket

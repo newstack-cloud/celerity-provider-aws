@@ -43,7 +43,10 @@ func (s *AWSConfigTestSuite) TestAWSConfigFromProviderContext() {
 				) (aws.Config, error) {
 					cfg := aws.Config{}
 					for _, opt := range optFns {
-						opt(&config.LoadOptions{})
+						err := opt(&config.LoadOptions{})
+						if err != nil {
+							return aws.Config{}, err
+						}
 					}
 					return cfg, nil
 				},

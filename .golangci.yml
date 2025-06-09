@@ -9,7 +9,11 @@ linters:
   enable:
     - forcetypeassert
     - godot
-    - gofmt
     - misspell
     - staticcheck
     - govet
+
+formatters:
+  enable:
+    - gofmt
+
