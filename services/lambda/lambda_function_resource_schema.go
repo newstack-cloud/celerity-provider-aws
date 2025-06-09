@@ -408,6 +408,7 @@ func lambdaFunctionResourceSchema() *provider.ResourceDefinitionsSchema {
 						Type:        provider.ResourceDefinitionsSchemaTypeString,
 						Description: "The ARN of the runtime version you want the function to use.",
 						FormattedDescription: "The ARN of the runtime version you want the function to use.\n\n" +
+							"> [!NOTE]\n" +
 							"> This is only required if you're using the **Manual** runtime update mode.",
 						Pattern:   "^arn:(aws[a-zA-Z-]*):lambda:[a-z]{2}((-gov)|(-iso(b?)))?-[a-z]+-\\d{1}::runtime:.+$",
 						MinLength: 26,
