@@ -1,0 +1,19 @@
+# Celerity Plugin release please PR workflow.
+name: Prepare Release (with release-please)
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/release-please-action@v1
+        with:
+          release-type: go

@@ -30,7 +30,9 @@ jobs:
           go install github.com/two-hundred/celerity/tools/plugin-docgen/cmd/celerity-plugin-docgen@latest
       - name: Build Provider for Docgen
         run: |
-          go build -o /tmp/celerity/plugins/providers/two-hundred/aws/1.0.0/plugin main.go
+          VERSION=$(grep -o 'PluginVersion: *"[^"]*"' main.go | sed 's/PluginVersion: *"\(.*\)"/\1/')
+          mkdir -p /tmp/celerity/plugins/providers/two-hundred/aws/$VERSION
+          go build -o /tmp/celerity/plugins/providers/two-hundred/aws/$VERSION/plugin main.go
       - name: Generate Plugin JSON Docs
         run: |
           celerity-plugin-docgen -plugin=two-hundred/aws

@@ -14,13 +14,22 @@ Tags used for releases need to be in the following format:
 ```
 MAJOR.MINOR.PATCH(-PRE_RELEASE_SUFFIX)?
 
-e.g. 0.1.0, 0.1.0-alpha.1, 0.1.0-beta.1, 0.1.0-rc.1
+e.g. 0.1.0, 1.0.0-next.1
 ```
 
 ## Release workflow
 
-1. Ensure all relevant changes have been merged (rebased) into the trunk (main).
-2. Create a new release branch for `release/MAJOR.MINOR.PATCH(-PRE_RELEASE_SUFFIX)?` (e.g. `release/0.1.1`) with the approximate next version. (This branch is short-lived so it is not crucial to get the version 100% correct)
-3. Push the release branch and this will trigger a GitHub actions workflow that will determine the actual version from commits and update the change log for the target application or library.
-4. The automated workflow from step 3 will create a PR that generates a preliminary set of release notes. Review and edit the release notes accordingly and then rebase the PR into main. (These release notes will be used in a further automated release publishing step)
-5. Rebasing the PR into main will trigger the process of creating the tag and release in GitHub along with building and publishing artifacts for the provider.
+1. Ensure all relevant changes have been merged (rebased) into the trunk (main). The release-please GitHub actions workflow will maintain a release PR that will be updated with the latest changes based on the conventional commit messages.
+2. Ensure the version in `main.go` is updated to the next version number indicated in the release PR.
+3. Review the release notes and change log changes in the release PR, update the release notes as necessary.
+4. Once the release notes are ready, merge the release PR into main.
+5. The release-please GitHub actions workflow will create a release tag and a draft release. The creation of the tag will trigger the release publishing workflow.
+6. The release publishing workflow will build all the artifacts for the provider, generate a `docs.json` file for the plugin (to be consumed by the Celerity Registry) and publish the release or pre-release in GitHub.
+
+## Pre-releases
+
+When you want to create a pre-release, you should set `prerelease` to `true` in the release-please-config.json file.
+
+This will cause the release-please GitHub actions workflow to create a pre-release version of the provider using the `-next.N` suffix.
+
+Once the current pre-release version of the package is deemed stable, you should remove `prerelease` from the release-please-config.json file.

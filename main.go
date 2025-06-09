@@ -44,7 +44,7 @@ func main() {
 	config := plugin.ServePluginConfiguration{
 		ID: "two-hundred/aws",
 		PluginMetadata: &pluginservicev1.PluginMetadata{
-			PluginVersion:        "1.0.0",
+			PluginVersion:        "0.1.0",
 			DisplayName:          "AWS",
 			FormattedDescription: string(providerDescription),
 			RepositoryUrl:        "https://github.com/two-hundred/celerity-provider-aws",
