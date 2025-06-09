@@ -1,4 +1,4 @@
-# Celerity Plugin release please PR workflow.
+# Celerity Provider for AWS release please PR workflow.
 name: Prepare Release (with release-please)
 
 on:
