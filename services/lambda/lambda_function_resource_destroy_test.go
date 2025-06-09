@@ -46,7 +46,9 @@ func (s *LambdaFunctionResourceDestroySuite) Test_destroy() {
 				ResourceState: &state.ResourceState{
 					SpecData: &core.MappingNode{
 						Fields: map[string]*core.MappingNode{
-							"arn": core.MappingNodeFromString("arn:aws:lambda:us-east-1:123456789012:function:test-function"),
+							"arn": core.MappingNodeFromString(
+								"arn:aws:lambda:us-east-1:123456789012:function:test-function",
+							),
 						},
 					},
 				},
@@ -68,7 +70,9 @@ func (s *LambdaFunctionResourceDestroySuite) Test_destroy() {
 				ResourceState: &state.ResourceState{
 					SpecData: &core.MappingNode{
 						Fields: map[string]*core.MappingNode{
-							"arn": core.MappingNodeFromString("arn:aws:lambda:us-east-1:123456789012:function:test-function"),
+							"arn": core.MappingNodeFromString(
+								"arn:aws:lambda:us-east-1:123456789012:function:test-function",
+							),
 						},
 					},
 				},
