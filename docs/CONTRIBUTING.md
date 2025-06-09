@@ -25,9 +25,9 @@ If you want to install dependencies manually you can run:
 go mod download
 ```
 
-### NPM dependencies
+### Node dependencies
 
-There are npm dependencies that provide tools that are used in git hooks and scripting for the provider.
+There are node.js dependencies that provide tools that are used in git hooks and scripting for the provider.
 
 Install dependencies from the root directory by simply running:
 ```bash

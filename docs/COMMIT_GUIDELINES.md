@@ -13,7 +13,7 @@ a base for more advanced tooling to allow for efficient searches for decisions a
 **The following commit types are supported in the Celerity Provider for AWS:**
 
 - `fix:` - Should be used for any bug fixes.
-- `build:` - Should be used for functionality related to building an application.
+- `build:` - Should be used for functionality related to building the application.
 - `revert:` - Should be used for any commits that revert changes.
 - `wip:` - Should be used for commits that contain work in progress.
 - `feat:` - Should be used for any new features added, regardless of the size of the feature.
@@ -25,6 +25,8 @@ a base for more advanced tooling to allow for efficient searches for decisions a
 - `perf:` - Should be used for a commit that represents performance improvements.
 - `test:` - Should be used for commits that are purely for automated tests.
 - `instr:` - Should be used for commit that are for instrumentation purposes. (e.g. logs, trace spans and telemetry configuration)
+
+**`fix` and `feat` commit types must be used for changes that will impact the next release version.**
 
 ### Commit footers
 
