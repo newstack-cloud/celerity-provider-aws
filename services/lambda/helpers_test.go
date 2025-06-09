@@ -35,7 +35,7 @@ func createLambdaServiceMockFactory(
 	}
 }
 
-// Mock configuration options
+// Mock configuration options.
 func WithGetFunctionOutput(output *lambda.GetFunctionOutput) lambdaServiceMockOption {
 	return func(m *lambdaServiceMock) {
 		m.getFunctionOutput = output
