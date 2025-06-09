@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/stretchr/testify/suite"
+	"github.com/two-hundred/celerity-provider-aws/internal/testutils"
 	"github.com/two-hundred/celerity/libs/blueprint/core"
 	"github.com/two-hundred/celerity/libs/blueprint/provider"
 	"github.com/two-hundred/celerity/libs/plugin-framework/sdk/pluginutils"
@@ -59,8 +60,8 @@ func (s *AWSConfigStoreTestSuite) Test_from_provider_context() {
 	}
 	sessionID := "test-session-1"
 
-	store := NewAWSConfigStore(env, s.mockConfigCreator, &MockAWSConfigLoader{})
-	providerContext := newTestProviderContext("aws", providerConfig, nil)
+	store := NewAWSConfigStore(env, s.mockConfigCreator, &testutils.MockAWSConfigLoader{})
+	providerContext := testutils.NewTestProviderContext("aws", providerConfig, nil)
 
 	// Create a context with the session ID
 	ctx := context.WithValue(context.Background(), pluginutils.ContextSessionIDKey, sessionID)
@@ -89,8 +90,8 @@ func (s *AWSConfigStoreTestSuite) Test_from_provider_context() {
 }
 
 func (s *AWSConfigStoreTestSuite) Test_from_provider_context_no_session_id() {
-	store := NewAWSConfigStore([]string{}, s.mockConfigCreator, &MockAWSConfigLoader{})
-	providerContext := newTestProviderContext(
+	store := NewAWSConfigStore([]string{}, s.mockConfigCreator, &testutils.MockAWSConfigLoader{})
+	providerContext := testutils.NewTestProviderContext(
 		"aws",
 		map[string]*core.ScalarValue{
 			"region": core.ScalarFromString("us-west-2"),
@@ -108,20 +109,6 @@ func (s *AWSConfigStoreTestSuite) Test_from_provider_context_no_session_id() {
 	s.NoError(err)
 	s.NotNil(cfg2)
 	s.NotEqual(cfg, cfg2, "Configs without session ID should not be cached")
-}
-
-// newTestProviderContext creates a provider.Context for tests using the correct constructors.
-func newTestProviderContext(
-	providerName string,
-	providerConfig map[string]*core.ScalarValue,
-	contextVariables map[string]*core.ScalarValue,
-) provider.Context {
-	providerConfigMap := map[string]map[string]*core.ScalarValue{
-		providerName: providerConfig,
-	}
-	params := core.NewDefaultParams(providerConfigMap, nil, contextVariables, nil)
-	ctx := provider.NewProviderContextFromParams("aws", params)
-	return ctx
 }
 
 func TestAWSConfigStoreSuite(t *testing.T) {

@@ -2,6 +2,7 @@ package lambda
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -10,6 +11,17 @@ import (
 	"github.com/two-hundred/celerity/libs/blueprint/core"
 	"github.com/two-hundred/celerity/libs/blueprint/provider"
 )
+
+type optionalConfiguration struct {
+	condition func() bool
+	field     string
+	value     func() *core.MappingNode
+}
+
+type additionalConfiguration struct {
+	name string
+	fn   func(context.Context, string, map[string]*core.MappingNode, Service) error
+}
 
 func (l *lambdaFunctionResourceActions) GetExternalState(
 	ctx context.Context,
@@ -34,180 +46,239 @@ func (l *lambdaFunctionResourceActions) GetExternalState(
 		return nil, err
 	}
 
-	resourceSpecState := &core.MappingNode{
+	resourceSpecState := l.buildBaseResourceSpecState(
+		functionOutput,
+		input.CurrentResourceSpec.Fields["code"],
+	)
+
+	err = l.addOptionalConfigurationsToSpec(
+		functionOutput,
+		resourceSpecState.Fields,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	err = l.addAdditionalConfigurationsToSpec(
+		ctx,
+		functionARN,
+		resourceSpecState.Fields,
+		lambdaService,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	l.addComputedFieldsToSpec(functionOutput, resourceSpecState.Fields)
+
+	return &provider.ResourceGetExternalStateOutput{
+		ResourceSpecState: resourceSpecState,
+	}, nil
+}
+
+func (l *lambdaFunctionResourceActions) buildBaseResourceSpecState(
+	functionOutput *lambda.GetFunctionOutput,
+	inputSpecCode *core.MappingNode,
+) *core.MappingNode {
+	return &core.MappingNode{
 		Fields: map[string]*core.MappingNode{
+			"arn": core.MappingNodeFromString(
+				aws.ToString(functionOutput.Configuration.FunctionArn),
+			),
 			"architecture": core.MappingNodeFromString(
 				string(functionOutput.Configuration.Architectures[0]),
 			),
 			"code": functionCodeConfigToMappingNode(
 				functionOutput.Code,
-				input.CurrentResourceSpec.Fields["code"],
+				inputSpecCode,
 			),
 			"functionName": core.MappingNodeFromString(
 				aws.ToString(functionOutput.Configuration.FunctionName),
 			),
 		},
 	}
+}
 
-	if functionOutput.Configuration.DeadLetterConfig != nil {
-		resourceSpecState.Fields["deadLetterConfig"] = functionDeadLetterConfigToMappingNode(
-			functionOutput.Configuration.DeadLetterConfig,
-		)
+func (l *lambdaFunctionResourceActions) addOptionalConfigurationsToSpec(
+	functionOutput *lambda.GetFunctionOutput,
+	specFields map[string]*core.MappingNode,
+) error {
+	configurations := []optionalConfiguration{
+		{
+			condition: func() bool { return functionOutput.Configuration.DeadLetterConfig != nil },
+			field:     "deadLetterConfig",
+			value: func() *core.MappingNode {
+				return functionDeadLetterConfigToMappingNode(
+					functionOutput.Configuration.DeadLetterConfig,
+				)
+			},
+		},
+		{
+			condition: func() bool { return functionOutput.Configuration.Description != nil },
+			field:     "description",
+			value: func() *core.MappingNode {
+				return core.MappingNodeFromString(
+					*functionOutput.Configuration.Description,
+				)
+			},
+		},
+		{
+			condition: func() bool { return functionOutput.Configuration.Environment != nil },
+			field:     "environment",
+			value: func() *core.MappingNode {
+				return functionEnvToMappingNode(functionOutput.Configuration.Environment)
+			},
+		},
+		{
+			condition: func() bool { return functionOutput.Configuration.EphemeralStorage != nil },
+			field:     "ephemeralStorage",
+			value: func() *core.MappingNode {
+				return functionEphemeralStorageToMappingNode(functionOutput.Configuration.EphemeralStorage)
+			},
+		},
+		{
+			condition: func() bool { return functionOutput.Configuration.FileSystemConfigs != nil },
+			field:     "fileSystemConfig",
+			value: func() *core.MappingNode {
+				return functionFileSystemConfigsToMappingNode(functionOutput.Configuration.FileSystemConfigs)
+			},
+		},
+		{
+			condition: func() bool { return functionOutput.Configuration.Handler != nil },
+			field:     "handler",
+			value: func() *core.MappingNode {
+				return core.MappingNodeFromString(aws.ToString(functionOutput.Configuration.Handler))
+			},
+		},
+		{
+			condition: func() bool { return functionOutput.Configuration.ImageConfigResponse != nil },
+			field:     "imageConfig",
+			value: func() *core.MappingNode {
+				return functionImageConfigToMappingNode(functionOutput.Configuration.ImageConfigResponse)
+			},
+		},
+		{
+			condition: func() bool { return functionOutput.Configuration.KMSKeyArn != nil },
+			field:     "kmsKeyArn",
+			value: func() *core.MappingNode {
+				return core.MappingNodeFromString(aws.ToString(functionOutput.Configuration.KMSKeyArn))
+			},
+		},
+		{
+			condition: func() bool { return functionOutput.Configuration.Layers != nil },
+			field:     "layers",
+			value: func() *core.MappingNode {
+				return functionLayersToMappingNode(functionOutput.Configuration.Layers)
+			},
+		},
+		{
+			condition: func() bool { return functionOutput.Configuration.LoggingConfig != nil },
+			field:     "loggingConfig",
+			value: func() *core.MappingNode {
+				return functionLoggingConfigToMappingNode(functionOutput.Configuration.LoggingConfig)
+			},
+		},
+		{
+			condition: func() bool { return functionOutput.Configuration.MemorySize != nil },
+			field:     "memorySize",
+			value: func() *core.MappingNode {
+				return core.MappingNodeFromInt(int(aws.ToInt32(functionOutput.Configuration.MemorySize)))
+			},
+		},
+		{
+			condition: func() bool { return functionOutput.Configuration.PackageType != "" },
+			field:     "packageType",
+			value: func() *core.MappingNode {
+				return core.MappingNodeFromString(string(functionOutput.Configuration.PackageType))
+			},
+		},
+		{
+			condition: func() bool { return functionOutput.Configuration.Role != nil },
+			field:     "role",
+			value: func() *core.MappingNode {
+				return core.MappingNodeFromString(aws.ToString(functionOutput.Configuration.Role))
+			},
+		},
+		{
+			condition: func() bool { return functionOutput.Configuration.Runtime != "" },
+			field:     "runtime",
+			value: func() *core.MappingNode {
+				return core.MappingNodeFromString(string(functionOutput.Configuration.Runtime))
+			},
+		},
+		{
+			condition: func() bool { return functionOutput.Configuration.RuntimeVersionConfig != nil },
+			field:     "runtimeManagementConfig",
+			value: func() *core.MappingNode {
+				return functionRuntimeVersionConfigToMappingNode(
+					functionOutput.Configuration.RuntimeVersionConfig,
+					specFields["runtimeManagementConfig"],
+				)
+			},
+		},
+		{
+			condition: func() bool { return functionOutput.Configuration.SnapStart != nil },
+			field:     "snapStart",
+			value: func() *core.MappingNode {
+				return functionSnapStartConfigToMappingNode(functionOutput.Configuration.SnapStart)
+			},
+		},
+		{
+			condition: func() bool { return len(functionOutput.Tags) > 0 },
+			field:     "tags",
+			value:     func() *core.MappingNode { return utils.TagsToMappingNode(functionOutput.Tags) },
+		},
+		{
+			condition: func() bool { return functionOutput.Configuration.Timeout != nil },
+			field:     "timeout",
+			value: func() *core.MappingNode {
+				return core.MappingNodeFromInt(int(aws.ToInt32(functionOutput.Configuration.Timeout)))
+			},
+		},
+		{
+			condition: func() bool { return functionOutput.Configuration.TracingConfig != nil },
+			field:     "tracingConfig",
+			value: func() *core.MappingNode {
+				return functionTracingConfigToMappingNode(functionOutput.Configuration.TracingConfig)
+			},
+		},
+		{
+			condition: func() bool { return functionOutput.Configuration.VpcConfig != nil },
+			field:     "vpcConfig",
+			value: func() *core.MappingNode {
+				return functionVPCConfigToMappingNode(functionOutput.Configuration.VpcConfig)
+			},
+		},
 	}
 
-	if functionOutput.Configuration.Description != nil {
-		resourceSpecState.Fields["description"] = core.MappingNodeFromString(
-			*functionOutput.Configuration.Description,
-		)
+	for _, config := range configurations {
+		if config.condition() {
+			specFields[config.field] = config.value()
+		}
 	}
 
-	if functionOutput.Configuration.Environment != nil {
-		resourceSpecState.Fields["environment"] = functionEnvToMappingNode(
-			functionOutput.Configuration.Environment,
-		)
+	return nil
+}
+
+func (l *lambdaFunctionResourceActions) addAdditionalConfigurationsToSpec(
+	ctx context.Context,
+	functionARN string,
+	specFields map[string]*core.MappingNode,
+	lambdaService Service,
+) error {
+	configurations := []additionalConfiguration{
+		{name: "code signing config", fn: l.addCodeSigningConfigToSpec},
+		{name: "recursion config", fn: l.addRecursionConfigToSpec},
+		{name: "concurrency config", fn: l.addConcurrencyConfigToSpec},
 	}
 
-	if functionOutput.Configuration.EphemeralStorage != nil {
-		resourceSpecState.Fields["ephemeralStorage"] = functionEphemeralStorageToMappingNode(
-			functionOutput.Configuration.EphemeralStorage,
-		)
+	for _, config := range configurations {
+		if err := config.fn(ctx, functionARN, specFields, lambdaService); err != nil {
+			return fmt.Errorf("failed to add %s: %w", config.name, err)
+		}
 	}
 
-	if functionOutput.Configuration.FileSystemConfigs != nil {
-		resourceSpecState.Fields["fileSystemConfig"] = functionFileSystemConfigsToMappingNode(
-			functionOutput.Configuration.FileSystemConfigs,
-		)
-	}
-
-	if functionOutput.Configuration.Handler != nil {
-		resourceSpecState.Fields["handler"] = core.MappingNodeFromString(
-			aws.ToString(functionOutput.Configuration.Handler),
-		)
-	}
-
-	if functionOutput.Configuration.ImageConfigResponse != nil {
-		resourceSpecState.Fields["imageConfig"] = functionImageConfigToMappingNode(
-			functionOutput.Configuration.ImageConfigResponse,
-		)
-	}
-
-	if functionOutput.Configuration.KMSKeyArn != nil {
-		resourceSpecState.Fields["kmsKeyArn"] = core.MappingNodeFromString(
-			aws.ToString(functionOutput.Configuration.KMSKeyArn),
-		)
-	}
-
-	if functionOutput.Configuration.Layers != nil {
-		resourceSpecState.Fields["layers"] = functionLayersToMappingNode(
-			functionOutput.Configuration.Layers,
-		)
-	}
-
-	if functionOutput.Configuration.LoggingConfig != nil {
-		resourceSpecState.Fields["loggingConfig"] = functionLoggingConfigToMappingNode(
-			functionOutput.Configuration.LoggingConfig,
-		)
-	}
-
-	if functionOutput.Configuration.MemorySize != nil {
-		resourceSpecState.Fields["memorySize"] = core.MappingNodeFromInt(
-			int(aws.ToInt32(functionOutput.Configuration.MemorySize)),
-		)
-	}
-
-	if functionOutput.Configuration.PackageType != "" {
-		resourceSpecState.Fields["packageType"] = core.MappingNodeFromString(
-			string(functionOutput.Configuration.PackageType),
-		)
-	}
-
-	if functionOutput.Configuration.Role != nil {
-		resourceSpecState.Fields["role"] = core.MappingNodeFromString(
-			aws.ToString(functionOutput.Configuration.Role),
-		)
-	}
-
-	if functionOutput.Configuration.Runtime != "" {
-		resourceSpecState.Fields["runtime"] = core.MappingNodeFromString(
-			string(functionOutput.Configuration.Runtime),
-		)
-	}
-
-	if functionOutput.Configuration.RuntimeVersionConfig != nil {
-		resourceSpecState.Fields["runtimeManagementConfig"] = functionRuntimeVersionConfigToMappingNode(
-			functionOutput.Configuration.RuntimeVersionConfig,
-			input.CurrentResourceSpec.Fields["runtimeManagementConfig"],
-		)
-	}
-
-	if functionOutput.Configuration.SnapStart != nil {
-		resourceSpecState.Fields["snapStart"] = functionSnapStartConfigToMappingNode(
-			functionOutput.Configuration.SnapStart,
-		)
-	}
-
-	if len(functionOutput.Tags) > 0 {
-		resourceSpecState.Fields["tags"] = utils.TagsToMappingNode(
-			functionOutput.Tags,
-		)
-	}
-
-	if functionOutput.Configuration.Timeout != nil {
-		resourceSpecState.Fields["timeout"] = core.MappingNodeFromInt(
-			int(aws.ToInt32(functionOutput.Configuration.Timeout)),
-		)
-	}
-
-	if functionOutput.Configuration.TracingConfig != nil {
-		resourceSpecState.Fields["tracingConfig"] = functionTracingConfigToMappingNode(
-			functionOutput.Configuration.TracingConfig,
-		)
-	}
-
-	if functionOutput.Configuration.VpcConfig != nil {
-		resourceSpecState.Fields["vpcConfig"] = functionVPCConfigToMappingNode(
-			functionOutput.Configuration.VpcConfig,
-		)
-	}
-
-	err = l.addCodeSigningConfigToSpec(
-		ctx,
-		functionARN,
-		resourceSpecState.Fields,
-		lambdaService,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	err = l.addRecursionConfigToSpec(
-		ctx,
-		functionARN,
-		resourceSpecState.Fields,
-		lambdaService,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	err = l.addConcurrencyConfigToSpec(
-		ctx,
-		functionARN,
-		resourceSpecState.Fields,
-		lambdaService,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	l.addComputedFieldsToSpec(
-		functionOutput,
-		resourceSpecState.Fields,
-	)
-
-	return &provider.ResourceGetExternalStateOutput{
-		ResourceSpecState: resourceSpecState,
-	}, nil
+	return nil
 }
 
 func (l *lambdaFunctionResourceActions) addComputedFieldsToSpec(
@@ -219,7 +290,7 @@ func (l *lambdaFunctionResourceActions) addComputedFieldsToSpec(
 	)
 
 	if functionOutput.Configuration.SnapStart != nil {
-		specFields["snapsnapStartResponseApplyOn"] = core.MappingNodeFromString(
+		specFields["snapStartResponseApplyOn"] = core.MappingNodeFromString(
 			string(functionOutput.Configuration.SnapStart.ApplyOn),
 		)
 		specFields["snapStartResponseOptimizationStatus"] = core.MappingNodeFromString(
@@ -307,10 +378,6 @@ func functionCodeConfigToMappingNode(
 	code *types.FunctionCodeLocation,
 	inputSpecCode *core.MappingNode,
 ) *core.MappingNode {
-	if code == nil {
-		return nil
-	}
-
 	fields := map[string]*core.MappingNode{}
 
 	// For code source fields for a `Zip` package type, the source config is
@@ -318,17 +385,19 @@ func functionCodeConfigToMappingNode(
 	// in the response when fetching the function, a pre-signed URL is returned instead.
 	// When retrieving external state for resources, if fields in the spec are not available
 	// in the upstream provider response, they will be set to the value in the input spec.
-	if s3Bucket, hasBucket := inputSpecCode.Fields["s3Bucket"]; hasBucket {
-		fields["s3Bucket"] = s3Bucket
-	}
-	if s3Key, hasKey := inputSpecCode.Fields["s3Key"]; hasKey {
-		fields["s3Key"] = s3Key
-	}
-	if s3ObjectVersion, hasVersion := inputSpecCode.Fields["s3ObjectVersion"]; hasVersion {
-		fields["s3ObjectVersion"] = s3ObjectVersion
-	}
-	if zipFile, hasZipFile := inputSpecCode.Fields["zipFile"]; hasZipFile {
-		fields["zipFile"] = zipFile
+	if inputSpecCode != nil {
+		if s3Bucket, hasBucket := inputSpecCode.Fields["s3Bucket"]; hasBucket {
+			fields["s3Bucket"] = s3Bucket
+		}
+		if s3Key, hasKey := inputSpecCode.Fields["s3Key"]; hasKey {
+			fields["s3Key"] = s3Key
+		}
+		if s3ObjectVersion, hasVersion := inputSpecCode.Fields["s3ObjectVersion"]; hasVersion {
+			fields["s3ObjectVersion"] = s3ObjectVersion
+		}
+		if zipFile, hasZipFile := inputSpecCode.Fields["zipFile"]; hasZipFile {
+			fields["zipFile"] = zipFile
+		}
 	}
 
 	if code.ImageUri != nil {
@@ -519,8 +588,10 @@ func functionRuntimeVersionConfigToMappingNode(
 	// The `updateRuntimeOn` field is an input when saving a lambda function but is not persisted
 	// as part of the resource state in AWS, so like other fields that are input-only,
 	// it is sourced from the input spec.
-	if updateRuntimeOn, ok := inputSpecRuntimeVersionConfig.Fields["updateRuntimeOn"]; ok {
-		fields["updateRuntimeOn"] = updateRuntimeOn
+	if inputSpecRuntimeVersionConfig != nil {
+		if updateRuntimeOn, ok := inputSpecRuntimeVersionConfig.Fields["updateRuntimeOn"]; ok {
+			fields["updateRuntimeOn"] = updateRuntimeOn
+		}
 	}
 
 	return &core.MappingNode{

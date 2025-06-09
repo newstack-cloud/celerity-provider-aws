@@ -18,7 +18,11 @@ type Service interface {
 	// Returns information about the function or function version, with a link to
 	// download the deployment package that's valid for 10 minutes. If you specify a
 	// function version, only details that are specific to that version are returned.
-	GetFunction(ctx context.Context, params *lambda.GetFunctionInput, optFns ...func(*lambda.Options)) (*lambda.GetFunctionOutput, error)
+	GetFunction(
+		ctx context.Context,
+		params *lambda.GetFunctionInput,
+		optFns ...func(*lambda.Options),
+	) (*lambda.GetFunctionOutput, error)
 	// Deletes a Lambda function. To delete a specific function version, use the
 	// Qualifier parameter. Otherwise, all versions and aliases are deleted. This
 	// doesn't require the user to have explicit permissions for DeleteAlias.
@@ -26,7 +30,11 @@ type Service interface {
 	// To delete Lambda event source mappings that invoke a function, use DeleteEventSourceMapping. For Amazon
 	// Web Services services and resources that invoke your function directly, delete
 	// the trigger in the service where you originally configured it.
-	DeleteFunction(ctx context.Context, params *lambda.DeleteFunctionInput, optFns ...func(*lambda.Options)) (*lambda.DeleteFunctionOutput, error)
+	DeleteFunction(
+		ctx context.Context,
+		params *lambda.DeleteFunctionInput,
+		optFns ...func(*lambda.Options),
+	) (*lambda.DeleteFunctionOutput, error)
 	// Returns the code signing configuration for the specified function.
 	GetFunctionCodeSigningConfig(
 		ctx context.Context,
