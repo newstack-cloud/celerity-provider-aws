@@ -52,3 +52,9 @@ celerity-provider-aws
 node_modules
 *.cjs
 *.mjs
+
+# Directories for locally built plugins for testing docgen.
+plugins
+
+# Generated docs file for the plugin.
+docs.json
