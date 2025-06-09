@@ -7,8 +7,26 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
+	"github.com/two-hundred/celerity-provider-aws/utils"
 	"github.com/two-hundred/celerity/libs/blueprint/provider"
 )
+
+type getExternalStateTestCase struct {
+	name                 string
+	lambdaServiceFactory func(awsConfig *aws.Config, providerContext provider.Context) Service
+	awsConfigStore       *utils.AWSConfigStore
+	input                *provider.ResourceGetExternalStateInput
+	expectedOutput       *provider.ResourceGetExternalStateOutput
+	expectError          bool
+}
+
+type destroyTestCase struct {
+	name                 string
+	lambdaServiceFactory func(awsConfig *aws.Config, providerContext provider.Context) Service
+	awsConfigStore       *utils.AWSConfigStore
+	input                *provider.ResourceDestroyInput
+	expectError          bool
+}
 
 type lambdaServiceMock struct {
 	getFunctionOutput            *lambda.GetFunctionOutput
@@ -19,6 +37,8 @@ type lambdaServiceMock struct {
 	getFunctionCodeSigningError  error
 	getFunctionRecursionError    error
 	getFunctionConcurrencyError  error
+	deleteFunctionOutput         *lambda.DeleteFunctionOutput
+	deleteFunctionError          error
 }
 
 type lambdaServiceMockOption func(*lambdaServiceMock)
@@ -90,6 +110,18 @@ func WithGetFunctionConcurrencyError(err error) lambdaServiceMockOption {
 	}
 }
 
+func WithDeleteFunctionOutput(output *lambda.DeleteFunctionOutput) lambdaServiceMockOption {
+	return func(m *lambdaServiceMock) {
+		m.deleteFunctionOutput = output
+	}
+}
+
+func WithDeleteFunctionError(err error) lambdaServiceMockOption {
+	return func(m *lambdaServiceMock) {
+		m.deleteFunctionError = err
+	}
+}
+
 func (m *lambdaServiceMock) GetFunction(
 	ctx context.Context,
 	params *lambda.GetFunctionInput,
@@ -127,7 +159,7 @@ func (m *lambdaServiceMock) DeleteFunction(
 	params *lambda.DeleteFunctionInput,
 	optFns ...func(*lambda.Options),
 ) (*lambda.DeleteFunctionOutput, error) {
-	return nil, nil
+	return m.deleteFunctionOutput, m.deleteFunctionError
 }
 
 func createBaseTestFunctionConfig(

@@ -75,28 +75,6 @@ func (l *lambdaFunctionResourceActions) DeployFunc(
 	return nil, nil
 }
 
-func (l *lambdaFunctionResourceActions) DestroyFunc(
-	ctx context.Context,
-	input *provider.ResourceDestroyInput,
-) error {
-	lambdaService, err := l.getLambdaService(ctx, input.ProviderContext)
-	if err != nil {
-		return err
-	}
-
-	functionARN := core.StringValue(
-		input.ResourceState.SpecData.Fields["arn"],
-	)
-	_, err = lambdaService.DeleteFunction(
-		ctx,
-		&lambda.DeleteFunctionInput{
-			FunctionName: &functionARN,
-		},
-	)
-
-	return err
-}
-
 func (l *lambdaFunctionResourceActions) StabilisedFunc(
 	ctx context.Context,
 	input *provider.ResourceHasStabilisedInput,
