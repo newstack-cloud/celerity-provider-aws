@@ -27,15 +27,15 @@ jobs:
           cache: true
       - name: Install Plugin Docgen Tool
         run: |
-          go install github.com/two-hundred/celerity/tools/plugin-docgen/cmd/celerity-plugin-docgen@latest
+          go install github.com/newstack-cloud/celerity/tools/plugin-docgen/cmd/celerity-plugin-docgen@latest
       - name: Build Provider for Docgen
         run: |
           VERSION=$(grep -o 'PluginVersion: *"[^"]*"' main.go | sed 's/PluginVersion: *"\(.*\)"/\1/')
-          mkdir -p /tmp/celerity/plugins/providers/two-hundred/aws/$VERSION
-          go build -o /tmp/celerity/plugins/providers/two-hundred/aws/$VERSION/plugin main.go
+          mkdir -p /tmp/celerity/plugins/providers/newstack-cloud/aws/$VERSION
+          go build -o /tmp/celerity/plugins/providers/newstack-cloud/aws/$VERSION/plugin main.go
       - name: Generate Plugin JSON Docs
         run: |
-          celerity-plugin-docgen -plugin=two-hundred/aws
+          celerity-plugin-docgen -plugin=newstack-cloud/aws
         env:
           CELERITY_PLUGIN_DOCGEN_PLUGIN_LOG_FILE_ROOT_DIR: /tmp/celerity/plugins/logs
           CELERITY_DEPLOY_ENGINE_PLUGIN_PATH: /tmp/celerity/plugins

@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/newstack-cloud/celerity-provider-aws/services/lambda"
+	"github.com/newstack-cloud/celerity-provider-aws/utils"
+	"github.com/newstack-cloud/celerity/libs/blueprint/core"
 	"github.com/stretchr/testify/suite"
-	"github.com/two-hundred/celerity-provider-aws/services/lambda"
-	"github.com/two-hundred/celerity-provider-aws/utils"
-	"github.com/two-hundred/celerity/libs/blueprint/core"
 )
 
 type ProviderSuite struct {

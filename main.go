@@ -7,13 +7,13 @@ import (
 	"log"
 	"os"
 
-	"github.com/two-hundred/celerity-provider-aws/provider"
-	"github.com/two-hundred/celerity-provider-aws/services/lambda"
-	"github.com/two-hundred/celerity-provider-aws/utils"
-	"github.com/two-hundred/celerity/libs/plugin-framework/plugin"
-	"github.com/two-hundred/celerity/libs/plugin-framework/pluginservicev1"
-	"github.com/two-hundred/celerity/libs/plugin-framework/sdk/pluginutils"
-	"github.com/two-hundred/celerity/libs/plugin-framework/sdk/providerv1"
+	"github.com/newstack-cloud/celerity-provider-aws/provider"
+	"github.com/newstack-cloud/celerity-provider-aws/services/lambda"
+	"github.com/newstack-cloud/celerity-provider-aws/utils"
+	"github.com/newstack-cloud/celerity/libs/plugin-framework/plugin"
+	"github.com/newstack-cloud/celerity/libs/plugin-framework/pluginservicev1"
+	"github.com/newstack-cloud/celerity/libs/plugin-framework/sdk/pluginutils"
+	"github.com/newstack-cloud/celerity/libs/plugin-framework/sdk/providerv1"
 )
 
 //go:embed provider_description.md
@@ -42,12 +42,12 @@ func main() {
 
 	providerDescription, _ := embedded.ReadFile("provider_description.md")
 	config := plugin.ServePluginConfiguration{
-		ID: "two-hundred/aws",
+		ID: "newstack-cloud/aws",
 		PluginMetadata: &pluginservicev1.PluginMetadata{
 			PluginVersion:        "0.1.0",
 			DisplayName:          "AWS",
 			FormattedDescription: string(providerDescription),
-			RepositoryUrl:        "https://github.com/two-hundred/celerity-provider-aws",
+			RepositoryUrl:        "https://github.com/newstack-cloud/celerity-provider-aws",
 			Author:               "Two Hundred",
 		},
 		ProtocolVersion: "1.0",

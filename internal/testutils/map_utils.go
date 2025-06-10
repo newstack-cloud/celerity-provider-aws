@@ -3,7 +3,7 @@ package testutils
 import (
 	"slices"
 
-	"github.com/two-hundred/celerity/libs/blueprint/core"
+	"github.com/newstack-cloud/celerity/libs/blueprint/core"
 )
 
 // ShallowCopy creates a shallow copy of a map of MappingNodes, excluding

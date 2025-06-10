@@ -2,7 +2,7 @@ package types
 
 import (
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/two-hundred/celerity/libs/blueprint/provider"
+	"github.com/newstack-cloud/celerity/libs/blueprint/provider"
 )
 
 // ServiceFactory is a function type that creates service instances

@@ -1,8 +1,8 @@
 package testutils
 
 import (
+	"github.com/newstack-cloud/celerity/libs/blueprint/core"
 	"github.com/stretchr/testify/assert"
-	"github.com/two-hundred/celerity/libs/blueprint/core"
 )
 
 // CompareTags compares two slices of tag MappingNodes in an order-independent way.

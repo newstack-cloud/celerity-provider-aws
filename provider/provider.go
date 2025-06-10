@@ -3,13 +3,13 @@ package provider
 import (
 	"regexp"
 
-	"github.com/two-hundred/celerity-provider-aws/services/lambda"
-	"github.com/two-hundred/celerity-provider-aws/types"
-	"github.com/two-hundred/celerity-provider-aws/utils"
-	"github.com/two-hundred/celerity/libs/blueprint/core"
-	"github.com/two-hundred/celerity/libs/blueprint/provider"
-	"github.com/two-hundred/celerity/libs/plugin-framework/sdk/providerv1"
-	"github.com/two-hundred/celerity/libs/plugin-framework/sdk/validation"
+	"github.com/newstack-cloud/celerity-provider-aws/services/lambda"
+	"github.com/newstack-cloud/celerity-provider-aws/types"
+	"github.com/newstack-cloud/celerity-provider-aws/utils"
+	"github.com/newstack-cloud/celerity/libs/blueprint/core"
+	"github.com/newstack-cloud/celerity/libs/blueprint/provider"
+	"github.com/newstack-cloud/celerity/libs/plugin-framework/sdk/providerv1"
+	"github.com/newstack-cloud/celerity/libs/plugin-framework/sdk/validation"
 )
 
 func NewProvider(

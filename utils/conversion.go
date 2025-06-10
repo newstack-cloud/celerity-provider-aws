@@ -1,6 +1,6 @@
 package utils
 
-import "github.com/two-hundred/celerity/libs/blueprint/core"
+import "github.com/newstack-cloud/celerity/libs/blueprint/core"
 
 // TagsToMappingNode converts a map of tags from an AWS service response
 // to a MappingNode suitable for use in a resource spec.

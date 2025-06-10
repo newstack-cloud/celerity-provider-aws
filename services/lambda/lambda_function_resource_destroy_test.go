@@ -6,12 +6,12 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
+	"github.com/newstack-cloud/celerity-provider-aws/internal/testutils"
+	"github.com/newstack-cloud/celerity-provider-aws/utils"
+	"github.com/newstack-cloud/celerity/libs/blueprint/core"
+	"github.com/newstack-cloud/celerity/libs/blueprint/provider"
+	"github.com/newstack-cloud/celerity/libs/blueprint/state"
 	"github.com/stretchr/testify/suite"
-	"github.com/two-hundred/celerity-provider-aws/internal/testutils"
-	"github.com/two-hundred/celerity-provider-aws/utils"
-	"github.com/two-hundred/celerity/libs/blueprint/core"
-	"github.com/two-hundred/celerity/libs/blueprint/provider"
-	"github.com/two-hundred/celerity/libs/blueprint/state"
 )
 
 type LambdaFunctionResourceDestroySuite struct {

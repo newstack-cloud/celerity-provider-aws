@@ -1,8 +1,8 @@
 package lambda
 
 import (
-	"github.com/two-hundred/celerity/libs/blueprint/core"
-	"github.com/two-hundred/celerity/libs/blueprint/provider"
+	"github.com/newstack-cloud/celerity/libs/blueprint/core"
+	"github.com/newstack-cloud/celerity/libs/blueprint/provider"
 )
 
 func lambdaFunctionResourceSchema() *provider.ResourceDefinitionsSchema {

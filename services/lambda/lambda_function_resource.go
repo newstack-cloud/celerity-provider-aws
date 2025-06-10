@@ -3,11 +3,11 @@ package lambda
 import (
 	"context"
 
-	providertypes "github.com/two-hundred/celerity-provider-aws/types"
-	"github.com/two-hundred/celerity-provider-aws/utils"
+	providertypes "github.com/newstack-cloud/celerity-provider-aws/types"
+	"github.com/newstack-cloud/celerity-provider-aws/utils"
 
-	"github.com/two-hundred/celerity/libs/blueprint/provider"
-	"github.com/two-hundred/celerity/libs/plugin-framework/sdk/providerv1"
+	"github.com/newstack-cloud/celerity/libs/blueprint/provider"
+	"github.com/newstack-cloud/celerity/libs/plugin-framework/sdk/providerv1"
 )
 
 // FunctionResource returns a resource implementation for an AWS Lambda Function.
@@ -42,7 +42,8 @@ func FunctionResource(
 		},
 		ResourceCanLinkTo:    []string{},
 		GetExternalStateFunc: lambdaFunctionActions.GetExternalState,
-		DeployFunc:           lambdaFunctionActions.DeployFunc,
+		CreateFunc:           lambdaFunctionActions.CreateFunc,
+		UpdateFunc:           lambdaFunctionActions.UpdateFunc,
 		DestroyFunc:          lambdaFunctionActions.DestroyFunc,
 		StabilisedFunc:       lambdaFunctionActions.StabilisedFunc,
 	}
@@ -63,11 +64,4 @@ func (l *lambdaFunctionResourceActions) getLambdaService(
 	}
 
 	return l.lambdaServiceFactory(awsConfig, providerContext), nil
-}
-
-func (l *lambdaFunctionResourceActions) DeployFunc(
-	ctx context.Context,
-	input *provider.ResourceDeployInput,
-) (*provider.ResourceDeployOutput, error) {
-	return nil, nil
 }
