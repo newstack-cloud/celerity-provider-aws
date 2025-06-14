@@ -48,7 +48,7 @@ func main() {
 			DisplayName:          "AWS",
 			FormattedDescription: string(providerDescription),
 			RepositoryUrl:        "https://github.com/newstack-cloud/celerity-provider-aws",
-			Author:               "Two Hundred",
+			Author:               "NewStack Cloud Limited",
 		},
 		ProtocolVersion: "1.0",
 	}

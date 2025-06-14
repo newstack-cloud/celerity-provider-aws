@@ -58,3 +58,5 @@ plugins
 
 # Generated docs file for the plugin.
 docs.json
+
+.DS_Store

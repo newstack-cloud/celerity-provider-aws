@@ -8,7 +8,7 @@ import (
 	"github.com/newstack-cloud/celerity/libs/blueprint/provider"
 )
 
-func (l *lambdaFunctionResourceActions) DestroyFunc(
+func (l *lambdaFunctionResourceActions) Destroy(
 	ctx context.Context,
 	input *provider.ResourceDestroyInput,
 ) error {

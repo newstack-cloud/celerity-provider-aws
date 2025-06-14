@@ -9,7 +9,7 @@ import (
 	"github.com/newstack-cloud/celerity/libs/blueprint/provider"
 )
 
-func (l *lambdaFunctionResourceActions) StabilisedFunc(
+func (l *lambdaFunctionResourceActions) Stabilised(
 	ctx context.Context,
 	input *provider.ResourceHasStabilisedInput,
 ) (*provider.ResourceHasStabilisedOutput, error) {
@@ -31,8 +31,8 @@ func (l *lambdaFunctionResourceActions) StabilisedFunc(
 		return nil, err
 	}
 
-	lastUpdateStatus := functionOutput.Configuration.LastUpdateStatus
-	hasStabilised := lastUpdateStatus == types.LastUpdateStatusSuccessful
+	functionState := functionOutput.Configuration.State
+	hasStabilised := functionState == types.StateActive
 	return &provider.ResourceHasStabilisedOutput{
 		Stabilised: hasStabilised,
 	}, nil

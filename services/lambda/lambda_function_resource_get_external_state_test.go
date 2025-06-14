@@ -1,7 +1,6 @@
 package lambda
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/newstack-cloud/celerity-provider-aws/utils"
 	"github.com/newstack-cloud/celerity/libs/blueprint/core"
 	"github.com/newstack-cloud/celerity/libs/blueprint/provider"
+	"github.com/newstack-cloud/celerity/libs/plugin-framework/sdk/plugintestutils"
 	"github.com/newstack-cloud/celerity/libs/plugin-framework/sdk/pluginutils"
 	"github.com/stretchr/testify/suite"
 )
@@ -22,7 +22,7 @@ type LambdaFunctionResourceGetExternalStateSuite struct {
 
 func (s *LambdaFunctionResourceGetExternalStateSuite) Test_get_external_state() {
 	loader := &testutils.MockAWSConfigLoader{}
-	providerCtx := testutils.NewTestProviderContext(
+	providerCtx := plugintestutils.NewTestProviderContext(
 		"aws",
 		map[string]*core.ScalarValue{
 			"region": core.ScalarFromString("us-west-2"),
@@ -32,7 +32,7 @@ func (s *LambdaFunctionResourceGetExternalStateSuite) Test_get_external_state() 
 		},
 	)
 
-	testCases := []getExternalStateTestCase{
+	testCases := []plugintestutils.ResourceGetExternalStateTestCase[*aws.Config, Service]{
 		createBasicFunctionStateTestCase(providerCtx, loader),
 		createAllOptionalConfigsTestCase(providerCtx, loader),
 		createGetFunctionErrorTestCase(providerCtx, loader),
@@ -42,37 +42,11 @@ func (s *LambdaFunctionResourceGetExternalStateSuite) Test_get_external_state() 
 		createTracingAndRuntimeVersionTestCase(providerCtx, loader),
 	}
 
-	for _, tc := range testCases {
-		s.Run(tc.name, func() {
-			lambdaActions := lambdaFunctionResourceActions{
-				lambdaServiceFactory: tc.lambdaServiceFactory,
-				awsConfigStore:       tc.awsConfigStore,
-			}
-
-			output, err := lambdaActions.GetExternalState(context.Background(), tc.input)
-
-			if tc.expectError {
-				s.Error(err)
-				return
-			}
-
-			s.NoError(err)
-
-			// Special handling for tags: compare as sets (order-independent) for the all-optional-configs test case
-			if tc.name == "successfully gets function state with all optional configurations" {
-				expectedTags := tc.expectedOutput.ResourceSpecState.Fields["tags"].Items
-				actualTags := output.ResourceSpecState.Fields["tags"].Items
-				testutils.CompareTags(s.T(), expectedTags, actualTags)
-
-				s.Equal(
-					testutils.ShallowCopy(tc.expectedOutput.ResourceSpecState.Fields, "tags"),
-					testutils.ShallowCopy(output.ResourceSpecState.Fields, "tags"),
-				)
-			} else {
-				s.Equal(tc.expectedOutput, output)
-			}
-		})
-	}
+	plugintestutils.RunResourceGetExternalStateTestCases(
+		testCases,
+		FunctionResource,
+		&s.Suite,
+	)
 }
 
 func TestLambdaFunctionResourceGetExternalStateSuite(t *testing.T) {
@@ -81,10 +55,13 @@ func TestLambdaFunctionResourceGetExternalStateSuite(t *testing.T) {
 
 // Test case generator functions below.
 
-func createBasicFunctionStateTestCase(providerCtx provider.Context, loader *testutils.MockAWSConfigLoader) getExternalStateTestCase {
-	return getExternalStateTestCase{
-		name: "successfully gets basic function state",
-		lambdaServiceFactory: createLambdaServiceMockFactory(
+func createBasicFunctionStateTestCase(
+	providerCtx provider.Context,
+	loader *testutils.MockAWSConfigLoader,
+) plugintestutils.ResourceGetExternalStateTestCase[*aws.Config, Service] {
+	return plugintestutils.ResourceGetExternalStateTestCase[*aws.Config, Service]{
+		Name: "successfully gets basic function state",
+		ServiceFactory: createLambdaServiceMockFactory(
 			WithGetFunctionOutput(createBaseTestFunctionConfig(
 				"test-function",
 				types.RuntimeNodejs18x,
@@ -95,12 +72,12 @@ func createBasicFunctionStateTestCase(providerCtx provider.Context, loader *test
 			WithGetFunctionRecursionOutput(&lambda.GetFunctionRecursionConfigOutput{}),
 			WithGetFunctionConcurrencyOutput(&lambda.GetFunctionConcurrencyOutput{}),
 		),
-		awsConfigStore: utils.NewAWSConfigStore(
+		ConfigStore: utils.NewAWSConfigStore(
 			[]string{},
 			utils.AWSConfigFromProviderContext,
 			loader,
 		),
-		input: &provider.ResourceGetExternalStateInput{
+		Input: &provider.ResourceGetExternalStateInput{
 			ProviderContext: providerCtx,
 			CurrentResourceSpec: &core.MappingNode{
 				Fields: map[string]*core.MappingNode{
@@ -114,7 +91,7 @@ func createBasicFunctionStateTestCase(providerCtx provider.Context, loader *test
 				},
 			},
 		},
-		expectedOutput: &provider.ResourceGetExternalStateOutput{
+		ExpectedOutput: &provider.ResourceGetExternalStateOutput{
 			ResourceSpecState: &core.MappingNode{
 				Fields: map[string]*core.MappingNode{
 					"architecture": core.MappingNodeFromString("x86_64"),
@@ -132,11 +109,14 @@ func createBasicFunctionStateTestCase(providerCtx provider.Context, loader *test
 				},
 			},
 		},
-		expectError: false,
+		ExpectError: false,
 	}
 }
 
-func createAllOptionalConfigsTestCase(providerCtx provider.Context, loader *testutils.MockAWSConfigLoader) getExternalStateTestCase {
+func createAllOptionalConfigsTestCase(
+	providerCtx provider.Context,
+	loader *testutils.MockAWSConfigLoader,
+) plugintestutils.ResourceGetExternalStateTestCase[*aws.Config, Service] {
 	tags := map[string]string{
 		"Environment": "test",
 		"Project":     "celerity",
@@ -241,9 +221,9 @@ func createAllOptionalConfigsTestCase(providerCtx provider.Context, loader *test
 		},
 	}
 
-	return getExternalStateTestCase{
-		name: "successfully gets function state with all optional configurations",
-		lambdaServiceFactory: createLambdaServiceMockFactory(
+	return plugintestutils.ResourceGetExternalStateTestCase[*aws.Config, Service]{
+		Name: "successfully gets function state with all optional configurations",
+		ServiceFactory: createLambdaServiceMockFactory(
 			WithGetFunctionOutput(&lambda.GetFunctionOutput{
 				Configuration: &types.FunctionConfiguration{
 					FunctionName: aws.String("test-function"),
@@ -305,12 +285,12 @@ func createAllOptionalConfigsTestCase(providerCtx provider.Context, loader *test
 			WithGetFunctionRecursionOutput(&lambda.GetFunctionRecursionConfigOutput{}),
 			WithGetFunctionConcurrencyOutput(&lambda.GetFunctionConcurrencyOutput{}),
 		),
-		awsConfigStore: utils.NewAWSConfigStore(
+		ConfigStore: utils.NewAWSConfigStore(
 			[]string{},
 			utils.AWSConfigFromProviderContext,
 			loader,
 		),
-		input: &provider.ResourceGetExternalStateInput{
+		Input: &provider.ResourceGetExternalStateInput{
 			ProviderContext: providerCtx,
 			CurrentResourceSpec: &core.MappingNode{
 				Fields: map[string]*core.MappingNode{
@@ -324,23 +304,27 @@ func createAllOptionalConfigsTestCase(providerCtx provider.Context, loader *test
 				},
 			},
 		},
-		expectedOutput: expectedOutput,
-		expectError:    false,
+		CheckTags:      true,
+		ExpectedOutput: expectedOutput,
+		ExpectError:    false,
 	}
 }
 
-func createGetFunctionErrorTestCase(providerCtx provider.Context, loader *testutils.MockAWSConfigLoader) getExternalStateTestCase {
-	return getExternalStateTestCase{
-		name: "handles get function error",
-		lambdaServiceFactory: createLambdaServiceMockFactory(
+func createGetFunctionErrorTestCase(
+	providerCtx provider.Context,
+	loader *testutils.MockAWSConfigLoader,
+) plugintestutils.ResourceGetExternalStateTestCase[*aws.Config, Service] {
+	return plugintestutils.ResourceGetExternalStateTestCase[*aws.Config, Service]{
+		Name: "handles get function error",
+		ServiceFactory: createLambdaServiceMockFactory(
 			WithGetFunctionError(errors.New("failed to get function")),
 		),
-		awsConfigStore: utils.NewAWSConfigStore(
+		ConfigStore: utils.NewAWSConfigStore(
 			[]string{},
 			utils.AWSConfigFromProviderContext,
 			loader,
 		),
-		input: &provider.ResourceGetExternalStateInput{
+		Input: &provider.ResourceGetExternalStateInput{
 			ProviderContext: providerCtx,
 			CurrentResourceSpec: &core.MappingNode{
 				Fields: map[string]*core.MappingNode{
@@ -348,14 +332,17 @@ func createGetFunctionErrorTestCase(providerCtx provider.Context, loader *testut
 				},
 			},
 		},
-		expectError: true,
+		ExpectError: true,
 	}
 }
 
-func createGetFunctionCodeSigningErrorTestCase(providerCtx provider.Context, loader *testutils.MockAWSConfigLoader) getExternalStateTestCase {
-	return getExternalStateTestCase{
-		name: "handles get function code signing config error",
-		lambdaServiceFactory: createLambdaServiceMockFactory(
+func createGetFunctionCodeSigningErrorTestCase(
+	providerCtx provider.Context,
+	loader *testutils.MockAWSConfigLoader,
+) plugintestutils.ResourceGetExternalStateTestCase[*aws.Config, Service] {
+	return plugintestutils.ResourceGetExternalStateTestCase[*aws.Config, Service]{
+		Name: "handles get function code signing config error",
+		ServiceFactory: createLambdaServiceMockFactory(
 			WithGetFunctionOutput(createBaseTestFunctionConfig(
 				"test-function",
 				types.RuntimeNodejs18x,
@@ -364,12 +351,12 @@ func createGetFunctionCodeSigningErrorTestCase(providerCtx provider.Context, loa
 			)),
 			WithGetFunctionCodeSigningError(errors.New("failed to get code signing config")),
 		),
-		awsConfigStore: utils.NewAWSConfigStore(
+		ConfigStore: utils.NewAWSConfigStore(
 			[]string{},
 			utils.AWSConfigFromProviderContext,
 			loader,
 		),
-		input: &provider.ResourceGetExternalStateInput{
+		Input: &provider.ResourceGetExternalStateInput{
 			ProviderContext: providerCtx,
 			CurrentResourceSpec: &core.MappingNode{
 				Fields: map[string]*core.MappingNode{
@@ -377,14 +364,17 @@ func createGetFunctionCodeSigningErrorTestCase(providerCtx provider.Context, loa
 				},
 			},
 		},
-		expectError: true,
+		ExpectError: true,
 	}
 }
 
-func createEphemeralStorageTestCase(providerCtx provider.Context, loader *testutils.MockAWSConfigLoader) getExternalStateTestCase {
-	return getExternalStateTestCase{
-		name: "successfully gets function state with ephemeral storage",
-		lambdaServiceFactory: createLambdaServiceMockFactory(
+func createEphemeralStorageTestCase(
+	providerCtx provider.Context,
+	loader *testutils.MockAWSConfigLoader,
+) plugintestutils.ResourceGetExternalStateTestCase[*aws.Config, Service] {
+	return plugintestutils.ResourceGetExternalStateTestCase[*aws.Config, Service]{
+		Name: "successfully gets function state with ephemeral storage",
+		ServiceFactory: createLambdaServiceMockFactory(
 			WithGetFunctionOutput(&lambda.GetFunctionOutput{
 				Configuration: &types.FunctionConfiguration{
 					FunctionName: aws.String("test-function"),
@@ -407,12 +397,12 @@ func createEphemeralStorageTestCase(providerCtx provider.Context, loader *testut
 			WithGetFunctionRecursionOutput(&lambda.GetFunctionRecursionConfigOutput{}),
 			WithGetFunctionConcurrencyOutput(&lambda.GetFunctionConcurrencyOutput{}),
 		),
-		awsConfigStore: utils.NewAWSConfigStore(
+		ConfigStore: utils.NewAWSConfigStore(
 			[]string{},
 			utils.AWSConfigFromProviderContext,
 			loader,
 		),
-		input: &provider.ResourceGetExternalStateInput{
+		Input: &provider.ResourceGetExternalStateInput{
 			ProviderContext: providerCtx,
 			CurrentResourceSpec: &core.MappingNode{
 				Fields: map[string]*core.MappingNode{
@@ -426,7 +416,7 @@ func createEphemeralStorageTestCase(providerCtx provider.Context, loader *testut
 				},
 			},
 		},
-		expectedOutput: &provider.ResourceGetExternalStateOutput{
+		ExpectedOutput: &provider.ResourceGetExternalStateOutput{
 			ResourceSpecState: &core.MappingNode{
 				Fields: map[string]*core.MappingNode{
 					"arn":          core.MappingNodeFromString("arn:aws:lambda:us-east-1:123456789012:function:test-function"),
@@ -449,14 +439,17 @@ func createEphemeralStorageTestCase(providerCtx provider.Context, loader *testut
 				},
 			},
 		},
-		expectError: false,
+		ExpectError: false,
 	}
 }
 
-func createImageConfigTestCase(providerCtx provider.Context, loader *testutils.MockAWSConfigLoader) getExternalStateTestCase {
-	return getExternalStateTestCase{
-		name: "successfully gets function state with image configuration",
-		lambdaServiceFactory: createLambdaServiceMockFactory(
+func createImageConfigTestCase(
+	providerCtx provider.Context,
+	loader *testutils.MockAWSConfigLoader,
+) plugintestutils.ResourceGetExternalStateTestCase[*aws.Config, Service] {
+	return plugintestutils.ResourceGetExternalStateTestCase[*aws.Config, Service]{
+		Name: "successfully gets function state with image configuration",
+		ServiceFactory: createLambdaServiceMockFactory(
 			WithGetFunctionOutput(&lambda.GetFunctionOutput{
 				Configuration: &types.FunctionConfiguration{
 					FunctionName: aws.String("test-function"),
@@ -489,12 +482,12 @@ func createImageConfigTestCase(providerCtx provider.Context, loader *testutils.M
 			WithGetFunctionRecursionOutput(&lambda.GetFunctionRecursionConfigOutput{}),
 			WithGetFunctionConcurrencyOutput(&lambda.GetFunctionConcurrencyOutput{}),
 		),
-		awsConfigStore: utils.NewAWSConfigStore(
+		ConfigStore: utils.NewAWSConfigStore(
 			[]string{},
 			utils.AWSConfigFromProviderContext,
 			loader,
 		),
-		input: &provider.ResourceGetExternalStateInput{
+		Input: &provider.ResourceGetExternalStateInput{
 			ProviderContext: providerCtx,
 			CurrentResourceSpec: &core.MappingNode{
 				Fields: map[string]*core.MappingNode{
@@ -508,7 +501,7 @@ func createImageConfigTestCase(providerCtx provider.Context, loader *testutils.M
 				},
 			},
 		},
-		expectedOutput: &provider.ResourceGetExternalStateOutput{
+		ExpectedOutput: &provider.ResourceGetExternalStateOutput{
 			ResourceSpecState: &core.MappingNode{
 				Fields: map[string]*core.MappingNode{
 					"arn":          core.MappingNodeFromString("arn:aws:lambda:us-east-1:123456789012:function:test-function"),
@@ -543,14 +536,17 @@ func createImageConfigTestCase(providerCtx provider.Context, loader *testutils.M
 				},
 			},
 		},
-		expectError: false,
+		ExpectError: false,
 	}
 }
 
-func createTracingAndRuntimeVersionTestCase(providerCtx provider.Context, loader *testutils.MockAWSConfigLoader) getExternalStateTestCase {
-	return getExternalStateTestCase{
-		name: "successfully gets function state with tracing and runtime version config",
-		lambdaServiceFactory: createLambdaServiceMockFactory(
+func createTracingAndRuntimeVersionTestCase(
+	providerCtx provider.Context,
+	loader *testutils.MockAWSConfigLoader,
+) plugintestutils.ResourceGetExternalStateTestCase[*aws.Config, Service] {
+	return plugintestutils.ResourceGetExternalStateTestCase[*aws.Config, Service]{
+		Name: "successfully gets function state with tracing and runtime version config",
+		ServiceFactory: createLambdaServiceMockFactory(
 			WithGetFunctionOutput(&lambda.GetFunctionOutput{
 				Configuration: &types.FunctionConfiguration{
 					FunctionName: aws.String("test-function"),
@@ -576,12 +572,12 @@ func createTracingAndRuntimeVersionTestCase(providerCtx provider.Context, loader
 			WithGetFunctionRecursionOutput(&lambda.GetFunctionRecursionConfigOutput{}),
 			WithGetFunctionConcurrencyOutput(&lambda.GetFunctionConcurrencyOutput{}),
 		),
-		awsConfigStore: utils.NewAWSConfigStore(
+		ConfigStore: utils.NewAWSConfigStore(
 			[]string{},
 			utils.AWSConfigFromProviderContext,
 			loader,
 		),
-		input: &provider.ResourceGetExternalStateInput{
+		Input: &provider.ResourceGetExternalStateInput{
 			ProviderContext: providerCtx,
 			CurrentResourceSpec: &core.MappingNode{
 				Fields: map[string]*core.MappingNode{
@@ -595,7 +591,7 @@ func createTracingAndRuntimeVersionTestCase(providerCtx provider.Context, loader
 				},
 			},
 		},
-		expectedOutput: &provider.ResourceGetExternalStateOutput{
+		ExpectedOutput: &provider.ResourceGetExternalStateOutput{
 			ResourceSpecState: &core.MappingNode{
 				Fields: map[string]*core.MappingNode{
 					"arn":          core.MappingNodeFromString("arn:aws:lambda:us-east-1:123456789012:function:test-function"),
@@ -623,6 +619,6 @@ func createTracingAndRuntimeVersionTestCase(providerCtx provider.Context, loader
 				},
 			},
 		},
-		expectError: false,
+		ExpectError: false,
 	}
 }

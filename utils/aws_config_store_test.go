@@ -10,6 +10,7 @@ import (
 	"github.com/newstack-cloud/celerity-provider-aws/internal/testutils"
 	"github.com/newstack-cloud/celerity/libs/blueprint/core"
 	"github.com/newstack-cloud/celerity/libs/blueprint/provider"
+	"github.com/newstack-cloud/celerity/libs/plugin-framework/sdk/plugintestutils"
 	"github.com/newstack-cloud/celerity/libs/plugin-framework/sdk/pluginutils"
 	"github.com/stretchr/testify/suite"
 )
@@ -61,7 +62,7 @@ func (s *AWSConfigStoreTestSuite) Test_from_provider_context() {
 	sessionID := "test-session-1"
 
 	store := NewAWSConfigStore(env, s.mockConfigCreator, &testutils.MockAWSConfigLoader{})
-	providerContext := testutils.NewTestProviderContext("aws", providerConfig, nil)
+	providerContext := plugintestutils.NewTestProviderContext("aws", providerConfig, nil)
 
 	// Create a context with the session ID
 	ctx := context.WithValue(context.Background(), pluginutils.ContextSessionIDKey, sessionID)
@@ -91,7 +92,7 @@ func (s *AWSConfigStoreTestSuite) Test_from_provider_context() {
 
 func (s *AWSConfigStoreTestSuite) Test_from_provider_context_no_session_id() {
 	store := NewAWSConfigStore([]string{}, s.mockConfigCreator, &testutils.MockAWSConfigLoader{})
-	providerContext := testutils.NewTestProviderContext(
+	providerContext := plugintestutils.NewTestProviderContext(
 		"aws",
 		map[string]*core.ScalarValue{
 			"region": core.ScalarFromString("us-west-2"),

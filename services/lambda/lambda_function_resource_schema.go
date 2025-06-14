@@ -70,8 +70,16 @@ func lambdaFunctionResourceSchema() *provider.ResourceDefinitionsSchema {
 						Pattern: "(arn:(aws[a-zA-Z-]*)?:[a-z0-9-.]+:.*)|()",
 					},
 					"zipFile": {
-						Type:        provider.ResourceDefinitionsSchemaTypeString,
-						Description: "The inline code for the Lambda function. This will be converted into a base-64 encoded zip archive format by the provider.",
+						Type: provider.ResourceDefinitionsSchemaTypeString,
+						Description: "(Node.js and Python only) The inline code for the Lambda function. " +
+							"This will be converted into a base-64 encoded zip archive format by the provider. " +
+							"The zip file will contain a file named \"index\" and cannot exceed 4MB. " +
+							"The handler property in the resource must be of the form \"index.{handlerName}\".",
+						FormattedDescription: "(Node.js and Python only) The inline code for the Lambda function. " +
+							"This will be converted into a base-64 encoded zip archive format by the provider. " +
+							"The zip file will contain a file named `index` and cannot exceed 4MB. " +
+							"The handler property in the resource must be of the form `index.{handlerName}`.",
+						ValidateFunc: validateZipFileRuntime,
 					},
 				},
 			},

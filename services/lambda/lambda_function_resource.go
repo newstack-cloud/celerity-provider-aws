@@ -3,17 +3,17 @@ package lambda
 import (
 	"context"
 
-	providertypes "github.com/newstack-cloud/celerity-provider-aws/types"
-	"github.com/newstack-cloud/celerity-provider-aws/utils"
+	"github.com/aws/aws-sdk-go-v2/aws"
 
 	"github.com/newstack-cloud/celerity/libs/blueprint/provider"
+	"github.com/newstack-cloud/celerity/libs/plugin-framework/sdk/pluginutils"
 	"github.com/newstack-cloud/celerity/libs/plugin-framework/sdk/providerv1"
 )
 
 // FunctionResource returns a resource implementation for an AWS Lambda Function.
 func FunctionResource(
-	lambdaServiceFactory providertypes.ServiceFactory[Service],
-	awsConfigStore *utils.AWSConfigStore,
+	lambdaServiceFactory pluginutils.ServiceFactory[*aws.Config, Service],
+	awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
 ) provider.Resource {
 	yamlExample, _ := examples.ReadFile("examples/resources/lambda_function_yaml.md")
 	jsoncExample, _ := examples.ReadFile("examples/resources/lambda_function_jsonc.md")
@@ -42,16 +42,16 @@ func FunctionResource(
 		},
 		ResourceCanLinkTo:    []string{},
 		GetExternalStateFunc: lambdaFunctionActions.GetExternalState,
-		CreateFunc:           lambdaFunctionActions.CreateFunc,
-		UpdateFunc:           lambdaFunctionActions.UpdateFunc,
-		DestroyFunc:          lambdaFunctionActions.DestroyFunc,
-		StabilisedFunc:       lambdaFunctionActions.StabilisedFunc,
+		CreateFunc:           lambdaFunctionActions.Create,
+		UpdateFunc:           lambdaFunctionActions.Update,
+		DestroyFunc:          lambdaFunctionActions.Destroy,
+		StabilisedFunc:       lambdaFunctionActions.Stabilised,
 	}
 }
 
 type lambdaFunctionResourceActions struct {
-	lambdaServiceFactory providertypes.ServiceFactory[Service]
-	awsConfigStore       *utils.AWSConfigStore
+	lambdaServiceFactory pluginutils.ServiceFactory[*aws.Config, Service]
+	awsConfigStore       pluginutils.ServiceConfigStore[*aws.Config]
 }
 
 func (l *lambdaFunctionResourceActions) getLambdaService(

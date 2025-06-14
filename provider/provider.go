@@ -3,17 +3,18 @@ package provider
 import (
 	"regexp"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/newstack-cloud/celerity-provider-aws/services/lambda"
-	"github.com/newstack-cloud/celerity-provider-aws/types"
 	"github.com/newstack-cloud/celerity-provider-aws/utils"
 	"github.com/newstack-cloud/celerity/libs/blueprint/core"
 	"github.com/newstack-cloud/celerity/libs/blueprint/provider"
+	"github.com/newstack-cloud/celerity/libs/plugin-framework/sdk/pluginutils"
 	"github.com/newstack-cloud/celerity/libs/plugin-framework/sdk/providerv1"
 	"github.com/newstack-cloud/celerity/libs/plugin-framework/sdk/validation"
 )
 
 func NewProvider(
-	lambdaServiceFactory types.ServiceFactory[lambda.Service],
+	lambdaServiceFactory pluginutils.ServiceFactory[*aws.Config, lambda.Service],
 	awsConfigStore *utils.AWSConfigStore,
 ) provider.Provider {
 	return &providerv1.ProviderPluginDefinition{

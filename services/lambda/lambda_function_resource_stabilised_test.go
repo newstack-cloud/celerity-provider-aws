@@ -1,7 +1,6 @@
 package lambda
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/newstack-cloud/celerity-provider-aws/utils"
 	"github.com/newstack-cloud/celerity/libs/blueprint/core"
 	"github.com/newstack-cloud/celerity/libs/blueprint/provider"
+	"github.com/newstack-cloud/celerity/libs/plugin-framework/sdk/plugintestutils"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -19,18 +19,9 @@ type LambdaFunctionResourceStabilisedSuite struct {
 	suite.Suite
 }
 
-type stabilisedTestCase struct {
-	name                 string
-	lambdaServiceFactory func(awsConfig *aws.Config, providerContext provider.Context) Service
-	awsConfigStore       *utils.AWSConfigStore
-	input                *provider.ResourceHasStabilisedInput
-	expectedOutput       *provider.ResourceHasStabilisedOutput
-	expectError          bool
-}
-
 func (s *LambdaFunctionResourceStabilisedSuite) Test_stabilised() {
 	loader := &testutils.MockAWSConfigLoader{}
-	providerCtx := testutils.NewTestProviderContext(
+	providerCtx := plugintestutils.NewTestProviderContext(
 		"aws",
 		map[string]*core.ScalarValue{
 			"region": core.ScalarFromString("us-west-2"),
@@ -40,22 +31,22 @@ func (s *LambdaFunctionResourceStabilisedSuite) Test_stabilised() {
 		},
 	)
 
-	testCases := []stabilisedTestCase{
+	testCases := []plugintestutils.ResourceHasStabilisedTestCase[*aws.Config, Service]{
 		{
-			name: "returns stabilised when function is successfully updated",
-			lambdaServiceFactory: createLambdaServiceMockFactory(
+			Name: "returns stabilised when function is successfully updated",
+			ServiceFactory: createLambdaServiceMockFactory(
 				WithGetFunctionOutput(&lambda.GetFunctionOutput{
 					Configuration: &types.FunctionConfiguration{
-						LastUpdateStatus: types.LastUpdateStatusSuccessful,
+						State: types.StateActive,
 					},
 				}),
 			),
-			awsConfigStore: utils.NewAWSConfigStore(
+			ConfigStore: utils.NewAWSConfigStore(
 				[]string{},
 				utils.AWSConfigFromProviderContext,
 				loader,
 			),
-			input: &provider.ResourceHasStabilisedInput{
+			Input: &provider.ResourceHasStabilisedInput{
 				ProviderContext: providerCtx,
 				ResourceSpec: &core.MappingNode{
 					Fields: map[string]*core.MappingNode{
@@ -65,26 +56,26 @@ func (s *LambdaFunctionResourceStabilisedSuite) Test_stabilised() {
 					},
 				},
 			},
-			expectedOutput: &provider.ResourceHasStabilisedOutput{
+			ExpectedOutput: &provider.ResourceHasStabilisedOutput{
 				Stabilised: true,
 			},
-			expectError: false,
+			ExpectError: false,
 		},
 		{
-			name: "returns not stabilised when function is still updating",
-			lambdaServiceFactory: createLambdaServiceMockFactory(
+			Name: "returns not stabilised when function is still updating",
+			ServiceFactory: createLambdaServiceMockFactory(
 				WithGetFunctionOutput(&lambda.GetFunctionOutput{
 					Configuration: &types.FunctionConfiguration{
-						LastUpdateStatus: types.LastUpdateStatusInProgress,
+						State: types.StatePending,
 					},
 				}),
 			),
-			awsConfigStore: utils.NewAWSConfigStore(
+			ConfigStore: utils.NewAWSConfigStore(
 				[]string{},
 				utils.AWSConfigFromProviderContext,
 				loader,
 			),
-			input: &provider.ResourceHasStabilisedInput{
+			Input: &provider.ResourceHasStabilisedInput{
 				ProviderContext: providerCtx,
 				ResourceSpec: &core.MappingNode{
 					Fields: map[string]*core.MappingNode{
@@ -94,22 +85,22 @@ func (s *LambdaFunctionResourceStabilisedSuite) Test_stabilised() {
 					},
 				},
 			},
-			expectedOutput: &provider.ResourceHasStabilisedOutput{
+			ExpectedOutput: &provider.ResourceHasStabilisedOutput{
 				Stabilised: false,
 			},
-			expectError: false,
+			ExpectError: false,
 		},
 		{
-			name: "handles get function error",
-			lambdaServiceFactory: createLambdaServiceMockFactory(
+			Name: "handles get function error",
+			ServiceFactory: createLambdaServiceMockFactory(
 				WithGetFunctionError(errors.New("failed to get function")),
 			),
-			awsConfigStore: utils.NewAWSConfigStore(
+			ConfigStore: utils.NewAWSConfigStore(
 				[]string{},
 				utils.AWSConfigFromProviderContext,
 				loader,
 			),
-			input: &provider.ResourceHasStabilisedInput{
+			Input: &provider.ResourceHasStabilisedInput{
 				ProviderContext: providerCtx,
 				ResourceSpec: &core.MappingNode{
 					Fields: map[string]*core.MappingNode{
@@ -119,29 +110,16 @@ func (s *LambdaFunctionResourceStabilisedSuite) Test_stabilised() {
 					},
 				},
 			},
-			expectedOutput: nil,
-			expectError:    true,
+			ExpectedOutput: nil,
+			ExpectError:    true,
 		},
 	}
 
-	for _, tc := range testCases {
-		s.Run(tc.name, func() {
-			lambdaActions := lambdaFunctionResourceActions{
-				lambdaServiceFactory: tc.lambdaServiceFactory,
-				awsConfigStore:       tc.awsConfigStore,
-			}
-
-			output, err := lambdaActions.StabilisedFunc(context.Background(), tc.input)
-
-			if tc.expectError {
-				s.Error(err)
-				s.Nil(output)
-			} else {
-				s.NoError(err)
-				s.Equal(tc.expectedOutput, output)
-			}
-		})
-	}
+	plugintestutils.RunResourceHasStabilisedTestCases(
+		testCases,
+		FunctionResource,
+		&s.Suite,
+	)
 }
 
 func TestLambdaFunctionResourceStabilisedSuite(t *testing.T) {

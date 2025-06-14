@@ -11,6 +11,7 @@ import (
 	"github.com/newstack-cloud/celerity-provider-aws/internal/testutils"
 	"github.com/newstack-cloud/celerity/libs/blueprint/core"
 	"github.com/newstack-cloud/celerity/libs/blueprint/provider"
+	"github.com/newstack-cloud/celerity/libs/plugin-framework/sdk/plugintestutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
@@ -29,7 +30,7 @@ func (s *AWSConfigTestSuite) TestAWSConfigFromProviderContext() {
 	}{
 		{
 			name: "successfully loads config with region",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{
 					"region": core.ScalarFromString("us-west-2"),
@@ -56,7 +57,7 @@ func (s *AWSConfigTestSuite) TestAWSConfigFromProviderContext() {
 		},
 		{
 			name: "handles loader error",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{},
 				nil,
@@ -97,7 +98,7 @@ func (s *AWSConfigTestSuite) TestRegionOptions() {
 	}{
 		{
 			name: "region from provider config",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{
 					"region": core.ScalarFromString("us-east-1"),
@@ -108,7 +109,7 @@ func (s *AWSConfigTestSuite) TestRegionOptions() {
 		},
 		{
 			name: "no region in provider config",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{},
 				nil,
@@ -146,7 +147,7 @@ func (s *AWSConfigTestSuite) TestRetryConfigOptions() {
 	}{
 		{
 			name: "retry mode and max retries from provider config",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{
 					"retryMode":  core.ScalarFromString("standard"),
@@ -160,7 +161,7 @@ func (s *AWSConfigTestSuite) TestRetryConfigOptions() {
 		},
 		{
 			name: "retry mode from env var",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{},
 				nil,
@@ -173,7 +174,7 @@ func (s *AWSConfigTestSuite) TestRetryConfigOptions() {
 		},
 		{
 			name: "no retry config",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{},
 				nil,
@@ -217,7 +218,7 @@ func (s *AWSConfigTestSuite) TestCredentialOptions() {
 	}{
 		{
 			name: "static credentials",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{
 					"accessKeyId":     core.ScalarFromString("test-access-key"),
@@ -236,7 +237,7 @@ func (s *AWSConfigTestSuite) TestCredentialOptions() {
 		},
 		{
 			name: "shared credentials files",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{
 					"sharedCredentialsFiles": core.ScalarFromString("/path/to/creds1,/path/to/creds2"),
@@ -253,7 +254,7 @@ func (s *AWSConfigTestSuite) TestCredentialOptions() {
 		},
 		{
 			name: "no credentials",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{},
 				nil,
@@ -299,7 +300,7 @@ func (s *AWSConfigTestSuite) TestSharedEndpointOptions() {
 	}{
 		{
 			name: "FIPS and dual stack enabled",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{
 					"useFIPSEndpoint":      core.ScalarFromBool(true),
@@ -312,7 +313,7 @@ func (s *AWSConfigTestSuite) TestSharedEndpointOptions() {
 		},
 		{
 			name: "FIPS and dual stack disabled",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{
 					"useFIPSEndpoint":      core.ScalarFromBool(false),
@@ -325,7 +326,7 @@ func (s *AWSConfigTestSuite) TestSharedEndpointOptions() {
 		},
 		{
 			name: "no endpoint config",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{},
 				nil,
@@ -370,7 +371,7 @@ func (s *AWSConfigTestSuite) TestCertOptions() {
 	}{
 		{
 			name: "custom CA bundle from file",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{
 					"customCaBundle": core.ScalarFromString("__testdata/ca-bundle.pem"),
@@ -382,7 +383,7 @@ func (s *AWSConfigTestSuite) TestCertOptions() {
 		},
 		{
 			name: "custom CA bundle from env",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{},
 				nil,
@@ -394,7 +395,7 @@ func (s *AWSConfigTestSuite) TestCertOptions() {
 		},
 		{
 			name: "no CA bundle",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{},
 				nil,
@@ -440,7 +441,7 @@ func (s *AWSConfigTestSuite) TestHTTPClientOptions() {
 	}{
 		{
 			name: "custom HTTP client config",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{
 					"httpProxy": core.ScalarFromString("http://proxy.example.com:8080"),
@@ -451,7 +452,7 @@ func (s *AWSConfigTestSuite) TestHTTPClientOptions() {
 		},
 		{
 			name: "no HTTP client config",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{},
 				nil,
@@ -491,7 +492,7 @@ func (s *AWSConfigTestSuite) TestEC2MetadataServiceOptions() {
 	}{
 		{
 			name: "EC2 metadata service config",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{
 					"ec2MetadataServiceEndpoint":     core.ScalarFromString("http://169.254.169.254"),
@@ -505,7 +506,7 @@ func (s *AWSConfigTestSuite) TestEC2MetadataServiceOptions() {
 		},
 		{
 			name: "EC2 metadata service from env",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{},
 				nil,
@@ -519,7 +520,7 @@ func (s *AWSConfigTestSuite) TestEC2MetadataServiceOptions() {
 		},
 		{
 			name: "no EC2 metadata service config",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{},
 				nil,
@@ -560,7 +561,7 @@ func (s *AWSConfigTestSuite) TestAssumeRoleOptions() {
 	}{
 		{
 			name: "assume role config",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{
 					"assumeRole.roleArn":         core.ScalarFromString("arn:aws:iam::123456789012:role/test-role"),
@@ -574,7 +575,7 @@ func (s *AWSConfigTestSuite) TestAssumeRoleOptions() {
 		},
 		{
 			name: "no assume role config",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{},
 				nil,
@@ -612,7 +613,7 @@ func (s *AWSConfigTestSuite) TestAssumeRoleWithWebIdentityOptions() {
 	}{
 		{
 			name: "assume role with web identity config",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{
 					"assumeRoleWithWebIdentity.roleArn":          core.ScalarFromString("arn:aws:iam::123456789012:role/test-role"),
@@ -625,7 +626,7 @@ func (s *AWSConfigTestSuite) TestAssumeRoleWithWebIdentityOptions() {
 		},
 		{
 			name: "no assume role with web identity config",
-			providerCtx: testutils.NewTestProviderContext(
+			providerCtx: plugintestutils.NewTestProviderContext(
 				"aws",
 				map[string]*core.ScalarValue{},
 				nil,
