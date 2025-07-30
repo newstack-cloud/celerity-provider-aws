@@ -144,7 +144,7 @@ func NewMockService(t any) *ec2ServiceMock {
 	return &ec2ServiceMock{}
 }
 
-// VPC-related options
+// VPC-related options.
 func WithCreateVpcOutput(output *ec2.CreateVpcOutput) ec2ServiceMockOption {
 	return func(m *ec2ServiceMock) {
 		m.createVpcOutput = output
@@ -181,7 +181,7 @@ func WithDeleteVpcError(err error) ec2ServiceMockOption {
 	}
 }
 
-// VPC attribute-related options
+// VPC attribute-related options.
 func WithModifyVpcAttributeOutput(output *ec2.ModifyVpcAttributeOutput) ec2ServiceMockOption {
 	return func(m *ec2ServiceMock) {
 		m.modifyVpcAttributeOutput = output
@@ -206,7 +206,7 @@ func WithDescribeVpcAttributeError(err error) ec2ServiceMockOption {
 	}
 }
 
-// Subnet-related options
+// Subnet-related options.
 func WithCreateSubnetOutputs(outputs []*ec2.CreateSubnetOutput) ec2ServiceMockOption {
 	return func(m *ec2ServiceMock) {
 		m.createSubnetOutputs = outputs
@@ -255,7 +255,7 @@ func WithModifySubnetAttributeError(err error) ec2ServiceMockOption {
 	}
 }
 
-// Availability zone-related options
+// Availability zone-related options.
 func WithDescribeAvailabilityZonesOutput(output *ec2.DescribeAvailabilityZonesOutput) ec2ServiceMockOption {
 	return func(m *ec2ServiceMock) {
 		m.describeAvailabilityZonesOutput = output
@@ -268,7 +268,7 @@ func WithDescribeAvailabilityZonesError(err error) ec2ServiceMockOption {
 	}
 }
 
-// Route table-related options
+// Route table-related options.
 func WithCreateRouteTableOutputs(outputs []*ec2.CreateRouteTableOutput) ec2ServiceMockOption {
 	return func(m *ec2ServiceMock) {
 		m.createRouteTableOutputs = outputs
@@ -341,7 +341,7 @@ func WithCreateRouteError(err error) ec2ServiceMockOption {
 	}
 }
 
-// Internet gateway-related options
+// Internet gateway-related options.
 func WithCreateInternetGatewayOutput(output *ec2.CreateInternetGatewayOutput) ec2ServiceMockOption {
 	return func(m *ec2ServiceMock) {
 		m.createInternetGatewayOutput = output
@@ -402,7 +402,7 @@ func WithDetachInternetGatewayError(err error) ec2ServiceMockOption {
 	}
 }
 
-// NAT gateway-related options
+// NAT gateway-related options.
 func WithCreateNatGatewayOutputs(outputs []*ec2.CreateNatGatewayOutput) ec2ServiceMockOption {
 	return func(m *ec2ServiceMock) {
 		m.createNatGatewayOutputs = outputs
@@ -439,7 +439,7 @@ func WithDeleteNatGatewayError(err error) ec2ServiceMockOption {
 	}
 }
 
-// Elastic IP-related options
+// Elastic IP-related options.
 func WithAllocateAddressOutputs(outputs []*ec2.AllocateAddressOutput) ec2ServiceMockOption {
 	return func(m *ec2ServiceMock) {
 		m.allocateAddressOutputs = outputs
@@ -464,7 +464,7 @@ func WithReleaseAddressError(err error) ec2ServiceMockOption {
 	}
 }
 
-// Security group-related options
+// Security group-related options.
 func WithCreateSecurityGroupOutput(output *ec2.CreateSecurityGroupOutput) ec2ServiceMockOption {
 	return func(m *ec2ServiceMock) {
 		m.createSecurityGroupOutput = output
@@ -513,7 +513,7 @@ func WithRevokeSecurityGroupEgressError(err error) ec2ServiceMockOption {
 	}
 }
 
-// Network ACL-related options
+// Network ACL-related options.
 func WithCreateNetworkAclOutput(output *ec2.CreateNetworkAclOutput) ec2ServiceMockOption {
 	return func(m *ec2ServiceMock) {
 		m.createNetworkAclOutput = output
@@ -574,7 +574,7 @@ func WithReplaceNetworkAclAssociationError(err error) ec2ServiceMockOption {
 	}
 }
 
-// Tag-related options
+// Tag-related options.
 func WithCreateTagsOutput(output *ec2.CreateTagsOutput) ec2ServiceMockOption {
 	return func(m *ec2ServiceMock) {
 		m.createTagsOutput = output
@@ -599,7 +599,7 @@ func WithDeleteTagsError(err error) ec2ServiceMockOption {
 	}
 }
 
-// VPC methods
+// VPC methods.
 func (m *ec2ServiceMock) CreateVpc(
 	ctx context.Context,
 	params *ec2.CreateVpcInput,
@@ -658,7 +658,7 @@ func (m *ec2ServiceMock) DescribeVpcAttribute(
 	return m.describeVpcAttributeOutput, m.describeVpcAttributeError
 }
 
-// Subnet methods
+// Subnet methods.
 func (m *ec2ServiceMock) CreateSubnet(
 	ctx context.Context,
 	params *ec2.CreateSubnetInput,
@@ -708,7 +708,7 @@ func (m *ec2ServiceMock) ModifySubnetAttribute(
 	return m.modifySubnetAttributeOutput, m.modifySubnetAttributeError
 }
 
-// Availability zone methods
+// Availability zone methods.
 func (m *ec2ServiceMock) DescribeAvailabilityZones(
 	ctx context.Context,
 	params *ec2.DescribeAvailabilityZonesInput,
@@ -718,7 +718,7 @@ func (m *ec2ServiceMock) DescribeAvailabilityZones(
 	return m.describeAvailabilityZonesOutput, m.describeAvailabilityZonesError
 }
 
-// Route table methods
+// Route table methods.
 func (m *ec2ServiceMock) CreateRouteTable(
 	ctx context.Context,
 	params *ec2.CreateRouteTableInput,
@@ -786,7 +786,7 @@ func (m *ec2ServiceMock) CreateRoute(
 	return m.createRouteOutput, m.createRouteError
 }
 
-// Internet gateway methods
+// Internet gateway methods.
 func (m *ec2ServiceMock) CreateInternetGateway(
 	ctx context.Context,
 	params *ec2.CreateInternetGatewayInput,
@@ -832,7 +832,7 @@ func (m *ec2ServiceMock) DetachInternetGateway(
 	return m.detachInternetGatewayOutput, m.detachInternetGatewayError
 }
 
-// NAT gateway methods
+// NAT gateway methods.
 func (m *ec2ServiceMock) CreateNatGateway(
 	ctx context.Context,
 	params *ec2.CreateNatGatewayInput,
@@ -873,7 +873,7 @@ func (m *ec2ServiceMock) DeleteNatGateway(
 	return m.deleteNatGatewayOutput, m.deleteNatGatewayError
 }
 
-// Elastic IP methods
+// Elastic IP methods.
 func (m *ec2ServiceMock) AllocateAddress(
 	ctx context.Context,
 	params *ec2.AllocateAddressInput,
@@ -905,7 +905,7 @@ func (m *ec2ServiceMock) ReleaseAddress(
 	return m.releaseAddressOutput, m.releaseAddressError
 }
 
-// Security group methods
+// Security group methods.
 func (m *ec2ServiceMock) CreateSecurityGroup(
 	ctx context.Context,
 	params *ec2.CreateSecurityGroupInput,
@@ -942,7 +942,7 @@ func (m *ec2ServiceMock) RevokeSecurityGroupEgress(
 	return m.revokeSecurityGroupEgressOutput, m.revokeSecurityGroupEgressError
 }
 
-// Network ACL methods
+// Network ACL methods.
 func (m *ec2ServiceMock) CreateNetworkAcl(
 	ctx context.Context,
 	params *ec2.CreateNetworkAclInput,
@@ -988,7 +988,7 @@ func (m *ec2ServiceMock) ReplaceNetworkAclAssociation(
 	return m.replaceNetworkAclAssociationOutput, m.replaceNetworkAclAssociationError
 }
 
-// Tag methods
+// Tag methods.
 func (m *ec2ServiceMock) CreateTags(
 	ctx context.Context,
 	params *ec2.CreateTagsInput,

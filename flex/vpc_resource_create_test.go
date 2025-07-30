@@ -431,7 +431,7 @@ func createVPCCreateWithCreateVPCErrorTestCase(
 	}
 }
 
-// Mock resource group tagging service for testing
+// Mock resource group tagging service for testing.
 type mockResourceGroupTaggingService struct{}
 
 func (m *mockResourceGroupTaggingService) GetResources(ctx context.Context, input *resourcegroupstaggingapi.GetResourcesInput, optFns ...func(*resourcegroupstaggingapi.Options)) (*resourcegroupstaggingapi.GetResourcesOutput, error) {

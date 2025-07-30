@@ -31,7 +31,7 @@ type Service interface {
 	// pages. You should check the PaginationToken response parameter to determine if
 	// there are additional results available to return. Repeat the query, passing the
 	// PaginationToken response parameter value as an input to the next request until
-	// you recieve a null value. A null value for PaginationToken indicates that there
+	// you receive a null value. A null value for PaginationToken indicates that there
 	// are no more results waiting to be returned.
 	//
 	// [Tag Policies]: https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_tag-policies.html
