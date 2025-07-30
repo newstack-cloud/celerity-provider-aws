@@ -12,6 +12,7 @@ import (
 	"github.com/aws/smithy-go"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
+	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 )
 
 func (i *iamRoleResourceActions) GetExternalState(
@@ -71,7 +72,7 @@ func (i *iamRoleResourceActions) GetExternalState(
 	}
 
 	// Convert back to MappingNode structure
-	policyMappingNode, err := convertInterfaceToMappingNode(policyDocument)
+	policyMappingNode, err := pluginutils.AnyToMappingNode(policyDocument)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +132,7 @@ func (i *iamRoleResourceActions) GetExternalState(
 			if err := json.Unmarshal([]byte(aws.ToString(getPolicyOutput.PolicyDocument)), &policyDoc); err != nil {
 				return nil, err
 			}
-			policyDocNode, err := convertInterfaceToMappingNode(policyDoc)
+			policyDocNode, err := pluginutils.AnyToMappingNode(policyDoc)
 			if err != nil {
 				return nil, err
 			}
@@ -148,40 +149,4 @@ func (i *iamRoleResourceActions) GetExternalState(
 	return &provider.ResourceGetExternalStateOutput{
 		ResourceSpecState: resourceSpecState,
 	}, nil
-}
-
-// convertInterfaceToMappingNode converts a JSON interface{} to a MappingNode.
-func convertInterfaceToMappingNode(data interface{}) (*core.MappingNode, error) {
-	switch v := data.(type) {
-	case map[string]interface{}:
-		fields := make(map[string]*core.MappingNode)
-		for key, value := range v {
-			convertedValue, err := convertInterfaceToMappingNode(value)
-			if err != nil {
-				return nil, err
-			}
-			fields[key] = convertedValue
-		}
-		return &core.MappingNode{Fields: fields}, nil
-	case []interface{}:
-		items := make([]*core.MappingNode, len(v))
-		for i, item := range v {
-			convertedItem, err := convertInterfaceToMappingNode(item)
-			if err != nil {
-				return nil, err
-			}
-			items[i] = convertedItem
-		}
-		return &core.MappingNode{Items: items}, nil
-	case string:
-		return core.MappingNodeFromString(v), nil
-	case float64:
-		return core.MappingNodeFromInt(int(v)), nil
-	case bool:
-		return core.MappingNodeFromBool(v), nil
-	case nil:
-		return &core.MappingNode{}, nil
-	default:
-		return nil, fmt.Errorf("unsupported type: %T", data)
-	}
 }

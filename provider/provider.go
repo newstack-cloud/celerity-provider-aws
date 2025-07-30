@@ -4,11 +4,14 @@ import (
 	"regexp"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/newstack-cloud/bluelink-provider-aws/flex"
+	ec2service "github.com/newstack-cloud/bluelink-provider-aws/services/ec2/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/services/iam"
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/services/lambda"
 	lambdalinks "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/links"
 	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
+	resgrouptagservice "github.com/newstack-cloud/bluelink-provider-aws/services/resgrouptag/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/utils"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
@@ -20,6 +23,8 @@ import (
 func NewProvider(
 	iamServiceFactory pluginutils.ServiceFactory[*aws.Config, iamservice.Service],
 	lambdaServiceFactory pluginutils.ServiceFactory[*aws.Config, lambdaservice.Service],
+	ec2ServiceFactory pluginutils.ServiceFactory[*aws.Config, ec2service.Service],
+	resourceGroupTaggingServiceFactory pluginutils.ServiceFactory[*aws.Config, resgrouptagservice.Service],
 	awsConfigStore *utils.AWSConfigStore,
 ) provider.Provider {
 	return &providerv1.ProviderPluginDefinition{
@@ -96,6 +101,11 @@ func NewProvider(
 			),
 			"aws/lambda/layerVersionPermission": lambda.LayerVersionPermissionResource(
 				lambdaServiceFactory,
+				awsConfigStore,
+			),
+			"aws/flex/vpc": flex.VPCResource(
+				ec2ServiceFactory,
+				resourceGroupTaggingServiceFactory,
 				awsConfigStore,
 			),
 		},

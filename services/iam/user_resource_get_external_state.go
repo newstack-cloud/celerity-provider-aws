@@ -12,6 +12,7 @@ import (
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
+	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 )
 
 func (i *iamUserResourceActions) GetExternalState(
@@ -186,7 +187,7 @@ func (i *iamUserResourceActions) getInlinePolicies(
 		}
 
 		// Convert to MappingNode
-		policyDocNode, err := convertInterfaceToMappingNode(policyDoc)
+		policyDocNode, err := pluginutils.AnyToMappingNode(policyDoc)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert policy document to mapping node: %w", err)
 		}

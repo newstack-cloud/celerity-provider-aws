@@ -96,17 +96,13 @@ func (l *lambdaFunctionCodeSigningConfigLinkActions) addCodeSigningConfigToFunct
 		input.ResourceInfo.ResourceName,
 	)
 	return &provider.LinkUpdateResourceOutput{
-		LinkData: &core.MappingNode{
-			Fields: map[string]*core.MappingNode{
-				input.ResourceInfo.ResourceName: {
-					Fields: map[string]*core.MappingNode{
-						"codeSigningConfigArn": core.MappingNodeFromString(
-							core.StringValue(codeSigningConfigARN),
-						),
-					},
-				},
-			},
-		},
+		LinkData: core.MappingNodeFields(
+			input.ResourceInfo.ResourceName,
+			core.MappingNodeFields(
+				"codeSigningConfigArn",
+				core.MappingNodeFromString(core.StringValue(codeSigningConfigARN)),
+			),
+		),
 		ResourceDataMappings: map[string]string{
 			resourceFieldPath: linkFieldPath,
 		},
@@ -129,9 +125,7 @@ func (l *lambdaFunctionCodeSigningConfigLinkActions) removeCodeSigningConfigFrom
 	}
 
 	return &provider.LinkUpdateResourceOutput{
-		LinkData: &core.MappingNode{
-			Fields: map[string]*core.MappingNode{},
-		},
+		LinkData: core.MappingNodeFields(),
 	}, nil
 }
 
@@ -141,9 +135,7 @@ func (l *lambdaFunctionCodeSigningConfigLinkActions) UpdateResourceB(
 ) (*provider.LinkUpdateResourceOutput, error) {
 	// The code signing config is not updated as a part of the link update.
 	return &provider.LinkUpdateResourceOutput{
-		LinkData: &core.MappingNode{
-			Fields: map[string]*core.MappingNode{},
-		},
+		LinkData: core.MappingNodeFields(),
 	}, nil
 }
 
@@ -155,8 +147,6 @@ func (l *lambdaFunctionCodeSigningConfigLinkActions) UpdateIntermediaryResources
 	// for the lambda function to code signing config link.
 	return &provider.LinkUpdateIntermediaryResourcesOutput{
 		IntermediaryResourceStates: []*state.LinkIntermediaryResourceState{},
-		LinkData: &core.MappingNode{
-			Fields: map[string]*core.MappingNode{},
-		},
+		LinkData:                   core.MappingNodeFields(),
 	}, nil
 }

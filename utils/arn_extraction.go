@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
+	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 )
 
@@ -22,4 +23,18 @@ func ExtractARNFromCurrentState(
 		return "", fmt.Errorf("ARN is required for %s", context)
 	}
 	return core.StringValue(arn), nil
+}
+
+// ExtractARNFromResourceInfo extracts the ARN from the resource info,
+// this only works when the "arn" field is present as a a top-level field in provided
+// spec data.
+func ExtractARNFromResourceInfo(resourceInfo *provider.ResourceInfo) (string, bool) {
+	specData := pluginutils.GetCurrentStateSpecDataFromResourceInfo(
+		resourceInfo,
+	)
+	arn, hasARN := pluginutils.GetValueByPath(
+		"$.arn",
+		specData,
+	)
+	return core.StringValue(arn), hasARN
 }

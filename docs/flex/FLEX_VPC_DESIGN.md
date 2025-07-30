@@ -55,6 +55,17 @@ This will be used to uniquely identify the flex VPC in the AWS account.
 
 The name must be unique within the AWS account.
 
+### `mode`
+
+The mode of the flex VPC resource.
+
+This can be one of the following values:
+
+- `create`: The flex VPC will be created in the AWS account.
+- `reference`: The flex VPC definition will be a reference to an existing VPC (and related resources) in the AWS account.
+
+**Default:** `create`
+
 ### `preset`
 
 A preset is a pre-defined configuration for the Flex VPC resource. It is used to specify the desired VPC configuration and the associated resources.
@@ -67,7 +78,7 @@ See the [Presets](#presets) section for more details on the available presets.
 
 The CIDR block for the VPC.
 
-The CIDR block must be a valid IPv4 or IPv6 CIDR block.
+The CIDR block must be a valid IPv4 CIDR block.
 
 The CIDR block must be large enough to accommodate the number of subnets specified in the preset.
 
@@ -85,9 +96,136 @@ This will also be used to determine the availability zones for the subnets.
 
 If not provided, the region will be inferred from the current deployment.
 
+### `enableDNSSupport`
+
+Whether DNS resolution is enabled for the VPC.
+
+**Default:** `true`
+
+### `enableDNSHostnames`
+
+Whether DNS hostnames are enabled for the VPC.
+This is useful for internal host names for EC2 instances.
+
+**Default:** `false`
+
 ### `tags`
 
 A map of custom tags to be applied to the VPC and its associated resources.
+
+## Computed Fields
+
+### `vpcId`
+
+The ID of the concrete AWS VPC that will be created or referenced.
+
+This will be computed after the VPC is created.
+
+### `subnets`
+
+A map of the subnets that will be created or referenced.
+The keys are logical names of the subnets that are derived from the flex VPC preset.
+
+An example of this would be:
+
+```json
+{
+    "subnets": {
+        "public-az-1": {
+            "id": "subnet-01234567890123456",
+            "availabilityZone": "us-east-1a",
+        }
+    }
+}
+```
+
+### `routeTables`
+
+A list of the route tables that will be created or referenced.
+The route table structure will contain the ID of the route table and the subnet IDs that it is associated with.
+
+An example of this would be:
+
+```json
+{
+    "routeTables": [
+        {
+            "id": "rtb-01234567890123456",
+            "subnetIds": [
+                "subnet-01234567890123456",
+                "subnet-01234567890123457",
+                "subnet-01234567890123458"
+            ]
+        }
+    ]
+}
+```
+
+### `securityGroups`
+
+A list of the security group IDs that will be created or referenced.
+
+An example of this would be:
+
+```json
+{
+    "securityGroups": [
+        "sg-01234567890123456",
+        "sg-01234567890123457",
+        "sg-01234567890123458"
+    ]
+}
+```
+
+### `networkAcls`
+
+A mapping of network ACLs to subnet IDs that they are associated with.
+The key is a logical name of the network ACL as defined by the flex VPC resource implementation.
+
+An example of this would be:
+
+```json
+{
+    "networkAcls": {
+        "default": {
+            "id": "acl-01234567890123456",
+            "subnetIds": [
+                "subnet-01234567890123456",
+                "subnet-01234567890123457",
+                "subnet-01234567890123458"
+            ]
+        }
+    }
+}
+```
+
+### `gateways`
+
+A structure containing of internet and NAT gateways that will be created or referenced.
+
+An example of this would be:
+
+```json
+{
+    "gateways": {
+        "internetGatewayId": "igw-01234567890123456",
+        "natGateways": [
+            {
+                "id": "nat-01234567890123456",
+                "elasticIpId": "eipalloc-01234567890123456",
+                "inPublicSubnetId": "subnet-01234567890123456",
+                "forPrivateSubnetId": "subnet-01234567890123457"
+            },
+            {
+                "id": "nat-01234567890123457",
+                "elasticIpId": "eipalloc-01234567890123457",
+                "inPublicSubnetId": "subnet-01234567890123457",
+                "forPrivateSubnetId": "subnet-01234567890123458"
+            }
+        ]
+    }
+}
+```
 
 ## Presets
 
@@ -102,7 +240,7 @@ A multi-AZ VPC with public and private subnets in 3 availability zones (AZs) for
 - **NAT Gateways**: 3 NAT Gateways, one in each public subnet to cover each availability zone, providing zone-local egress for private subnets.
 - **Internet Gateway**: An internet gateway is attached to the VPC, enabling inbound/outbound internet access for public subnets. IPv6 will be enabled by default in addition to IPv4.
 - **Route Tables**: Public subnets route 0.0.0.0/0 to the internet gateway; private subnets route 0.0.0.0/0 to the NAT gateway in their AZ.
-- **Security**: Default security groups and NACLs deny all traffic by default, the usage of links between resources in a blueprint will enable rules that allow specific traffic based on the linked resources.
+- **Security**: An initial security group is provisioned that denies all traffic by default, the usage of links between resources in a blueprint will enable rules that allow specific traffic based on the linked resources.
 - **Use Case**: This preset is suitable for production workloads that require high availability, scalability and secure internet access for private resources. Examples of use cases would be web applications, data processing workloads and databases.
 - **Tagging**: All resources in the VPC will be tagged with Bluelink's default tags to identify the resources as a part of a Flex VPC along with user-defined tags for the flex VPC resource.
 
@@ -114,7 +252,7 @@ A multi-AZ VPC with only public subnets in 3 availability zones (AZs) for high a
 - **Availiability Zones**: The availability zones are selected based on the current region of the deployment or a custom region that can be specified for the flex VPC resource.
 - **Internet Gateway**: An internet gateway is attached to the VPC, enabling inbound/outbound internet access for public subnets. IPv6 will be enabled by default in addition to IPv4.
 - **Route Tables**: Public subnets route 0.0.0.0/0 to the internet gateway.
-- **Security**: Default security groups and NACLs deny all traffic by default, the usage of links between resources in a blueprint will enable rules that allow specific traffic based on the linked resources.
+- **Security**: An initial security group is provisioned to deny all traffic by default. A deny-all NACL will also be created as an additional layer of security for public-only VPCs as a starting point. The usage of links between resources in a blueprint will enable security group and NACL rules that allow specific traffic based on the linked resources.
 - **Use Case**: This preset is suitable when all resources need direct internet access and there is no requirement for resources to be isolated from the public internet. This is not typical for production workloads, but can be very valuable for development, testing and public-facing services with lenient security requirements.
 - **Tagging**: All resources in the VPC will be tagged with Bluelink's default tags to identify the resources as a part of a Flex VPC along with user-defined tags for the flex VPC resource.
 
@@ -127,7 +265,7 @@ A multi-AZ VPC with only private subnets in 3 availability zones (AZs) for high 
 - **Internet Gateway**: No internet gateway is attached to the VPC, no inbound/outbound internet access is allowed for subnets.
 - **NAT Gateways**: No NAT Gateways are deployed.
 - **Route Tables**: There are no routes to 0.0.0.0/0 (the internet) or to any NAT or internet gateway. Route entries will be added dynamically by links for specific VPC endpoints and VPC peering connections.
-- **Security**: Default security groups and NACLs deny all traffic by default, the usage of links between resources in a blueprint will enable rules that allow specific traffic based on the linked resources.
+- **Security**: An initial security group is provisioned to deny all traffic by default, the usage of links between resources in a blueprint will enable rules that allow specific traffic based on the linked resources.
 - **Use Case**: This preset is suitable for workloads that need to be isolated from the public internet. This is useful for internal databases and workloads with strict security requirements.
 - **Tagging**: All resources in the VPC will be tagged with Bluelink's default tags to identify the resources as a part of a Flex VPC along with user-defined tags for the flex VPC resource.
 
@@ -142,7 +280,7 @@ This preset is the most cost-effective option for a VPC that still requires priv
 - **Internet Gateway**: An internet gateway is attached to the VPC, enabling inbound/outbound internet access for the public subnet. IPv6 will be enabled by default in addition to IPv4.
 - **NAT Gateways**: a NAT gateway is deployed to allow the private subnet access to the public internet.
 - **Route Tables**: The public subnet route 0.0.0.0/0 to the internet gateway; the private subnet route 0.0.0.0/0 to the NAT gateway in their AZ.
-- **Security**: Default security groups and NACLs deny all traffic by default, the usage of links between resources in a blueprint will enable rules that allow specific traffic based on the linked resources.
+- **Security**: An initial security group is provisioned to deny all traffic by default, the usage of links between resources in a blueprint will enable rules that allow specific traffic based on the linked resources.
 - **Use Case**: This preset is suitable for small workloads that do not require high availability. This is useful for development, testing and internal services that aren't business critical.
 
 ### `light-public`
@@ -155,7 +293,7 @@ This preset is the most cost-effective option for a VPC that does not require pr
 - **Availiability Zones**: The availability zone is selected based on the current region of the deployment or a custom region that can be specified for the flex VPC resource.
 - **Internet Gateway**: An internet gateway is attached to the VPC, enabling inbound/outbound internet access for the public subnet. IPv6 will be enabled by default in addition to IPv4.
 - **Route Tables**: The public subnet route 0.0.0.0/0 to the internet gateway.
-- **Security**: Default security groups and NACLs deny all traffic by default, the usage of links between resources in a blueprint will enable rules that allow specific traffic based on the linked resources.
+- **Security**: An initial security group is provisioned to deny all traffic by default. A deny-all NACL will also be created as an additional layer of security for public-only VPCs as a starting point. The usage of links between resources in a blueprint will enable security group and NACL rules that allow specific traffic based on the linked resources.
 - **Use Case**: This preset is suitable for small workloads that do not require high availability. This is useful for development, testing and internal services that aren't business critical.
 
 ## Validation
@@ -193,3 +331,9 @@ For links within the same blueprint, a local blueprint lock will be acquired to 
 ### Link cleanup behaviour
 
 When a link is removed, its name is removed from the tags associated with flex VPC resources and the resource is only deleted if there are no other links associated with the resource.
+
+### Definitions across multiple blueprints
+
+Only one flex VPC definition across all blueprints should have configuration for the same name. All other flex VPC resource definitions must be set with the `mode` field set to `reference`, where validation will fail if a flex VPC in reference mode contains additional configuration.
+
+If you don't set the `mode` field to `reference`, the deployment will fail if the flex VPC has already been created in the target AWS account.

@@ -1,6 +1,8 @@
 package utils
 
-import "github.com/newstack-cloud/bluelink/libs/blueprint/core"
+import (
+	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
+)
 
 // TagsToMappingNode converts a map of tags from an AWS service response
 // to a MappingNode suitable for use in a resource spec.

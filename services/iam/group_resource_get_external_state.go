@@ -144,13 +144,13 @@ func (i *iamGroupResourceActions) getInlinePolicies(
 		}
 
 		// Parse the policy document JSON
-		var policyDoc map[string]interface{}
+		var policyDoc map[string]any
 		if err := json.Unmarshal([]byte(aws.ToString(policyResult.PolicyDocument)), &policyDoc); err != nil {
 			return nil, fmt.Errorf("failed to parse policy document for %s: %w", policyName, err)
 		}
 
 		// Convert to MappingNode
-		policyDocNode, err := convertInterfaceToMappingNode(policyDoc)
+		policyDocNode, err := pluginutils.AnyToMappingNode(policyDoc)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert policy document to mapping node: %w", err)
 		}
