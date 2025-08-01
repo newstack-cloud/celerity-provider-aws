@@ -102,10 +102,13 @@ func vpcResourceSchema() *provider.ResourceDefinitionsSchema {
 				Type: provider.ResourceDefinitionsSchemaTypeBoolean,
 				Description: "Indicates whether the instances launched in the VPC get DNS hostnames. " +
 					"If enabled, instances in the VPC get DNS hostnames; otherwise, they do not. " +
-					"Disabled by default for nondefault VPCs.",
+					"Disabled by default for nondefault VPCs. You will want to enable DNS hostnames if you intend to use VPC endpoints " +
+					"to connect to AWS services using the public host names that SDKs use to connect to the services by default.",
 				FormattedDescription: "Indicates whether the instances launched in the VPC get DNS hostnames. " +
 					"If enabled, instances in the VPC get DNS hostnames; otherwise, they do not. " +
-					"Disabled by default for nondefault VPCs. For more information, see [DNS attributes in your VPC.](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-dns.html#vpc-dns-hostnames)",
+					"Disabled by default for nondefault VPCs. For more information, see [DNS attributes in your VPC.](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-dns.html#vpc-dns-hostnames)\n" +
+					"You will want to enable DNS hostnames if you intend to use VPC endpoints " +
+					"to connect to AWS services using the public host names that SDKs use to connect to the services by default.",
 				MustRecreate: false,
 				Default:      core.MappingNodeFromBool(false),
 				ValidateFunc: validation.ConflictsWithResourceDefinition(

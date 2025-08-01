@@ -1,9 +1,12 @@
 package utils
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
@@ -100,4 +103,93 @@ func toTagsMap(specTags *core.MappingNode) map[string]string {
 		}
 	}
 	return tagMap
+}
+
+const (
+	// TagLinkSecurityGroup is a tag that is used to identify the security group
+	// that is used to allow access to VPC endpoints.
+	TagLinkSecurityGroup = "bluelink:link:security-group"
+	// TagLinkVPCName is a tag that is used to identify the flex VPC
+	// that is used to allow access to VPC endpoints.
+	TagLinkVPCName = "bluelink:link:flex-vpc:name"
+	// TagBlueprintInstanceName is a tag that is used to identify the blueprint instance
+	// that is used to allow access to VPC endpoints.
+	TagBlueprintInstanceName = "bluelink:blueprint-instance:name"
+	// TagBlueprintLinkIDPrefix is a tag prefix that is used to identify the blueprint link
+	// that is used for networking resources created as a part of a link implementation.
+	// Each link will have its own key entry in the tag with the link ID as the suffix.
+	TagBlueprintLinkIDPrefix = "bluelink:blueprint-link:id:"
+	// TagLinkVPCEndpoint is a tag that is used to identify the VPC endpoint
+	// that is used to allow access to VPC endpoints.
+	TagLinkVPCEndpoint = "bluelink:link:vpc-endpoint"
+	// TagBluelinkService is a tag that is used to identify the service
+	// that a resource such as a security group is intended to provide access to.
+	TagBluelinkService = "bluelink:service"
+)
+
+// CreateTagLinkSecurityGroup creates a tag that is used to identify the security group
+// that is used to allow access to VPC endpoints.
+func CreateTagLinkSecurityGroup() ec2types.Tag {
+	return ec2types.Tag{
+		Key:   aws.String(TagLinkSecurityGroup),
+		Value: aws.String("true"),
+	}
+}
+
+// CreateTagLinkVPCEndpoint creates a tag that is used to identify the VPC endpoint
+// that is used to allow access to VPC endpoints.
+func CreateTagLinkVPCEndpoint() ec2types.Tag {
+	return ec2types.Tag{
+		Key:   aws.String(TagLinkVPCEndpoint),
+		Value: aws.String("true"),
+	}
+}
+
+// CreateTagFlexVPCNameForLink creates a filter that is used to identify the flex VPC
+// that is used to allow access to VPC endpoints.
+// This is to be used for components created as a part of a link implementation
+// and is different from the tag used for the core flex VPC resources.
+func CreateTagFlexVPCNameForLink(flexVPCName string) ec2types.Tag {
+	return ec2types.Tag{
+		Key:   aws.String(TagLinkVPCName),
+		Value: aws.String(flexVPCName),
+	}
+}
+
+// CreateTagFilterFlexVPCNameForLink creates a filter that is used to identify the flex VPC
+// that is used to allow access to VPC endpoints.
+// This is to be used for components created as a part of a link implementation
+// and is different from the tag used for the core flex VPC resources.
+func CreateTagFilterFlexVPCNameForLink(flexVPCName string) ec2types.Filter {
+	return ec2types.Filter{
+		Name:   aws.String(fmt.Sprintf("tag:%s", TagLinkVPCName)),
+		Values: []string{flexVPCName},
+	}
+}
+
+// CreateTagBlueprintInstanceName creates a tag that is used to identify the blueprint instance
+// associated with a networking resource created as a part of a link implementation.
+func CreateTagBlueprintInstanceName(instanceName string) ec2types.Tag {
+	return ec2types.Tag{
+		Key:   aws.String(TagBlueprintInstanceName),
+		Value: aws.String(instanceName),
+	}
+}
+
+// CreateTagBlueprintLinkID creates a tag that is used to identify the blueprint link
+// that is used to allow access to VPC endpoints.
+func CreateTagBlueprintLinkID(linkID string) ec2types.Tag {
+	return ec2types.Tag{
+		Key:   aws.String(fmt.Sprintf("%s%s", TagBlueprintLinkIDPrefix, linkID)),
+		Value: aws.String("true"),
+	}
+}
+
+// CreateTagBluelinkService creates a tag that is used to identify the service
+// that is used to allow access to VPC endpoints.
+func CreateTagBluelinkService(serviceName string) ec2types.Tag {
+	return ec2types.Tag{
+		Key:   aws.String(TagBluelinkService),
+		Value: aws.String(serviceName),
+	}
 }

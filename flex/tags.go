@@ -37,7 +37,9 @@ const (
 	TagFlexVPCNetworkACL = "bluelink:flex-vpc:network-acl"
 )
 
-func tagFilterFlexVPCName(name string) types.Filter {
+// TagFilterFlexVPCName returns a filter for the flex VPC name
+// for an EC2 networking resource.
+func TagFilterFlexVPCName(name string) types.Filter {
 	return types.Filter{
 		Name: aws.String(fmt.Sprintf("tag:%s", TagFlexVPCName)),
 		Values: []string{

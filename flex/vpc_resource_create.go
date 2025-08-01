@@ -122,7 +122,7 @@ func (l *vpcResourceActions) describeVPCsByName(
 
 	vpcsOutput, err := service.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{
 		Filters: []types.Filter{
-			tagFilterFlexVPCName(core.StringValue(name)),
+			TagFilterFlexVPCName(core.StringValue(name)),
 		},
 	})
 	if err != nil {

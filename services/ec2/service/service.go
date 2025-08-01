@@ -412,6 +412,57 @@ type Service interface {
 	// gateways. Alternatively, you can specify specific internet gateway IDs or filter
 	// the results to include only the internet gateways that match specific criteria.
 	DescribeInternetGateways(ctx context.Context, params *ec2.DescribeInternetGatewaysInput, optFns ...func(*ec2.Options)) (*ec2.DescribeInternetGatewaysOutput, error)
+	// Describes your VPC endpoints. The default is to describe all your VPC
+	// endpoints. Alternatively, you can specify specific VPC endpoint IDs or filter
+	// the results to include only the VPC endpoints that match specific criteria.
+	DescribeVpcEndpoints(ctx context.Context, params *ec2.DescribeVpcEndpointsInput, optFns ...func(*ec2.Options)) (*ec2.DescribeVpcEndpointsOutput, error)
+	// Creates a VPC endpoint. A VPC endpoint provides a private connection between
+	// the specified VPC and the specified endpoint service. You can use an endpoint
+	// service provided by Amazon Web Services, an Amazon Web Services Marketplace
+	// Partner, or another Amazon Web Services account. For more information, see the [Amazon Web Services PrivateLink User Guide].
+	//
+	// [Amazon Web Services PrivateLink User Guide]: https://docs.aws.amazon.com/vpc/latest/privatelink/
+	CreateVpcEndpoint(ctx context.Context, params *ec2.CreateVpcEndpointInput, optFns ...func(*ec2.Options)) (*ec2.CreateVpcEndpointOutput, error)
+	// Adds the specified inbound (ingress) rules to a security group.
+	//
+	// An inbound rule permits instances to receive traffic from the specified IPv4 or
+	// IPv6 address range, the IP address ranges that are specified by a prefix list,
+	// or the instances that are associated with a destination security group. For more
+	// information, see [Security group rules].
+	//
+	// You must specify exactly one of the following sources: an IPv4 or IPv6 address
+	// range, a prefix list, or a security group. You must specify a protocol for each
+	// rule (for example, TCP). If the protocol is TCP or UDP, you must also specify a
+	// port or port range. If the protocol is ICMP or ICMPv6, you must also specify the
+	// ICMP/ICMPv6 type and code.
+	//
+	// Rule changes are propagated to instances associated with the security group as
+	// quickly as possible. However, a small delay might occur.
+	//
+	// For examples of rules that you can add to security groups for specific access
+	// scenarios, see [Security group rules for different use cases]in the Amazon EC2 User Guide.
+	//
+	// For more information about security group quotas, see [Amazon VPC quotas] in the Amazon VPC User
+	// Guide.
+	//
+	// [Amazon VPC quotas]: https://docs.aws.amazon.com/vpc/latest/userguide/amazon-vpc-limits.html
+	// [Security group rules]: https://docs.aws.amazon.com/vpc/latest/userguide/security-group-rules.html
+	// [Security group rules for different use cases]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/security-group-rules-reference.html
+	AuthorizeSecurityGroupIngress(ctx context.Context, params *ec2.AuthorizeSecurityGroupIngressInput, optFns ...func(*ec2.Options)) (*ec2.AuthorizeSecurityGroupIngressOutput, error)
+	// Modifies attributes of a specified VPC endpoint. The attributes that you can
+	// modify depend on the type of VPC endpoint (interface, gateway, or Gateway Load
+	// Balancer). For more information, see the [Amazon Web Services PrivateLink Guide].
+	//
+	// [Amazon Web Services PrivateLink Guide]: https://docs.aws.amazon.com/vpc/latest/privatelink/
+	ModifyVpcEndpoint(ctx context.Context, params *ec2.ModifyVpcEndpointInput, optFns ...func(*ec2.Options)) (*ec2.ModifyVpcEndpointOutput, error)
+	// Deletes the specified VPC endpoint. Deleting a VPC endpoint disconnects you from
+	// the service. VPC endpoints that are associated with a VPC endpoint service are
+	// automatically deleted.
+	//
+	// For more information, see [VPC Endpoints] in the Amazon VPC User Guide.
+	//
+	// [VPC Endpoints]: https://docs.aws.amazon.com/vpc/latest/userguide/vpc-endpoints.html
+	DeleteVpcEndpoints(ctx context.Context, params *ec2.DeleteVpcEndpointsInput, optFns ...func(*ec2.Options)) (*ec2.DeleteVpcEndpointsOutput, error)
 }
 
 // NewService creates a new instance of the Amazon EC2 service

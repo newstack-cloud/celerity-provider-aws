@@ -104,6 +104,20 @@ type ec2ServiceMock struct {
 	replaceNetworkAclAssociationOutput *ec2.ReplaceNetworkAclAssociationOutput
 	replaceNetworkAclAssociationError  error
 
+	// VPC endpoint-related mock fields
+	describeVpcEndpointsOutput *ec2.DescribeVpcEndpointsOutput
+	describeVpcEndpointsError  error
+	createVpcEndpointOutput    *ec2.CreateVpcEndpointOutput
+	createVpcEndpointError     error
+	modifyVpcEndpointOutput    *ec2.ModifyVpcEndpointOutput
+	modifyVpcEndpointError     error
+	deleteVpcEndpointsOutput   *ec2.DeleteVpcEndpointsOutput
+	deleteVpcEndpointsError    error
+
+	// Security group ingress-related mock fields
+	authorizeSecurityGroupIngressOutput *ec2.AuthorizeSecurityGroupIngressOutput
+	authorizeSecurityGroupIngressError  error
+
 	// Tag-related mock fields
 	createTagsOutput *ec2.CreateTagsOutput
 	createTagsError  error
@@ -574,6 +588,68 @@ func WithReplaceNetworkAclAssociationError(err error) ec2ServiceMockOption {
 	}
 }
 
+// VPC endpoint-related options.
+func WithDescribeVpcEndpointsOutput(output *ec2.DescribeVpcEndpointsOutput) ec2ServiceMockOption {
+	return func(m *ec2ServiceMock) {
+		m.describeVpcEndpointsOutput = output
+	}
+}
+
+func WithDescribeVpcEndpointsError(err error) ec2ServiceMockOption {
+	return func(m *ec2ServiceMock) {
+		m.describeVpcEndpointsError = err
+	}
+}
+
+func WithCreateVpcEndpointOutput(output *ec2.CreateVpcEndpointOutput) ec2ServiceMockOption {
+	return func(m *ec2ServiceMock) {
+		m.createVpcEndpointOutput = output
+	}
+}
+
+func WithCreateVpcEndpointError(err error) ec2ServiceMockOption {
+	return func(m *ec2ServiceMock) {
+		m.createVpcEndpointError = err
+	}
+}
+
+func WithModifyVpcEndpointOutput(output *ec2.ModifyVpcEndpointOutput) ec2ServiceMockOption {
+	return func(m *ec2ServiceMock) {
+		m.modifyVpcEndpointOutput = output
+	}
+}
+
+func WithModifyVpcEndpointError(err error) ec2ServiceMockOption {
+	return func(m *ec2ServiceMock) {
+		m.modifyVpcEndpointError = err
+	}
+}
+
+func WithDeleteVpcEndpointsOutput(output *ec2.DeleteVpcEndpointsOutput) ec2ServiceMockOption {
+	return func(m *ec2ServiceMock) {
+		m.deleteVpcEndpointsOutput = output
+	}
+}
+
+func WithDeleteVpcEndpointsError(err error) ec2ServiceMockOption {
+	return func(m *ec2ServiceMock) {
+		m.deleteVpcEndpointsError = err
+	}
+}
+
+// Security group ingress-related options.
+func WithAuthorizeSecurityGroupIngressOutput(output *ec2.AuthorizeSecurityGroupIngressOutput) ec2ServiceMockOption {
+	return func(m *ec2ServiceMock) {
+		m.authorizeSecurityGroupIngressOutput = output
+	}
+}
+
+func WithAuthorizeSecurityGroupIngressError(err error) ec2ServiceMockOption {
+	return func(m *ec2ServiceMock) {
+		m.authorizeSecurityGroupIngressError = err
+	}
+}
+
 // Tag-related options.
 func WithCreateTagsOutput(output *ec2.CreateTagsOutput) ec2ServiceMockOption {
 	return func(m *ec2ServiceMock) {
@@ -986,6 +1062,53 @@ func (m *ec2ServiceMock) ReplaceNetworkAclAssociation(
 ) (*ec2.ReplaceNetworkAclAssociationOutput, error) {
 	m.RegisterCall(ctx, params)
 	return m.replaceNetworkAclAssociationOutput, m.replaceNetworkAclAssociationError
+}
+
+// VPC endpoint methods.
+func (m *ec2ServiceMock) DescribeVpcEndpoints(
+	ctx context.Context,
+	params *ec2.DescribeVpcEndpointsInput,
+	optFns ...func(*ec2.Options),
+) (*ec2.DescribeVpcEndpointsOutput, error) {
+	m.RegisterCall(ctx, params)
+	return m.describeVpcEndpointsOutput, m.describeVpcEndpointsError
+}
+
+func (m *ec2ServiceMock) CreateVpcEndpoint(
+	ctx context.Context,
+	params *ec2.CreateVpcEndpointInput,
+	optFns ...func(*ec2.Options),
+) (*ec2.CreateVpcEndpointOutput, error) {
+	m.RegisterCall(ctx, params)
+	return m.createVpcEndpointOutput, m.createVpcEndpointError
+}
+
+func (m *ec2ServiceMock) ModifyVpcEndpoint(
+	ctx context.Context,
+	params *ec2.ModifyVpcEndpointInput,
+	optFns ...func(*ec2.Options),
+) (*ec2.ModifyVpcEndpointOutput, error) {
+	m.RegisterCall(ctx, params)
+	return m.modifyVpcEndpointOutput, m.modifyVpcEndpointError
+}
+
+func (m *ec2ServiceMock) DeleteVpcEndpoints(
+	ctx context.Context,
+	params *ec2.DeleteVpcEndpointsInput,
+	optFns ...func(*ec2.Options),
+) (*ec2.DeleteVpcEndpointsOutput, error) {
+	m.RegisterCall(ctx, params)
+	return m.deleteVpcEndpointsOutput, m.deleteVpcEndpointsError
+}
+
+// Security group ingress methods.
+func (m *ec2ServiceMock) AuthorizeSecurityGroupIngress(
+	ctx context.Context,
+	params *ec2.AuthorizeSecurityGroupIngressInput,
+	optFns ...func(*ec2.Options),
+) (*ec2.AuthorizeSecurityGroupIngressOutput, error) {
+	m.RegisterCall(ctx, params)
+	return m.authorizeSecurityGroupIngressOutput, m.authorizeSecurityGroupIngressError
 }
 
 // Tag methods.
