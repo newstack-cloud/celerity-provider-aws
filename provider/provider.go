@@ -12,6 +12,8 @@ import (
 	lambdalinks "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/links"
 	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
 	resgrouptagservice "github.com/newstack-cloud/bluelink-provider-aws/services/resgrouptag/service"
+	"github.com/newstack-cloud/bluelink-provider-aws/services/sqs"
+	sqsservice "github.com/newstack-cloud/bluelink-provider-aws/services/sqs/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/utils"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
@@ -25,6 +27,7 @@ func NewProvider(
 	lambdaServiceFactory pluginutils.ServiceFactory[*aws.Config, lambdaservice.Service],
 	ec2ServiceFactory pluginutils.ServiceFactory[*aws.Config, ec2service.Service],
 	resourceGroupTaggingServiceFactory pluginutils.ServiceFactory[*aws.Config, resgrouptagservice.Service],
+	sqsServiceFactory pluginutils.ServiceFactory[*aws.Config, sqsservice.Service],
 	awsConfigStore *utils.AWSConfigStore,
 ) provider.Provider {
 	return &providerv1.ProviderPluginDefinition{
@@ -106,6 +109,10 @@ func NewProvider(
 			"aws/flex/vpc": flex.VPCResource(
 				ec2ServiceFactory,
 				resourceGroupTaggingServiceFactory,
+				awsConfigStore,
+			),
+			"aws/sqs/queue": sqs.QueueResource(
+				sqsServiceFactory,
 				awsConfigStore,
 			),
 		},

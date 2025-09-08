@@ -1,3 +1,5 @@
+//go:build unit
+
 package provider
 
 import (
@@ -8,6 +10,7 @@ import (
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
 	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
 	resgrouptagservice "github.com/newstack-cloud/bluelink-provider-aws/services/resgrouptag/service"
+	sqsservice "github.com/newstack-cloud/bluelink-provider-aws/services/sqs/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/utils"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
 	"github.com/stretchr/testify/suite"
@@ -66,6 +69,7 @@ func (s *ProviderSuite) Test_loads_provider_and_applies_duration_validation() {
 		lambdaservice.NewService,
 		ec2service.NewService,
 		resgrouptagservice.NewService,
+		sqsservice.NewService,
 		configStore,
 	)
 	configDef, err := provider.ConfigDefinition(context.Background())
@@ -151,6 +155,7 @@ func (s *ProviderSuite) Test_loads_provider_and_applies_role_arn_validation() {
 		lambdaservice.NewService,
 		ec2service.NewService,
 		resgrouptagservice.NewService,
+		sqsservice.NewService,
 		configStore,
 	)
 	configDef, err := provider.ConfigDefinition(context.Background())

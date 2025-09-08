@@ -131,3 +131,19 @@ var (
 	// IAMServerCertificateNameGenerator generates names for IAM server certificates (128 char limit).
 	IAMServerCertificateNameGenerator = DefaultUniqueNameGenerator(128)
 )
+
+// SQSQueueNameGenerator generates names for SQS queues (80 char limit) and accounts
+// for FIFO queues, ensuring the name ends with '.fifo'.
+func SQSQueueNameGenerator(fifoQueue bool) UniqueNameGenerator {
+	return func(input *provider.ResourceDeployInput) (string, error) {
+		if fifoQueue {
+			generatedName, err := DefaultUniqueNameGenerator(75)(input)
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("%s.fifo", generatedName), nil
+		}
+
+		return DefaultUniqueNameGenerator(80)(input)
+	}
+}

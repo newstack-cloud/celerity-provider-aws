@@ -56,8 +56,8 @@ func DiffTags[UpstreamTag any](
 	newSpecData := pluginutils.GetResolvedResourceSpecData(changes)
 	newSpecTags, _ := pluginutils.GetValueByPath(tagsRootPath, newSpecData)
 
-	currentTags := toTagsMap(currentSpecTags)
-	desiredTags := toTagsMap(newSpecTags)
+	currentTags := ToTagsMap(currentSpecTags)
+	desiredTags := ToTagsMap(newSpecTags)
 
 	// Calculate tags to add/update
 	toSetIntermediary := []*Tag{}
@@ -89,7 +89,9 @@ func DiffTags[UpstreamTag any](
 	return result
 }
 
-func toTagsMap(specTags *core.MappingNode) map[string]string {
+// ToTagsMap converts a MappingNode to a map of tags.
+// The MappingNode is expected to be an array of objects with "key" and "value" fields.
+func ToTagsMap(specTags *core.MappingNode) map[string]string {
 	tagMap := make(map[string]string)
 	if core.IsArrayMappingNode(specTags) {
 		for _, item := range specTags.Items {

@@ -12,6 +12,7 @@ import (
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
 	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
 	resgrouptagservice "github.com/newstack-cloud/bluelink-provider-aws/services/resgrouptag/service"
+	sqsservice "github.com/newstack-cloud/bluelink-provider-aws/services/sqs/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/utils"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/plugin"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/pluginservicev1"
@@ -36,6 +37,7 @@ func main() {
 			lambdaservice.NewService,
 			ec2service.NewService,
 			resgrouptagservice.NewService,
+			sqsservice.NewService,
 			utils.NewAWSConfigStore(
 				os.Environ(),
 				utils.AWSConfigFromProviderContext,
