@@ -26,6 +26,6 @@ jobs:
         with:
           audience: sts.amazonaws.com
           aws-region: eu-west-2
-          role-to-assume: arn:aws:iam::588704902642:role/github-actions-integration-tests
+          role-to-assume: arn:aws:iam::027653366630:role/github-actions-integration-tests
       - name: Run Integration Tests
         run: bash scripts/run-tests.sh --integration
