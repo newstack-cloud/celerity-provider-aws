@@ -9,6 +9,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/newstack-cloud/bluelink-provider-aws/internal/testutils"
 	sqsmock "github.com/newstack-cloud/bluelink-provider-aws/internal/testutils/sqs_mock"
 	sqsservice "github.com/newstack-cloud/bluelink-provider-aws/services/sqs/service"
@@ -156,6 +157,9 @@ func createBasicQueueTestCase(
 			},
 			"GetQueueAttributes": &sqs.GetQueueAttributesInput{
 				QueueUrl: aws.String(queueURL),
+				AttributeNames: []types.QueueAttributeName{
+					types.QueueAttributeNameQueueArn,
+				},
 			},
 		},
 	}
@@ -354,6 +358,9 @@ func createAdvancedQueueTestCase(
 			"CreateQueue": expectCreateQueueAdvancedConfigInput,
 			"GetQueueAttributes": &sqs.GetQueueAttributesInput{
 				QueueUrl: aws.String(queueURL),
+				AttributeNames: []types.QueueAttributeName{
+					types.QueueAttributeNameQueueArn,
+				},
 			},
 		},
 	}
@@ -547,6 +554,9 @@ func createFIFOQueueTestCase(
 			},
 			"GetQueueAttributes": &sqs.GetQueueAttributesInput{
 				QueueUrl: aws.String(queueURL),
+				AttributeNames: []types.QueueAttributeName{
+					types.QueueAttributeNameQueueArn,
+				},
 			},
 		},
 	}

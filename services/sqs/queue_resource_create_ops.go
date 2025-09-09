@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	sqsservice "github.com/newstack-cloud/bluelink-provider-aws/services/sqs/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/utils"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
@@ -73,6 +74,9 @@ func (q *queueCreate) Execute(
 
 	attributesOutput, err := sqsService.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
 		QueueUrl: createQueueOutput.QueueUrl,
+		AttributeNames: []types.QueueAttributeName{
+			types.QueueAttributeNameQueueArn,
+		},
 	})
 	if err != nil {
 		return saveOpCtx, err

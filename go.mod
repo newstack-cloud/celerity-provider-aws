@@ -16,7 +16,7 @@ require (
 	github.com/aws/smithy-go v1.23.0
 	github.com/matoous/go-nanoid/v2 v2.1.0
 	github.com/newstack-cloud/bluelink/libs/blueprint v0.32.0
-	github.com/newstack-cloud/bluelink/libs/plugin-framework v0.0.0-20250727193340-face3ba32877
+	github.com/newstack-cloud/bluelink/libs/plugin-framework v0.0.0-20250909100037-01bb55e32888
 	github.com/stretchr/testify v1.10.0
 )
 

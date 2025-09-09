@@ -33,7 +33,7 @@ lint-report.xml
 
 # Environment variables and app config
 .env
-!.env.test
+!.env.test.example
 
 tmp
 *-tmp

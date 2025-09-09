@@ -58,6 +58,13 @@ elif [ "$TEST_MODE" == "all" ]; then
   TEST_TAGS="unit,integration"
 fi
 
+if [ "$TEST_MODE" == "integration" ] && [ -f ".env.test" ]; then
+  echo "Exporting environment variables from .env.test for integration tests ..."
+  set -o allexport
+  source .env.test
+  set +o allexport
+fi
+
 go test -tags="$TEST_TAGS" -timeout 90000ms -race -coverprofile=coverage.txt -coverpkg=./... -covermode=atomic `go list ./... | egrep -v '(/(testutils))$'`
 
 if [ -z "$GITHUB_ACTION" ]; then
