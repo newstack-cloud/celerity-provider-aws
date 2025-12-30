@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 
 	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
+	resgrouptagservice "github.com/newstack-cloud/bluelink-provider-aws/services/resgrouptag/service"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/providerv1"
@@ -14,6 +15,7 @@ import (
 // EventSourceMappingResource returns a resource implementation for an AWS Lambda Event Source Mapping.
 func EventSourceMappingResource(
 	lambdaServiceFactory pluginutils.ServiceFactory[*aws.Config, lambdaservice.Service],
+	resourceGroupTaggingServiceFactory pluginutils.ServiceFactory[*aws.Config, resgrouptagservice.Service],
 	awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
 ) provider.Resource {
 	basicExample, _ := examples.ReadFile("examples/resources/lambda_event_source_mapping_basic.md")
@@ -26,8 +28,9 @@ func EventSourceMappingResource(
 	mqExample, _ := examples.ReadFile("examples/resources/lambda_event_source_mapping_mq.md")
 
 	lambdaEventSourceMappingActions := &lambdaEventSourceMappingResourceActions{
-		lambdaServiceFactory,
-		awsConfigStore,
+		lambdaServiceFactory:               lambdaServiceFactory,
+		resourceGroupTaggingServiceFactory: resourceGroupTaggingServiceFactory,
+		awsConfigStore:                     awsConfigStore,
 	}
 	return &providerv1.ResourceDefinition{
 		Type:             "aws/lambda/eventSourceMapping",
@@ -37,6 +40,7 @@ func EventSourceMappingResource(
 			"that is deployed to AWS.",
 		Schema:         lambdaEventSourceMappingResourceSchema(),
 		IDField:        "id",
+		TaggingSupport: provider.TaggingSupportFull,
 		CommonTerminal: true,
 		FormattedExamples: []string{
 			string(basicExample),
@@ -58,8 +62,9 @@ func EventSourceMappingResource(
 }
 
 type lambdaEventSourceMappingResourceActions struct {
-	lambdaServiceFactory pluginutils.ServiceFactory[*aws.Config, lambdaservice.Service]
-	awsConfigStore       pluginutils.ServiceConfigStore[*aws.Config]
+	lambdaServiceFactory               pluginutils.ServiceFactory[*aws.Config, lambdaservice.Service]
+	resourceGroupTaggingServiceFactory pluginutils.ServiceFactory[*aws.Config, resgrouptagservice.Service]
+	awsConfigStore                     pluginutils.ServiceConfigStore[*aws.Config]
 }
 
 func (l *lambdaEventSourceMappingResourceActions) getLambdaService(
@@ -76,4 +81,20 @@ func (l *lambdaEventSourceMappingResourceActions) getLambdaService(
 	}
 
 	return l.lambdaServiceFactory(awsConfig, providerContext), nil
+}
+
+func (l *lambdaEventSourceMappingResourceActions) getResourceGroupTaggingService(
+	ctx context.Context,
+	providerContext provider.Context,
+) (resgrouptagservice.Service, error) {
+	awsConfig, err := l.awsConfigStore.FromProviderContext(
+		ctx,
+		providerContext,
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return l.resourceGroupTaggingServiceFactory(awsConfig, providerContext), nil
 }

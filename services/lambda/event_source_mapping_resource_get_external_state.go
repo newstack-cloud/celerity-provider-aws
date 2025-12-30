@@ -3,10 +3,13 @@ package lambda
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
+	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
+	"github.com/newstack-cloud/bluelink-provider-aws/utils"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
@@ -21,12 +24,26 @@ func (l *lambdaEventSourceMappingResourceActions) GetExternalState(
 		return nil, fmt.Errorf("failed to get Lambda service: %w", err)
 	}
 
-	uuid := core.StringValue(input.CurrentResourceSpec.Fields["id"])
+	// Try to get UUID from current spec first
+	uuid := ""
+	idValue, hasID := pluginutils.GetValueByPath("$.id", input.CurrentResourceSpec)
+	if hasID {
+		uuid = core.StringValue(idValue)
+	}
+
+	// If no UUID, attempt fallback lookup by Bluelink tags
 	if uuid == "" {
-		// If no UUID is present, the resource doesn't exist yet
-		return &provider.ResourceGetExternalStateOutput{
-			ResourceSpecState: &core.MappingNode{Fields: map[string]*core.MappingNode{}},
-		}, nil
+		fallbackUUID, err := l.lookupEventSourceMappingUUIDByTags(ctx, input)
+		if err != nil {
+			return nil, fmt.Errorf("failed to lookup event source mapping by tags: %w", err)
+		}
+		if fallbackUUID == "" {
+			// Resource doesn't exist yet
+			return &provider.ResourceGetExternalStateOutput{
+				ResourceSpecState: &core.MappingNode{Fields: map[string]*core.MappingNode{}},
+			}, nil
+		}
+		uuid = fallbackUUID
 	}
 
 	getEventSourceMappingInput := &lambda.GetEventSourceMappingInput{
@@ -364,4 +381,44 @@ func eventSourceMappingSourceAccessConfigurationsToMappingNode(
 	}
 
 	return &core.MappingNode{Items: items}
+}
+
+// lookupEventSourceMappingUUIDByTags attempts to find a Lambda event source mapping by its Bluelink provenance tags.
+// This is used as a fallback when the UUID is not available (e.g., interrupted resource creation).
+// Returns empty string if no matching resource is found.
+func (l *lambdaEventSourceMappingResourceActions) lookupEventSourceMappingUUIDByTags(
+	ctx context.Context,
+	input *provider.ResourceGetExternalStateInput,
+) (string, error) {
+	tagFilters := utils.BuildBluelinkTagFiltersForLookup(input)
+	if tagFilters == nil {
+		// Tagging is not enabled, cannot perform fallback lookup
+		return "", nil
+	}
+
+	taggingService, err := l.getResourceGroupTaggingService(ctx, input.ProviderContext)
+	if err != nil {
+		return "", err
+	}
+
+	result, err := taggingService.GetResources(ctx, &resourcegroupstaggingapi.GetResourcesInput{
+		TagFilters:          tagFilters,
+		ResourceTypeFilters: []string{"lambda:event-source-mapping"},
+	})
+	if err != nil {
+		return "", err
+	}
+
+	if len(result.ResourceTagMappingList) == 0 {
+		return "", nil
+	}
+
+	// The ARN format is: arn:aws:lambda:region:account:event-source-mapping:uuid
+	// Extract the UUID from the ARN
+	arn := aws.ToString(result.ResourceTagMappingList[0].ResourceARN)
+	parts := strings.Split(arn, ":")
+	if len(parts) < 7 {
+		return "", fmt.Errorf("invalid event source mapping ARN format: %s", arn)
+	}
+	return parts[len(parts)-1], nil
 }

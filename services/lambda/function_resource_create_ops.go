@@ -30,6 +30,13 @@ func (u *functionCreate) Prepare(
 	if err != nil {
 		return false, saveOpCtx, err
 	}
+
+	// Merge Bluelink system tags with user-defined tags
+	deployInput, ok := saveOpCtx.Data["ResourceDeployInput"].(*provider.ResourceDeployInput)
+	if ok && deployInput != nil {
+		input.Tags = mergeBluelinkTagsWithLambdaTags(deployInput, input.Tags)
+	}
+
 	u.input = input
 	return hasValues, saveOpCtx, nil
 }

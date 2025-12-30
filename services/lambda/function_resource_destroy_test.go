@@ -16,6 +16,7 @@ import (
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/state"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/plugintestutils"
+	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -40,9 +41,17 @@ func (s *LambdaFunctionResourceDestroySuite) Test_destroy() {
 		createFailingDestroyTestCase(providerCtx, loader),
 	}
 
+	// Create a wrapper function that matches the expected signature
+	functionResourceWrapper := func(
+		serviceFactory pluginutils.ServiceFactory[*aws.Config, lambdaservice.Service],
+		configStore pluginutils.ServiceConfigStore[*aws.Config],
+	) provider.Resource {
+		return FunctionResource(serviceFactory, mockResourceGroupTaggingServiceFactory, configStore)
+	}
+
 	plugintestutils.RunResourceDestroyTestCases(
 		testCases,
-		FunctionResource,
+		functionResourceWrapper,
 		&s.Suite,
 	)
 }

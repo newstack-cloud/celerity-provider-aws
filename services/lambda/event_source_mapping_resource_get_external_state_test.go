@@ -47,9 +47,17 @@ func (s *LambdaEventSourceMappingResourceGetExternalStateSuite) Test_get_externa
 		createWithComplexConfigurationsTestCase(providerCtx, loader),
 	}
 
+	// Create a wrapper function that matches the expected signature
+	eventSourceMappingResourceWrapper := func(
+		serviceFactory pluginutils.ServiceFactory[*aws.Config, lambdaservice.Service],
+		configStore pluginutils.ServiceConfigStore[*aws.Config],
+	) provider.Resource {
+		return EventSourceMappingResource(serviceFactory, mockResourceGroupTaggingServiceFactory, configStore)
+	}
+
 	plugintestutils.RunResourceGetExternalStateTestCases(
 		testCases,
-		EventSourceMappingResource,
+		eventSourceMappingResourceWrapper,
 		&s.Suite,
 	)
 }

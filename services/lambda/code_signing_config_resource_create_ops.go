@@ -29,6 +29,10 @@ func (u *codeSigningConfigCreate) Prepare(
 	if err != nil {
 		return false, saveOpCtx, err
 	}
+
+	// Merge Bluelink system tags with user-defined tags
+	// Note: CodeSigningConfig doesn't support tags at creation time,
+	// tags are applied via TagResource after creation by the tagsUpdate operation
 	u.input = input
 	return hasValues, saveOpCtx, nil
 }

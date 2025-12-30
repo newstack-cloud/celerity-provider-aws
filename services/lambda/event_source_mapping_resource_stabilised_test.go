@@ -15,6 +15,7 @@ import (
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/plugintestutils"
+	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -40,9 +41,17 @@ func (s *LambdaEventSourceMappingResourceStabilisedSuite) Test_stabilised_lambda
 		stabilisedBasicEventSourceMappingErrorTestCase(providerCtx, loader),
 	}
 
+	// Create a wrapper function that matches the expected signature
+	eventSourceMappingResourceWrapper := func(
+		serviceFactory pluginutils.ServiceFactory[*aws.Config, lambdaservice.Service],
+		configStore pluginutils.ServiceConfigStore[*aws.Config],
+	) provider.Resource {
+		return EventSourceMappingResource(serviceFactory, mockResourceGroupTaggingServiceFactory, configStore)
+	}
+
 	plugintestutils.RunResourceHasStabilisedTestCases(
 		testCases,
-		EventSourceMappingResource,
+		eventSourceMappingResourceWrapper,
 		&s.Suite,
 	)
 }

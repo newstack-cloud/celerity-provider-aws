@@ -2,10 +2,12 @@ package lambda
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
+	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
 	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/utils"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
@@ -22,9 +24,28 @@ func (l *lambdaFunctionResourceActions) GetExternalState(
 		return nil, err
 	}
 
-	functionARN := core.StringValue(
-		input.CurrentResourceSpec.Fields["arn"],
-	)
+	// Try to get ARN from current spec first
+	functionARN := ""
+	if input.CurrentResourceSpec != nil && input.CurrentResourceSpec.Fields != nil {
+		functionARN = core.StringValue(input.CurrentResourceSpec.Fields["arn"])
+	}
+
+	// If no ARN, attempt fallback lookup by Bluelink tags
+	if functionARN == "" {
+		fallbackArn, err := l.lookupFunctionARNByTags(ctx, input)
+		if err != nil {
+			return nil, fmt.Errorf("failed to lookup function by tags: %w", err)
+		}
+		if fallbackArn == "" {
+			// Resource doesn't exist yet
+			return &provider.ResourceGetExternalStateOutput{
+				ResourceSpecState: &core.MappingNode{
+					Fields: map[string]*core.MappingNode{},
+				},
+			}, nil
+		}
+		functionARN = fallbackArn
+	}
 
 	functionOutput, err := lambdaService.GetFunction(
 		ctx,
@@ -44,6 +65,7 @@ func (l *lambdaFunctionResourceActions) GetExternalState(
 	err = l.addOptionalConfigurationsToSpec(
 		functionOutput,
 		resourceSpecState.Fields,
+		input.ProviderContext,
 	)
 	if err != nil {
 		return nil, err
@@ -92,6 +114,7 @@ func (l *lambdaFunctionResourceActions) buildBaseResourceSpecState(
 func (l *lambdaFunctionResourceActions) addOptionalConfigurationsToSpec(
 	functionOutput *lambda.GetFunctionOutput,
 	specFields map[string]*core.MappingNode,
+	providerContext provider.Context,
 ) error {
 	extractors := []pluginutils.OptionalValueExtractor[*lambda.GetFunctionOutput]{
 		{
@@ -269,18 +292,7 @@ func (l *lambdaFunctionResourceActions) addOptionalConfigurationsToSpec(
 				}, nil
 			},
 		},
-		{
-			Name: "tags",
-			Condition: func(output *lambda.GetFunctionOutput) bool {
-				return len(output.Tags) > 0
-			},
-			Fields: []string{"tags"},
-			Values: func(output *lambda.GetFunctionOutput) ([]*core.MappingNode, error) {
-				return []*core.MappingNode{
-					utils.TagsToMappingNode(output.Tags),
-				}, nil
-			},
-		},
+		// Note: tags are handled separately below to filter Bluelink provenance tags
 		{
 			Name: "timeout",
 			Condition: func(output *lambda.GetFunctionOutput) bool {
@@ -326,6 +338,11 @@ func (l *lambdaFunctionResourceActions) addOptionalConfigurationsToSpec(
 	)
 	if err != nil {
 		return err
+	}
+
+	// Handle tags separately to filter out Bluelink provenance tags
+	if len(functionOutput.Tags) > 0 {
+		specFields["tags"] = utils.UserTagsToMappingNode(functionOutput.Tags, providerContext)
 	}
 
 	return nil
@@ -768,4 +785,37 @@ func functionVPCConfigToMappingNode(
 	return &core.MappingNode{
 		Fields: fields,
 	}
+}
+
+// lookupFunctionARNByTags attempts to find a Lambda function by its Bluelink provenance tags.
+// This is used as a fallback when the ARN is not available (e.g., interrupted resource creation).
+// Returns empty string if no matching resource is found.
+func (l *lambdaFunctionResourceActions) lookupFunctionARNByTags(
+	ctx context.Context,
+	input *provider.ResourceGetExternalStateInput,
+) (string, error) {
+	tagFilters := utils.BuildBluelinkTagFiltersForLookup(input)
+	if tagFilters == nil {
+		// Tagging is not enabled, cannot perform fallback lookup
+		return "", nil
+	}
+
+	taggingService, err := l.getResourceGroupTaggingService(ctx, input.ProviderContext)
+	if err != nil {
+		return "", err
+	}
+
+	result, err := taggingService.GetResources(ctx, &resourcegroupstaggingapi.GetResourcesInput{
+		TagFilters:          tagFilters,
+		ResourceTypeFilters: []string{"lambda:function"},
+	})
+	if err != nil {
+		return "", err
+	}
+
+	if len(result.ResourceTagMappingList) == 0 {
+		return "", nil
+	}
+
+	return aws.ToString(result.ResourceTagMappingList[0].ResourceARN), nil
 }

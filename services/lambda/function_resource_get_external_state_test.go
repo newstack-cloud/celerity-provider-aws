@@ -46,9 +46,17 @@ func (s *LambdaFunctionResourceGetExternalStateSuite) Test_get_external_state() 
 		createTracingAndRuntimeVersionTestCase(providerCtx, loader),
 	}
 
+	// Create a wrapper function that matches the expected signature
+	functionResourceWrapper := func(
+		serviceFactory pluginutils.ServiceFactory[*aws.Config, lambdaservice.Service],
+		configStore pluginutils.ServiceConfigStore[*aws.Config],
+	) provider.Resource {
+		return FunctionResource(serviceFactory, mockResourceGroupTaggingServiceFactory, configStore)
+	}
+
 	plugintestutils.RunResourceGetExternalStateTestCases(
 		testCases,
-		FunctionResource,
+		functionResourceWrapper,
 		&s.Suite,
 	)
 }

@@ -45,9 +45,17 @@ func (s *LambdaCodeSigningConfigResourceGetExternalStateSuite) Test_get_external
 		createGetExternalStateCodeSigningConfigErrorTestCase(providerCtx, loader),
 	}
 
+	// Create a wrapper function that matches the expected signature
+	codeSigningConfigResourceWrapper := func(
+		serviceFactory pluginutils.ServiceFactory[*aws.Config, lambdaservice.Service],
+		configStore pluginutils.ServiceConfigStore[*aws.Config],
+	) provider.Resource {
+		return CodeSigningConfigResource(serviceFactory, mockResourceGroupTaggingServiceFactory, configStore)
+	}
+
 	plugintestutils.RunResourceGetExternalStateTestCases(
 		testCases,
-		CodeSigningConfigResource,
+		codeSigningConfigResourceWrapper,
 		&s.Suite,
 	)
 }

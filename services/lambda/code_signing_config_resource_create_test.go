@@ -16,6 +16,7 @@ import (
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/schema"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/plugintestutils"
+	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -43,9 +44,17 @@ func (s *LambdaCodeSigningConfigResourceCreateSuite) Test_create_lambda_code_sig
 		createComplexCodeSigningConfigTestCase(providerCtx, loader),
 	}
 
+	// Create a wrapper function that matches the expected signature
+	codeSigningConfigResourceWrapper := func(
+		serviceFactory pluginutils.ServiceFactory[*aws.Config, lambdaservice.Service],
+		configStore pluginutils.ServiceConfigStore[*aws.Config],
+	) provider.Resource {
+		return CodeSigningConfigResource(serviceFactory, mockResourceGroupTaggingServiceFactory, configStore)
+	}
+
 	plugintestutils.RunResourceDeployTestCases(
 		testCases,
-		CodeSigningConfigResource,
+		codeSigningConfigResourceWrapper,
 		&s.Suite,
 	)
 }

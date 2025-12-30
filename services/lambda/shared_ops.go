@@ -33,9 +33,19 @@ func (u *tagsUpdate) Prepare(
 		u.pathRoot,
 		currentResourceStateSpecData,
 	)
-	input, hasUpdates := changesToResourceTagUpdatesInput(
+
+	// Extract user tags from spec
+	userTags := extractTagsMapFromNode(newTagsNode)
+
+	// Merge Bluelink system tags with user-defined tags
+	deployInput, ok := saveOpCtx.Data["ResourceDeployInput"].(*provider.ResourceDeployInput)
+	if ok && deployInput != nil {
+		userTags = mergeBluelinkTagsWithLambdaTags(deployInput, userTags)
+	}
+
+	input, hasUpdates := changesToResourceTagUpdatesInputWithMergedTags(
 		saveOpCtx.ProviderUpstreamID,
-		newTagsNode,
+		userTags,
 		currentTagsNode,
 	)
 	u.saveTagsInput = input.saveTagsInput
@@ -68,43 +78,6 @@ func (u *tagsUpdate) Execute(
 type tagUpdatesInput struct {
 	saveTagsInput   *lambda.TagResourceInput
 	removeTagsInput *lambda.UntagResourceInput
-}
-
-func changesToResourceTagUpdatesInput(
-	arn string,
-	newTagsNode *core.MappingNode,
-	currentTagsNode *core.MappingNode,
-) (*tagUpdatesInput, bool) {
-	removedTags := []string{}
-	addTags := map[string]string{}
-
-	newTagsNodeItems := getItems(newTagsNode)
-	currentTagsNodeItems := getItems(currentTagsNode)
-	for _, item := range newTagsNodeItems {
-		key := core.StringValue(item.Fields["key"])
-		value := core.StringValue(item.Fields["value"])
-		addTags[key] = value
-	}
-
-	for _, item := range currentTagsNodeItems {
-		key := core.StringValue(item.Fields["key"])
-		if _, inNewTags := addTags[key]; !inNewTags {
-			removedTags = append(removedTags, key)
-		}
-	}
-
-	hasUpdates := len(addTags) > 0 || len(removedTags) > 0
-
-	return &tagUpdatesInput{
-		saveTagsInput: &lambda.TagResourceInput{
-			Resource: aws.String(arn),
-			Tags:     addTags,
-		},
-		removeTagsInput: &lambda.UntagResourceInput{
-			Resource: aws.String(arn),
-			TagKeys:  removedTags,
-		},
-	}, hasUpdates
 }
 
 // Shared between function and function version resources.
@@ -154,6 +127,51 @@ func getItems(node *core.MappingNode) []*core.MappingNode {
 	}
 
 	return node.Items
+}
+
+// extractTagsMapFromNode extracts tags from a MappingNode into a map.
+func extractTagsMapFromNode(node *core.MappingNode) map[string]string {
+	tags := make(map[string]string)
+	if node == nil {
+		return tags
+	}
+
+	for _, item := range node.Items {
+		key := core.StringValue(item.Fields["key"])
+		value := core.StringValue(item.Fields["value"])
+		tags[key] = value
+	}
+	return tags
+}
+
+// changesToResourceTagUpdatesInputWithMergedTags creates tag update inputs from merged tags map.
+func changesToResourceTagUpdatesInputWithMergedTags(
+	arn string,
+	mergedTags map[string]string,
+	currentTagsNode *core.MappingNode,
+) (*tagUpdatesInput, bool) {
+	removedTags := []string{}
+
+	currentTagsNodeItems := getItems(currentTagsNode)
+	for _, item := range currentTagsNodeItems {
+		key := core.StringValue(item.Fields["key"])
+		if _, inNewTags := mergedTags[key]; !inNewTags {
+			removedTags = append(removedTags, key)
+		}
+	}
+
+	hasUpdates := len(mergedTags) > 0 || len(removedTags) > 0
+
+	return &tagUpdatesInput{
+		saveTagsInput: &lambda.TagResourceInput{
+			Resource: aws.String(arn),
+			Tags:     mergedTags,
+		},
+		removeTagsInput: &lambda.UntagResourceInput{
+			Resource: aws.String(arn),
+			TagKeys:  removedTags,
+		},
+	}, hasUpdates
 }
 
 // Image Config Setters.

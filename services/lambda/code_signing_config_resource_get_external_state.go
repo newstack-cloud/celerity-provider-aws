@@ -6,6 +6,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
+	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
+	"github.com/newstack-cloud/bluelink-provider-aws/utils"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
@@ -20,9 +22,29 @@ func (l *lambdaCodeSigningConfigResourceActions) GetExternalState(
 		return nil, fmt.Errorf("failed to get Lambda service: %w", err)
 	}
 
-	codeSigningConfigArn := core.StringValue(
-		input.CurrentResourceSpec.Fields["codeSigningConfigArn"],
-	)
+	// Try to get ARN from current spec first
+	codeSigningConfigArn := ""
+	arnValue, hasArn := pluginutils.GetValueByPath("$.codeSigningConfigArn", input.CurrentResourceSpec)
+	if hasArn {
+		codeSigningConfigArn = core.StringValue(arnValue)
+	}
+
+	// If no ARN, attempt fallback lookup by Bluelink tags
+	if codeSigningConfigArn == "" {
+		fallbackArn, err := l.lookupCodeSigningConfigARNByTags(ctx, input)
+		if err != nil {
+			return nil, fmt.Errorf("failed to lookup code signing config by tags: %w", err)
+		}
+		if fallbackArn == "" {
+			// Resource doesn't exist yet
+			return &provider.ResourceGetExternalStateOutput{
+				ResourceSpecState: &core.MappingNode{
+					Fields: map[string]*core.MappingNode{},
+				},
+			}, nil
+		}
+		codeSigningConfigArn = fallbackArn
+	}
 
 	getCodeSigningConfigInput := &lambda.GetCodeSigningConfigInput{
 		CodeSigningConfigArn: aws.String(codeSigningConfigArn),
@@ -51,19 +73,24 @@ func (l *lambdaCodeSigningConfigResourceActions) GetExternalState(
 		return nil, fmt.Errorf("failed to get Lambda code signing config tags: %w", err)
 	}
 
-	// Add tags if present
+	// Add tags if present (filtering out Bluelink provenance tags)
 	if tagsOutput != nil && len(tagsOutput.Tags) > 0 {
-		tagNodes := make([]*core.MappingNode, 0, len(tagsOutput.Tags))
-		for key, value := range tagsOutput.Tags {
-			tagNodes = append(tagNodes, &core.MappingNode{
-				Fields: map[string]*core.MappingNode{
-					"key":   core.MappingNodeFromString(key),
-					"value": core.MappingNodeFromString(value),
-				},
-			})
-		}
-		resourceSpecState.Fields["tags"] = &core.MappingNode{
-			Items: tagNodes,
+		prefix := utils.GetBluelinkTagPrefix(input.ProviderContext.TaggingConfig())
+		filteredTags := utils.FilterTagsMap(tagsOutput.Tags, prefix)
+
+		if len(filteredTags) > 0 {
+			tagNodes := make([]*core.MappingNode, 0, len(filteredTags))
+			for key, value := range filteredTags {
+				tagNodes = append(tagNodes, &core.MappingNode{
+					Fields: map[string]*core.MappingNode{
+						"key":   core.MappingNodeFromString(key),
+						"value": core.MappingNodeFromString(value),
+					},
+				})
+			}
+			resourceSpecState.Fields["tags"] = &core.MappingNode{
+				Items: tagNodes,
+			}
 		}
 	}
 
@@ -153,4 +180,37 @@ func buildSigningProfileVersionArnsNode(arns []string) *core.MappingNode {
 	return &core.MappingNode{
 		Items: arnNodes,
 	}
+}
+
+// lookupCodeSigningConfigARNByTags attempts to find a Lambda code signing config by its Bluelink provenance tags.
+// This is used as a fallback when the ARN is not available (e.g., interrupted resource creation).
+// Returns empty string if no matching resource is found.
+func (l *lambdaCodeSigningConfigResourceActions) lookupCodeSigningConfigARNByTags(
+	ctx context.Context,
+	input *provider.ResourceGetExternalStateInput,
+) (string, error) {
+	tagFilters := utils.BuildBluelinkTagFiltersForLookup(input)
+	if tagFilters == nil {
+		// Tagging is not enabled, cannot perform fallback lookup
+		return "", nil
+	}
+
+	taggingService, err := l.getResourceGroupTaggingService(ctx, input.ProviderContext)
+	if err != nil {
+		return "", err
+	}
+
+	result, err := taggingService.GetResources(ctx, &resourcegroupstaggingapi.GetResourcesInput{
+		TagFilters:          tagFilters,
+		ResourceTypeFilters: []string{"lambda:code-signing-config"},
+	})
+	if err != nil {
+		return "", err
+	}
+
+	if len(result.ResourceTagMappingList) == 0 {
+		return "", nil
+	}
+
+	return aws.ToString(result.ResourceTagMappingList[0].ResourceARN), nil
 }

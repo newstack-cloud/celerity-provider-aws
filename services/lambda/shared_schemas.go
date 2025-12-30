@@ -8,8 +8,9 @@ import (
 
 func lambdaSchemaTags(resourceType string) *provider.ResourceDefinitionsSchema {
 	return &provider.ResourceDefinitionsSchema{
-		Type:        provider.ResourceDefinitionsSchemaTypeArray,
-		Description: fmt.Sprintf("A list of tags to apply to the %s.", resourceType),
+		Type:             provider.ResourceDefinitionsSchemaTypeArray,
+		SortArrayByField: "key",
+		Description:      fmt.Sprintf("A list of tags to apply to the %s.", resourceType),
 		FormattedDescription: fmt.Sprintf(
 			"A list of [tags](https://docs.aws.amazon.com/lambda/latest/dg/tagging.html) "+
 				"to apply to the %s.",
