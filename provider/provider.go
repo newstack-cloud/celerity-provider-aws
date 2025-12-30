@@ -5,6 +5,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/newstack-cloud/bluelink-provider-aws/flex"
+	"github.com/newstack-cloud/bluelink-provider-aws/services/dynamodb"
+	dynamodbservice "github.com/newstack-cloud/bluelink-provider-aws/services/dynamodb/service"
 	ec2service "github.com/newstack-cloud/bluelink-provider-aws/services/ec2/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/services/iam"
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
@@ -13,6 +15,7 @@ import (
 	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
 	resgrouptagservice "github.com/newstack-cloud/bluelink-provider-aws/services/resgrouptag/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/services/sqs"
+	sqslinks "github.com/newstack-cloud/bluelink-provider-aws/services/sqs/links"
 	sqsservice "github.com/newstack-cloud/bluelink-provider-aws/services/sqs/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/utils"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
@@ -28,6 +31,7 @@ func NewProvider(
 	ec2ServiceFactory pluginutils.ServiceFactory[*aws.Config, ec2service.Service],
 	resourceGroupTaggingServiceFactory pluginutils.ServiceFactory[*aws.Config, resgrouptagservice.Service],
 	sqsServiceFactory pluginutils.ServiceFactory[*aws.Config, sqsservice.Service],
+	dynamodbServiceFactory pluginutils.ServiceFactory[*aws.Config, dynamodbservice.Service],
 	awsConfigStore *utils.AWSConfigStore,
 ) provider.Provider {
 	return &providerv1.ProviderPluginDefinition{
@@ -36,10 +40,12 @@ func NewProvider(
 		Resources: map[string]provider.Resource{
 			"aws/iam/role": iam.RoleResource(
 				iamServiceFactory,
+				resourceGroupTaggingServiceFactory,
 				awsConfigStore,
 			),
 			"aws/iam/user": iam.UserResource(
 				iamServiceFactory,
+				resourceGroupTaggingServiceFactory,
 				awsConfigStore,
 			),
 			"aws/iam/group": iam.GroupResource(
@@ -56,22 +62,27 @@ func NewProvider(
 			),
 			"aws/iam/managedPolicy": iam.ManagedPolicyResource(
 				iamServiceFactory,
+				resourceGroupTaggingServiceFactory,
 				awsConfigStore,
 			),
 			"aws/iam/oidcProvider": iam.OIDCProviderResource(
 				iamServiceFactory,
+				resourceGroupTaggingServiceFactory,
 				awsConfigStore,
 			),
 			"aws/iam/samlProvider": iam.SAMLProviderResource(
 				iamServiceFactory,
+				resourceGroupTaggingServiceFactory,
 				awsConfigStore,
 			),
 			"aws/iam/serverCertificate": iam.ServerCertificateResource(
 				iamServiceFactory,
+				resourceGroupTaggingServiceFactory,
 				awsConfigStore,
 			),
 			"aws/lambda/function": lambda.FunctionResource(
 				lambdaServiceFactory,
+				resourceGroupTaggingServiceFactory,
 				awsConfigStore,
 			),
 			"aws/lambda/functionVersion": lambda.FunctionVersionResource(
@@ -88,10 +99,12 @@ func NewProvider(
 			),
 			"aws/lambda/codeSigningConfig": lambda.CodeSigningConfigResource(
 				lambdaServiceFactory,
+				resourceGroupTaggingServiceFactory,
 				awsConfigStore,
 			),
 			"aws/lambda/eventSourceMapping": lambda.EventSourceMappingResource(
 				lambdaServiceFactory,
+				resourceGroupTaggingServiceFactory,
 				awsConfigStore,
 			),
 			"aws/lambda/eventInvokeConfig": lambda.EventInvokeConfigResource(
@@ -113,6 +126,12 @@ func NewProvider(
 			),
 			"aws/sqs/queue": sqs.QueueResource(
 				sqsServiceFactory,
+				resourceGroupTaggingServiceFactory,
+				awsConfigStore,
+			),
+			"aws/dynamodb/table": dynamodb.TableResource(
+				dynamodbServiceFactory,
+				resourceGroupTaggingServiceFactory,
 				awsConfigStore,
 			),
 		},
@@ -137,11 +156,21 @@ func NewProvider(
 				lambdaServiceFactory,
 				awsConfigStore,
 			),
+			"aws/dynamodb/table": dynamodb.TableDataSource(
+				dynamodbServiceFactory,
+				awsConfigStore,
+			),
 		},
 		Links: map[string]provider.Link{
 			"aws/lambda/function::aws/lambda/codeSigningConfig": lambdalinks.FunctionCodeSigningConfigLink(
 				pluginutils.NewSingleLinkServiceDeps(
 					lambdaServiceFactory,
+					awsConfigStore,
+				),
+			),
+			"aws/sqs/queue::aws/sqs/queue": sqslinks.QueueQueueLink(
+				pluginutils.NewSingleLinkServiceDeps(
+					sqsServiceFactory,
 					awsConfigStore,
 				),
 			),

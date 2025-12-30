@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	dynamodbservice "github.com/newstack-cloud/bluelink-provider-aws/services/dynamodb/service"
 	ec2service "github.com/newstack-cloud/bluelink-provider-aws/services/ec2/service"
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
 	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
@@ -70,6 +71,7 @@ func (s *ProviderSuite) Test_loads_provider_and_applies_duration_validation() {
 		ec2service.NewService,
 		resgrouptagservice.NewService,
 		sqsservice.NewService,
+		dynamodbservice.NewService,
 		configStore,
 	)
 	configDef, err := provider.ConfigDefinition(context.Background())
@@ -156,6 +158,7 @@ func (s *ProviderSuite) Test_loads_provider_and_applies_role_arn_validation() {
 		ec2service.NewService,
 		resgrouptagservice.NewService,
 		sqsservice.NewService,
+		dynamodbservice.NewService,
 		configStore,
 	)
 	configDef, err := provider.ConfigDefinition(context.Background())
