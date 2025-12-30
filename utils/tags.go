@@ -89,6 +89,64 @@ func DiffTags[UpstreamTag any](
 	return result
 }
 
+// DiffTagsWithBluelink provides tag diffing that includes Bluelink system tags.
+// It works like DiffTags but merges Bluelink tags with the desired user tags
+// before computing the diff.
+//
+// tagsRootPath is the path to the tags field in the resource spec,
+// the expected format is to use "$" to represent the root of the spec (e.g. "$.tags").
+func DiffTagsWithBluelink[UpstreamTag any](
+	changes *provider.Changes,
+	deployInput *provider.ResourceDeployInput,
+	tagsRootPath string,
+	transformTag func(tag *Tag) UpstreamTag,
+) *TagsDiffResult[UpstreamTag] {
+	result := &TagsDiffResult[UpstreamTag]{
+		ToSet:    []UpstreamTag{},
+		ToRemove: []string{},
+	}
+
+	currentSpecData := pluginutils.GetCurrentResourceStateSpecData(changes)
+	currentSpecTags, _ := pluginutils.GetValueByPath(tagsRootPath, currentSpecData)
+	newSpecData := pluginutils.GetResolvedResourceSpecData(changes)
+	newSpecTags, _ := pluginutils.GetValueByPath(tagsRootPath, newSpecData)
+
+	currentTags := ToTagsMap(currentSpecTags)
+	userDesiredTags := ToTagsMap(newSpecTags)
+
+	// Merge Bluelink system tags with user-defined tags
+	desiredTags := MergeBluelinkTagsWithUserTags(deployInput, userDesiredTags)
+
+	// Calculate tags to add/update
+	toSetIntermediary := []*Tag{}
+	for key, value := range desiredTags {
+		toSetIntermediary = append(toSetIntermediary, &Tag{
+			Key:   key,
+			Value: value,
+		})
+	}
+
+	// Calculate tags to remove
+	for key := range currentTags {
+		if _, exists := desiredTags[key]; !exists {
+			result.ToRemove = append(result.ToRemove, key)
+		}
+	}
+
+	// Sort the tags to set and remove by key, this is mostly helpful
+	// for deterministic comparison of output.
+	slices.SortFunc(toSetIntermediary, func(i, j *Tag) int {
+		return strings.Compare(i.Key, j.Key)
+	})
+	slices.Sort(result.ToRemove)
+
+	for _, tag := range toSetIntermediary {
+		result.ToSet = append(result.ToSet, transformTag(tag))
+	}
+
+	return result
+}
+
 // ToTagsMap converts a MappingNode to a map of tags.
 // The MappingNode is expected to be an array of objects with "key" and "value" fields.
 func ToTagsMap(specTags *core.MappingNode) map[string]string {
