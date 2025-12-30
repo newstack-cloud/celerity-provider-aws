@@ -13,6 +13,7 @@ import (
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/plugintestutils"
+	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -36,9 +37,17 @@ func (s *SQSQueueResourceStabilisedSuite) Test_stabilised_sqs_queue() {
 		stabilisedBasicAliasTestCase(providerCtx, loader),
 	}
 
+	// Create a wrapper function that matches the expected signature
+	queueResourceWrapper := func(
+		serviceFactory pluginutils.ServiceFactory[*aws.Config, sqsservice.Service],
+		configStore pluginutils.ServiceConfigStore[*aws.Config],
+	) provider.Resource {
+		return QueueResource(serviceFactory, mockResourceGroupTaggingServiceFactory, configStore)
+	}
+
 	plugintestutils.RunResourceHasStabilisedTestCases(
 		testCases,
-		QueueResource,
+		queueResourceWrapper,
 		&s.Suite,
 	)
 }

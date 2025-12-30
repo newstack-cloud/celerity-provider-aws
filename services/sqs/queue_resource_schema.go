@@ -225,15 +225,15 @@ func sqsQueueResourceSchema() *provider.ResourceDefinitionsSchema {
 				Type:        provider.ResourceDefinitionsSchemaTypeInteger,
 				Description: "The maximum message size in bytes.",
 				FormattedDescription: "The maximum message size in bytes. " +
-					"Valid values: 1,024 bytes (1 KB) to 262,144 bytes (256 KB). Default is 262,144 bytes (256 KB).",
+					"Valid values: 1,024 bytes (1 KB) to 1,048,576 bytes (1 MB). Default is 1,048,576 bytes (1 MB).",
 				Minimum:  core.ScalarFromInt(1024),
-				Maximum:  core.ScalarFromInt(262144),
-				Default:  core.MappingNodeFromInt(262144),
+				Maximum:  core.ScalarFromInt(1048576),
+				Default:  core.MappingNodeFromInt(1048576),
 				Nullable: true,
 				Examples: []*core.MappingNode{
-					core.MappingNodeFromInt(1024),   // 1 KB
-					core.MappingNodeFromInt(65536),  // 64 KB
-					core.MappingNodeFromInt(262144), // 256 KB
+					core.MappingNodeFromInt(1024),    // 1 KB
+					core.MappingNodeFromInt(262144),  // 256 KB
+					core.MappingNodeFromInt(1048576), // 1 MB
 				},
 			},
 			"kmsMasterKeyId": {
@@ -365,6 +365,7 @@ func sqsQueueResourceSchema() *provider.ResourceDefinitionsSchema {
 				Description: "A list of tags to associate with the SQS queue.",
 				FormattedDescription: "A list of tags to associate with the SQS queue. " +
 					"Tags are key-value pairs that help you organize and identify your AWS resources.",
+				SortArrayByField: "key",
 				Items: &provider.ResourceDefinitionsSchema{
 					Type:     provider.ResourceDefinitionsSchemaTypeObject,
 					Label:    "Tag",

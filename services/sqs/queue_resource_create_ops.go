@@ -34,18 +34,18 @@ func (q *queueCreate) Prepare(
 		return false, saveOpCtx, err
 	}
 
+	deployInput, ok := saveOpCtx.Data["ResourceDeployInput"].(*provider.ResourceDeployInput)
+	if !ok || deployInput == nil {
+		return false, saveOpCtx, fmt.Errorf("ResourceDeployInput not found in SaveOperationContext.Data")
+	}
+
 	// Generate a unique queue name if not provided.
 	if input.QueueName == nil || aws.ToString(input.QueueName) == "" {
 		generateName := utils.SQSQueueNameGenerator(
 			input.Attributes["FifoQueue"] == "true",
 		)
 
-		inputData, ok := saveOpCtx.Data["ResourceDeployInput"].(*provider.ResourceDeployInput)
-		if !ok || inputData == nil {
-			return false, saveOpCtx, fmt.Errorf("ResourceDeployInput not found in SaveOperationContext.Data")
-		}
-
-		generatedName, err := generateName(inputData)
+		generatedName, err := generateName(deployInput)
 		if err != nil {
 			return false, saveOpCtx, err
 		}
@@ -53,6 +53,13 @@ func (q *queueCreate) Prepare(
 		input.QueueName = aws.String(generatedName)
 		hasValues = true
 	}
+
+	// Merge Bluelink system tags with user-defined tags
+	userTags := input.Tags
+	if userTags == nil {
+		userTags = make(map[string]string)
+	}
+	input.Tags = utils.MergeBluelinkTagsWithUserTags(deployInput, userTags)
 
 	q.input = input
 	return hasValues, saveOpCtx, nil
@@ -141,7 +148,13 @@ func changesToCreateQueueInput(specData *core.MappingNode) (*sqs.CreateQueueInpu
 			},
 		),
 		pluginutils.NewValueSetter(
-			"$.visibilityTimeoutSeconds",
+			"$.receiveMessageWaitTimeSeconds",
+			func(value *core.MappingNode, input *sqs.CreateQueueInput) {
+				input.Attributes["ReceiveMessageWaitTimeSeconds"] = strconv.Itoa(core.IntValue(value))
+			},
+		),
+		pluginutils.NewValueSetter(
+			"$.visibilityTimeout",
 			func(value *core.MappingNode, input *sqs.CreateQueueInput) {
 				input.Attributes["VisibilityTimeout"] = strconv.Itoa(core.IntValue(value))
 			},

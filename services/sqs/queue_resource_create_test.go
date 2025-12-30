@@ -18,6 +18,7 @@ import (
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/schema"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/plugintestutils"
+	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -44,9 +45,17 @@ func (s *SQSQueueResourceCreateSuite) Test_create_sqs_queue() {
 		createSQSFailureTestCase(providerCtx, loader),
 	}
 
+	// Create a wrapper function that matches the expected signature
+	queueResourceWrapper := func(
+		serviceFactory pluginutils.ServiceFactory[*aws.Config, sqsservice.Service],
+		configStore pluginutils.ServiceConfigStore[*aws.Config],
+	) provider.Resource {
+		return QueueResource(serviceFactory, mockResourceGroupTaggingServiceFactory, configStore)
+	}
+
 	plugintestutils.RunResourceDeployTestCases(
 		testCases,
-		QueueResource,
+		queueResourceWrapper,
 		&s.Suite,
 	)
 }
@@ -57,7 +66,12 @@ func createBasicQueueTestCase(
 ) plugintestutils.ResourceDeployTestCase[*aws.Config, sqsservice.Service] {
 	queueARN := "arn:aws:sqs:us-west-2:123456789012:test-queue"
 	queueURL := "https://sqs.us-west-2.amazonaws.com/123456789012/test-queue"
+	tags := map[string]string{
+		"Environment": "test",
+		"Project":     "test-project",
+	}
 
+	// Create the mock service directly
 	service := sqsmock.CreateSQSServiceMock(
 		sqsmock.WithCreateQueueOutput(
 			&sqs.CreateQueueOutput{
@@ -73,96 +87,33 @@ func createBasicQueueTestCase(
 		),
 	)
 
-	specData := core.MappingNodeFields(
-		"queueName",
-		core.MappingNodeFromString("test-queue"),
-		"tags",
-		core.MappingNodeItems(
-			core.MappingNodeFields(
-				"key",
-				core.MappingNodeFromString("Environment"),
-				"value",
-				core.MappingNodeFromString("test"),
-			),
-			core.MappingNodeFields(
-				"key",
-				core.MappingNodeFromString("Project"),
-				"value",
-				core.MappingNodeFromString("test-project"),
-			),
-		),
-	)
+	// Use shared helper for the basic test case structure
+	config := CreateUnitTestCaseConfig("test-queue", queueARN, queueURL, tags, providerCtx)
+	testCase := CreateBasicQueueTestCase(config)
 
-	return plugintestutils.ResourceDeployTestCase[*aws.Config, sqsservice.Service]{
-		Name: "create basic queue",
-		ServiceFactory: func(awsConfig *aws.Config, providerContext provider.Context) sqsservice.Service {
-			return service
-		},
-		ServiceMockCalls: &service.MockCalls,
-		ConfigStore: utils.NewAWSConfigStore(
-			[]string{},
-			utils.AWSConfigFromProviderContext,
-			loader,
-			utils.AWSConfigCacheKey,
-		),
-		Input: &provider.ResourceDeployInput{
-			InstanceID: "test-instance-id",
-			ResourceID: "test-queue-id",
-			Changes: &provider.Changes{
-				AppliedResourceInfo: provider.ResourceInfo{
-					ResourceID:   "test-queue-id",
-					ResourceName: "TestQueue",
-					InstanceID:   "test-instance-id",
-					ResourceWithResolvedSubs: &provider.ResolvedResource{
-						Type: &schema.ResourceTypeWrapper{
-							Value: "aws/sqs/queue",
-						},
-						Spec: specData,
-					},
-				},
-				NewFields: []provider.FieldChange{
-					{
-						FieldPath: "spec.queueName",
-					},
-					{
-						FieldPath: "spec.tags[0].key",
-					},
-					{
-						FieldPath: "spec.tags[0].value",
-					},
-					{
-						FieldPath: "spec.tags[1].key",
-					},
-					{
-						FieldPath: "spec.tags[1].value",
-					},
-				},
-			},
-			ProviderContext: providerCtx,
-		},
-		ExpectedOutput: &provider.ResourceDeployOutput{
-			ComputedFieldValues: map[string]*core.MappingNode{
-				"spec.arn":      core.MappingNodeFromString("arn:aws:sqs:us-west-2:123456789012:test-queue"),
-				"spec.queueUrl": core.MappingNodeFromString(queueURL),
-			},
-		},
-		SaveActionsCalled: map[string]any{
-			"CreateQueue": &sqs.CreateQueueInput{
-				QueueName:  aws.String("test-queue"),
-				Attributes: map[string]string{},
-				Tags: map[string]string{
-					"Environment": "test",
-					"Project":     "test-project",
-				},
-			},
-			"GetQueueAttributes": &sqs.GetQueueAttributesInput{
-				QueueUrl: aws.String(queueURL),
-				AttributeNames: []types.QueueAttributeName{
-					types.QueueAttributeNameQueueArn,
-				},
-			},
+	// Override with unit test specific configurations
+	testCase.ServiceFactory = func(awsConfig *aws.Config, providerContext provider.Context) sqsservice.Service {
+		return service
+	}
+	testCase.ServiceMockCalls = &service.MockCalls
+	testCase.ExpectedOutput = &provider.ResourceDeployOutput{
+		ComputedFieldValues: map[string]*core.MappingNode{
+			"spec.arn":      core.MappingNodeFromString(queueARN),
+			"spec.queueUrl": core.MappingNodeFromString(queueURL),
 		},
 	}
+	testCase.SaveActionsCalled = map[string]any{
+		"CreateQueue":        CreateExpectedCreateQueueInput("test-queue", tags),
+		"GetQueueAttributes": CreateExpectedGetQueueAttributesInput(queueURL),
+	}
+	testCase.ConfigStore = utils.NewAWSConfigStore(
+		[]string{},
+		utils.AWSConfigFromProviderContext,
+		loader,
+		utils.AWSConfigCacheKey,
+	)
+
+	return testCase
 }
 
 func createAdvancedQueueTestCase(
