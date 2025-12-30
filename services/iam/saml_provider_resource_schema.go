@@ -47,6 +47,7 @@ func iamSAMLProviderResourceSchema() *provider.ResourceDefinitionsSchema {
 				Description: "A list of tags that are attached to the specified IAM SAML provider.",
 				FormattedDescription: "A list of tags that are attached to the specified IAM SAML provider. " +
 					"For more information about tagging, see [Tagging IAM resources](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_tags.html) in the IAM User Guide.",
+				SortArrayByField: "key",
 				Items: &provider.ResourceDefinitionsSchema{
 					Type:  provider.ResourceDefinitionsSchemaTypeObject,
 					Label: "Tag",

@@ -24,12 +24,20 @@ func (i *iamRoleResourceActions) GetExternalState(
 		return nil, err
 	}
 
-	arn := core.StringValue(
-		input.CurrentResourceSpec.Fields["arn"],
-	)
-	if arn == "" {
-		return nil, fmt.Errorf("ARN is required for get external state operation")
+	// Try to get ARN from current spec.
+	// NOTE: Tag-based fallback lookup is not possible for IAM roles because the
+	// AWS Resource Groups Tagging API does not support GetResources for iam:role.
+	// See: https://docs.aws.amazon.com/resourcegroupstagging/latest/APIReference/supported-services.html
+	arnValue, hasArn := pluginutils.GetValueByPath("$.arn", input.CurrentResourceSpec)
+	if !hasArn {
+		// Resource doesn't exist yet or ARN not available
+		return &provider.ResourceGetExternalStateOutput{
+			ResourceSpecState: &core.MappingNode{
+				Fields: map[string]*core.MappingNode{},
+			},
+		}, nil
 	}
+	arn := core.StringValue(arnValue)
 
 	roleName, err := extractRoleNameFromARN(arn)
 	if err != nil {
@@ -111,6 +119,37 @@ func (i *iamRoleResourceActions) GetExternalState(
 		)
 	}
 
+	if role.PermissionsBoundary != nil && role.PermissionsBoundary.PermissionsBoundaryArn != nil {
+		resourceSpecState.Fields["permissionsBoundary"] = core.MappingNodeFromString(
+			aws.ToString(role.PermissionsBoundary.PermissionsBoundaryArn),
+		)
+	}
+
+	// Fetch and add tags (filtering out Bluelink provenance tags)
+	if len(role.Tags) > 0 {
+		userTags := extractUserIAMTags(role.Tags, input.ProviderContext)
+		if len(userTags.Items) > 0 {
+			resourceSpecState.Fields["tags"] = userTags
+		}
+	}
+
+	// Fetch and add attached managed policy ARNs
+	listAttachedPoliciesOutput, err := iamService.ListAttachedRolePolicies(ctx, &iam.ListAttachedRolePoliciesInput{
+		RoleName: role.RoleName,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(listAttachedPoliciesOutput.AttachedPolicies) > 0 {
+		managedPolicyArns := make([]*core.MappingNode, 0, len(listAttachedPoliciesOutput.AttachedPolicies))
+		for _, policy := range listAttachedPoliciesOutput.AttachedPolicies {
+			managedPolicyArns = append(managedPolicyArns, core.MappingNodeFromString(
+				aws.ToString(policy.PolicyArn),
+			))
+		}
+		resourceSpecState.Fields["managedPolicyArns"] = &core.MappingNode{Items: managedPolicyArns}
+	}
+
 	// Fetch and add inline policies as structured objects
 	listPoliciesOutput, err := iamService.ListRolePolicies(ctx, &iam.ListRolePoliciesInput{
 		RoleName: role.RoleName,
@@ -128,8 +167,13 @@ func (i *iamRoleResourceActions) GetExternalState(
 			if err != nil {
 				return nil, err
 			}
+			// URL decode the policy document (AWS returns URL-encoded JSON)
+			decodedInlinePolicyDocument, err := url.QueryUnescape(aws.ToString(getPolicyOutput.PolicyDocument))
+			if err != nil {
+				return nil, err
+			}
 			var policyDoc interface{}
-			if err := json.Unmarshal([]byte(aws.ToString(getPolicyOutput.PolicyDocument)), &policyDoc); err != nil {
+			if err := json.Unmarshal([]byte(decodedInlinePolicyDocument), &policyDoc); err != nil {
 				return nil, err
 			}
 			policyDocNode, err := pluginutils.AnyToMappingNode(policyDoc)

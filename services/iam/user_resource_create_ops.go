@@ -33,6 +33,11 @@ func (u *userCreate) Prepare(
 		return false, saveOpCtx, err
 	}
 
+	deployInput, ok := saveOpCtx.Data["ResourceDeployInput"].(*provider.ResourceDeployInput)
+	if !ok || deployInput == nil {
+		return false, saveOpCtx, fmt.Errorf("ResourceDeployInput not found in SaveOperationContext.Data")
+	}
+
 	// Generate unique user name if not provided
 	if createInput.UserName == nil || aws.ToString(createInput.UserName) == "" {
 		// Use the injected generator or default to the IAM user generator
@@ -41,13 +46,7 @@ func (u *userCreate) Prepare(
 			generator = utils.IAMUserNameGenerator
 		}
 
-		// Retrieve inputData from SaveOperationContext if available
-		inputData, ok := saveOpCtx.Data["ResourceDeployInput"].(*provider.ResourceDeployInput)
-		if !ok || inputData == nil {
-			return false, saveOpCtx, fmt.Errorf("ResourceDeployInput not found in SaveOperationContext.Data")
-		}
-
-		uniqueUserName, err := generator(inputData)
+		uniqueUserName, err := generator(deployInput)
 		if err != nil {
 			return false, saveOpCtx, err
 		}
@@ -55,6 +54,9 @@ func (u *userCreate) Prepare(
 		createInput.UserName = aws.String(uniqueUserName)
 		hasValues = true
 	}
+
+	// Merge Bluelink system tags with user-defined tags
+	createInput.Tags = mergeBluelinkTagsWithIAMTags(deployInput, createInput.Tags)
 
 	u.input = createInput
 	return hasValues, saveOpCtx, nil

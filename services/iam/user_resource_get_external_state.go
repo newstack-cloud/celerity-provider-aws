@@ -8,8 +8,10 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
+	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/aws/smithy-go"
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
+	"github.com/newstack-cloud/bluelink-provider-aws/utils"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
@@ -24,10 +26,21 @@ func (i *iamUserResourceActions) GetExternalState(
 		return nil, err
 	}
 
-	// Get the user ARN from the resource spec
-	arn := core.StringValue(input.CurrentResourceSpec.Fields["arn"])
+	// Try to get ARN from current spec.
+	// NOTE: Tag-based fallback lookup is not possible for IAM users because the
+	// AWS Resource Groups Tagging API does not support GetResources for iam:user.
+	// See: https://docs.aws.amazon.com/resourcegroupstagging/latest/APIReference/supported-services.html
+	arn := ""
+	if input.CurrentResourceSpec != nil && input.CurrentResourceSpec.Fields != nil {
+		arn = core.StringValue(input.CurrentResourceSpec.Fields["arn"])
+	}
 	if arn == "" {
-		return nil, fmt.Errorf("ARN is required for get external state operation")
+		// Resource doesn't exist yet or ARN not available
+		return &provider.ResourceGetExternalStateOutput{
+			ResourceSpecState: &core.MappingNode{
+				Fields: map[string]*core.MappingNode{},
+			},
+		}, nil
 	}
 
 	// Extract user name from ARN
@@ -92,8 +105,8 @@ func (i *iamUserResourceActions) GetExternalState(
 		externalState["permissionsBoundary"] = core.MappingNodeFromString(aws.ToString(user.PermissionsBoundary.PermissionsBoundaryArn))
 	}
 
-	// Get tags
-	userTags, err := i.getUserTags(ctx, iamService, userName)
+	// Get tags (filtering out Bluelink provenance tags)
+	userTags, err := i.getUserTags(ctx, iamService, userName, input.ProviderContext)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user tags: %w", err)
 	}
@@ -209,6 +222,7 @@ func (i *iamUserResourceActions) getUserTags(
 	ctx context.Context,
 	iamService iamservice.Service,
 	userName string,
+	providerContext provider.Context,
 ) ([]*core.MappingNode, error) {
 	result, err := iamService.ListUserTags(ctx, &iam.ListUserTagsInput{
 		UserName: aws.String(userName),
@@ -217,8 +231,14 @@ func (i *iamUserResourceActions) getUserTags(
 		return nil, err
 	}
 
+	// Filter out Bluelink provenance tags
+	prefix := utils.GetBluelinkTagPrefix(providerContext.TaggingConfig())
+	filteredTags := utils.FilterTags(result.Tags, func(t iamtypes.Tag) string {
+		return aws.ToString(t.Key)
+	}, prefix)
+
 	var tags []*core.MappingNode
-	for _, tag := range result.Tags {
+	for _, tag := range filteredTags {
 		tagNode := &core.MappingNode{
 			Fields: map[string]*core.MappingNode{
 				"key":   core.MappingNodeFromString(aws.ToString(tag.Key)),

@@ -350,8 +350,10 @@ func (r *roleTagsUpdate) Prepare(
 	specData *core.MappingNode,
 	changes *provider.Changes,
 ) (bool, pluginutils.SaveOperationContext, error) {
-	diffResult := utils.DiffTags(
+	deployInput, _ := saveOpCtx.Data["ResourceDeployInput"].(*provider.ResourceDeployInput)
+	diffResult := utils.DiffTagsWithBluelink(
 		changes,
+		deployInput,
 		"$.tags",
 		toIAMTag,
 	)

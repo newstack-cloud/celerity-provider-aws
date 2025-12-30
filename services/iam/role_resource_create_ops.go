@@ -33,6 +33,11 @@ func (r *roleCreate) Prepare(
 		return false, saveOpCtx, err
 	}
 
+	deployInput, ok := saveOpCtx.Data["ResourceDeployInput"].(*provider.ResourceDeployInput)
+	if !ok || deployInput == nil {
+		return false, saveOpCtx, fmt.Errorf("ResourceDeployInput not found in SaveOperationContext.Data")
+	}
+
 	// Generate unique role name if not provided
 	if createInput.RoleName == nil || aws.ToString(createInput.RoleName) == "" {
 		// Use the injected generator or default to the IAM role generator
@@ -41,13 +46,7 @@ func (r *roleCreate) Prepare(
 			generator = utils.IAMRoleNameGenerator
 		}
 
-		// Retrieve inputData from SaveOperationContext if available
-		inputData, ok := saveOpCtx.Data["ResourceDeployInput"].(*provider.ResourceDeployInput)
-		if !ok || inputData == nil {
-			return false, saveOpCtx, fmt.Errorf("ResourceDeployInput not found in SaveOperationContext.Data")
-		}
-
-		uniqueRoleName, err := generator(inputData)
+		uniqueRoleName, err := generator(deployInput)
 		if err != nil {
 			return false, saveOpCtx, err
 		}
@@ -55,6 +54,9 @@ func (r *roleCreate) Prepare(
 		createInput.RoleName = aws.String(uniqueRoleName)
 		hasValues = true
 	}
+
+	// Merge Bluelink system tags with user-defined tags
+	createInput.Tags = mergeBluelinkTagsWithIAMTags(deployInput, createInput.Tags)
 
 	r.input = createInput
 	return hasValues, saveOpCtx, nil

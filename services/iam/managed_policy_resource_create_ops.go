@@ -32,6 +32,11 @@ func (m *managedPolicyCreate) Prepare(
 		return false, saveOpCtx, err
 	}
 
+	deployInput, ok := saveOpCtx.Data["ResourceDeployInput"].(*provider.ResourceDeployInput)
+	if !ok || deployInput == nil {
+		return false, saveOpCtx, fmt.Errorf("ResourceDeployInput not found in SaveOperationContext.Data")
+	}
+
 	// Generate unique policy name if not provided
 	if createInput.PolicyName == nil || aws.ToString(createInput.PolicyName) == "" {
 		// Use the injected generator or default to the IAM policy generator
@@ -40,13 +45,7 @@ func (m *managedPolicyCreate) Prepare(
 			generator = utils.IAMPolicyNameGenerator
 		}
 
-		// Retrieve inputData from SaveOperationContext if available
-		inputData, ok := saveOpCtx.Data["ResourceDeployInput"].(*provider.ResourceDeployInput)
-		if !ok || inputData == nil {
-			return false, saveOpCtx, fmt.Errorf("ResourceDeployInput not found in SaveOperationContext.Data")
-		}
-
-		uniquePolicyName, err := generator(inputData)
+		uniquePolicyName, err := generator(deployInput)
 		if err != nil {
 			return false, saveOpCtx, err
 		}
@@ -54,6 +53,9 @@ func (m *managedPolicyCreate) Prepare(
 		createInput.PolicyName = aws.String(uniquePolicyName)
 		hasValues = true
 	}
+
+	// Merge Bluelink system tags with user-defined tags
+	createInput.Tags = mergeBluelinkTagsWithIAMTags(deployInput, createInput.Tags)
 
 	m.input = createInput
 	return hasValues, saveOpCtx, nil

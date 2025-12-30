@@ -18,6 +18,7 @@ import (
 	"github.com/newstack-cloud/bluelink/libs/blueprint/schema"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/state"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/plugintestutils"
+	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -45,9 +46,17 @@ func (s *ServerCertificateResourceUpdateSuite) Test_update_iam_server_certificat
 		updateServerCertificateServiceErrorTestCase(providerCtx, loader),
 	}
 
+	// Create a wrapper function that matches the expected signature
+	serverCertificateResourceWrapper := func(
+		serviceFactory pluginutils.ServiceFactory[*aws.Config, iamservice.Service],
+		configStore pluginutils.ServiceConfigStore[*aws.Config],
+	) provider.Resource {
+		return ServerCertificateResource(serviceFactory, mockResourceGroupTaggingServiceFactory, configStore)
+	}
+
 	plugintestutils.RunResourceDeployTestCases(
 		testCases,
-		ServerCertificateResource,
+		serverCertificateResourceWrapper,
 		&s.Suite,
 	)
 }

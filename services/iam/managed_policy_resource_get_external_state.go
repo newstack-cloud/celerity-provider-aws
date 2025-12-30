@@ -6,6 +6,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
+	"github.com/newstack-cloud/bluelink-provider-aws/utils"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
@@ -20,15 +22,28 @@ func (i *iamManagedPolicyResourceActions) GetExternalState(
 		return nil, err
 	}
 
-	// Safely get the policy ARN from the resource spec
+	// Try to get ARN from current spec first
+	arnStr := ""
 	arn, hasArn := pluginutils.GetValueByPath("$.arn", input.CurrentResourceSpec)
-	if !hasArn {
-		return nil, fmt.Errorf("ARN is required for get external state operation")
+	if hasArn {
+		arnStr = core.StringValue(arn)
 	}
 
-	arnStr := core.StringValue(arn)
+	// If no ARN, attempt fallback lookup by Bluelink tags
 	if arnStr == "" {
-		return nil, fmt.Errorf("ARN is required for get external state operation")
+		fallbackArn, err := i.lookupManagedPolicyARNByTags(ctx, input)
+		if err != nil {
+			return nil, fmt.Errorf("failed to lookup managed policy by tags: %w", err)
+		}
+		if fallbackArn == "" {
+			// Resource doesn't exist yet
+			return &provider.ResourceGetExternalStateOutput{
+				ResourceSpecState: &core.MappingNode{
+					Fields: map[string]*core.MappingNode{},
+				},
+			}, nil
+		}
+		arnStr = fallbackArn
 	}
 
 	// Get the managed policy
@@ -80,20 +95,9 @@ func (i *iamManagedPolicyResourceActions) GetExternalState(
 		externalState["updateDate"] = core.MappingNodeFromString(getPolicyOutput.Policy.UpdateDate.Format("2006-01-02T15:04:05Z"))
 	}
 
-	// Add tags if they exist
+	// Add tags if they exist (filtering out Bluelink provenance tags)
 	if len(listPolicyTagsOutput.Tags) > 0 {
-		tags := make([]*core.MappingNode, 0, len(listPolicyTagsOutput.Tags))
-		for _, tag := range listPolicyTagsOutput.Tags {
-			tags = append(tags, &core.MappingNode{
-				Fields: map[string]*core.MappingNode{
-					"key":   core.MappingNodeFromString(aws.ToString(tag.Key)),
-					"value": core.MappingNodeFromString(aws.ToString(tag.Value)),
-				},
-			})
-		}
-		externalState["tags"] = &core.MappingNode{
-			Items: tags,
-		}
+		externalState["tags"] = extractUserIAMTags(listPolicyTagsOutput.Tags, input.ProviderContext)
 	}
 
 	return &provider.ResourceGetExternalStateOutput{
@@ -101,4 +105,37 @@ func (i *iamManagedPolicyResourceActions) GetExternalState(
 			Fields: externalState,
 		},
 	}, nil
+}
+
+// lookupManagedPolicyARNByTags attempts to find an IAM managed policy by its Bluelink provenance tags.
+// This is used as a fallback when the ARN is not available (e.g., interrupted resource creation).
+// Returns empty string if no matching resource is found.
+func (i *iamManagedPolicyResourceActions) lookupManagedPolicyARNByTags(
+	ctx context.Context,
+	input *provider.ResourceGetExternalStateInput,
+) (string, error) {
+	tagFilters := utils.BuildBluelinkTagFiltersForLookup(input)
+	if tagFilters == nil {
+		// Tagging is not enabled, cannot perform fallback lookup
+		return "", nil
+	}
+
+	taggingService, err := i.getResourceGroupTaggingService(ctx, input.ProviderContext)
+	if err != nil {
+		return "", err
+	}
+
+	result, err := taggingService.GetResources(ctx, &resourcegroupstaggingapi.GetResourcesInput{
+		TagFilters:          tagFilters,
+		ResourceTypeFilters: []string{"iam:policy"},
+	})
+	if err != nil {
+		return "", err
+	}
+
+	if len(result.ResourceTagMappingList) == 0 {
+		return "", nil
+	}
+
+	return aws.ToString(result.ResourceTagMappingList[0].ResourceARN), nil
 }

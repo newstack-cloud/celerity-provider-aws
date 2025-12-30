@@ -13,6 +13,7 @@ import (
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/plugintestutils"
+	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -37,9 +38,17 @@ func (s *IAMOIDCProviderResourceStabilisedSuite) Test_stabilised_iam_oidc_provid
 		stabilisedOIDCProviderWithAllFieldsTestCase(providerCtx, loader),
 	}
 
+	// Create a wrapper function that matches the expected signature
+	oidcProviderResourceWrapper := func(
+		serviceFactory pluginutils.ServiceFactory[*aws.Config, iamservice.Service],
+		configStore pluginutils.ServiceConfigStore[*aws.Config],
+	) provider.Resource {
+		return OIDCProviderResource(serviceFactory, mockResourceGroupTaggingServiceFactory, configStore)
+	}
+
 	plugintestutils.RunResourceHasStabilisedTestCases(
 		testCases,
-		OIDCProviderResource,
+		oidcProviderResourceWrapper,
 		&s.Suite,
 	)
 }

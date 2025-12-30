@@ -106,8 +106,10 @@ func (s *samlProviderTagsUpdate) Prepare(
 	}
 	s.arn = arn
 
-	diffResult := utils.DiffTags(
+	deployInput, _ := saveOpCtx.Data["ResourceDeployInput"].(*provider.ResourceDeployInput)
+	diffResult := utils.DiffTagsWithBluelink(
 		changes,
+		deployInput,
 		"$.tags",
 		toIAMTag,
 	)

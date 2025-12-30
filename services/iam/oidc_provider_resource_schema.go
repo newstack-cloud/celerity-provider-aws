@@ -75,6 +75,7 @@ func iamOIDCProviderResourceSchema() *provider.ResourceDefinitionsSchema {
 				Description: "A list of tags that are attached to the specified IAM OIDC provider.",
 				FormattedDescription: "A list of tags that are attached to the specified IAM OIDC provider. " +
 					"For more information about tagging, see [Tagging IAM resources](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_tags.html) in the IAM User Guide.",
+				SortArrayByField: "key",
 				Items: &provider.ResourceDefinitionsSchema{
 					Type:  provider.ResourceDefinitionsSchemaTypeObject,
 					Label: "Tag",

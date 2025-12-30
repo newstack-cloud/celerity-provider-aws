@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
+	resgrouptagservice "github.com/newstack-cloud/bluelink-provider-aws/services/resgrouptag/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/utils"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
@@ -17,6 +18,7 @@ import (
 // RoleResource returns a resource implementation for an AWS IAM Role.
 func RoleResource(
 	iamServiceFactory pluginutils.ServiceFactory[*aws.Config, iamservice.Service],
+	resourceGroupTaggingServiceFactory pluginutils.ServiceFactory[*aws.Config, resgrouptagservice.Service],
 	awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
 ) provider.Resource {
 	basicExample, _ := examples.ReadFile("examples/resources/iam_role_basic.md")
@@ -24,9 +26,10 @@ func RoleResource(
 	jsoncExample, _ := examples.ReadFile("examples/resources/iam_role_jsonc.md")
 
 	iamRoleActions := &iamRoleResourceActions{
-		iamServiceFactory:   iamServiceFactory,
-		awsConfigStore:      awsConfigStore,
-		uniqueNameGenerator: utils.IAMRoleNameGenerator,
+		iamServiceFactory:                  iamServiceFactory,
+		resourceGroupTaggingServiceFactory: resourceGroupTaggingServiceFactory,
+		awsConfigStore:                     awsConfigStore,
+		uniqueNameGenerator:                utils.IAMRoleNameGenerator,
 	}
 	return &providerv1.ResourceDefinition{
 		Type:             "aws/iam/role",
@@ -34,8 +37,9 @@ func RoleResource(
 		PlainTextSummary: "A resource for managing an AWS IAM role.",
 		FormattedDescription: "The resource type used to define an [IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html) " +
 			"that is deployed to AWS.",
-		Schema:  iamRoleResourceSchema(),
-		IDField: "arn",
+		Schema:         iamRoleResourceSchema(),
+		IDField:        "arn",
+		TaggingSupport: provider.TaggingSupportFull,
 		// An IAM role is commonly used by other resources that need to assume permissions
 		CommonTerminal: false,
 		FormattedExamples: []string{
@@ -53,9 +57,10 @@ func RoleResource(
 }
 
 type iamRoleResourceActions struct {
-	iamServiceFactory   pluginutils.ServiceFactory[*aws.Config, iamservice.Service]
-	awsConfigStore      pluginutils.ServiceConfigStore[*aws.Config]
-	uniqueNameGenerator utils.UniqueNameGenerator
+	iamServiceFactory                  pluginutils.ServiceFactory[*aws.Config, iamservice.Service]
+	resourceGroupTaggingServiceFactory pluginutils.ServiceFactory[*aws.Config, resgrouptagservice.Service]
+	awsConfigStore                     pluginutils.ServiceConfigStore[*aws.Config]
+	uniqueNameGenerator                utils.UniqueNameGenerator
 }
 
 func (i *iamRoleResourceActions) getIamService(

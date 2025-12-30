@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
+	resgrouptagservice "github.com/newstack-cloud/bluelink-provider-aws/services/resgrouptag/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/utils"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
@@ -17,6 +18,7 @@ import (
 // UserResource returns a resource implementation for an AWS IAM User.
 func UserResource(
 	iamServiceFactory pluginutils.ServiceFactory[*aws.Config, iamservice.Service],
+	resourceGroupTaggingServiceFactory pluginutils.ServiceFactory[*aws.Config, resgrouptagservice.Service],
 	awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
 ) provider.Resource {
 	basicExample, _ := examples.ReadFile("examples/resources/iam_user_basic.md")
@@ -24,9 +26,10 @@ func UserResource(
 	jsoncExample, _ := examples.ReadFile("examples/resources/iam_user_jsonc.md")
 
 	iamUserActions := &iamUserResourceActions{
-		iamServiceFactory:   iamServiceFactory,
-		awsConfigStore:      awsConfigStore,
-		uniqueNameGenerator: utils.IAMUserNameGenerator,
+		iamServiceFactory:                  iamServiceFactory,
+		resourceGroupTaggingServiceFactory: resourceGroupTaggingServiceFactory,
+		awsConfigStore:                     awsConfigStore,
+		uniqueNameGenerator:                utils.IAMUserNameGenerator,
 	}
 	return &providerv1.ResourceDefinition{
 		Type:             "aws/iam/user",
@@ -34,8 +37,9 @@ func UserResource(
 		PlainTextSummary: "A resource for managing an AWS IAM user.",
 		FormattedDescription: "The resource type used to define an [IAM user](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users.html) " +
 			"that is deployed to AWS.",
-		Schema:  iamUserResourceSchema(),
-		IDField: "arn",
+		Schema:         iamUserResourceSchema(),
+		IDField:        "arn",
+		TaggingSupport: provider.TaggingSupportFull,
 		// An IAM user is commonly referenced by other resources that need to grant permissions to the user
 		CommonTerminal: false,
 		FormattedExamples: []string{
@@ -53,9 +57,10 @@ func UserResource(
 }
 
 type iamUserResourceActions struct {
-	iamServiceFactory   pluginutils.ServiceFactory[*aws.Config, iamservice.Service]
-	awsConfigStore      pluginutils.ServiceConfigStore[*aws.Config]
-	uniqueNameGenerator utils.UniqueNameGenerator
+	iamServiceFactory                  pluginutils.ServiceFactory[*aws.Config, iamservice.Service]
+	resourceGroupTaggingServiceFactory pluginutils.ServiceFactory[*aws.Config, resgrouptagservice.Service]
+	awsConfigStore                     pluginutils.ServiceConfigStore[*aws.Config]
+	uniqueNameGenerator                utils.UniqueNameGenerator
 }
 
 func (i *iamUserResourceActions) getIamService(

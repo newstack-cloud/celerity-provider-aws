@@ -16,6 +16,7 @@ import (
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/plugintestutils"
+	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -53,11 +54,20 @@ func (s *IamRoleResourceGetExternalStateSuite) Test_get_external_state_iam_role(
 		getExternalStateRoleNotFoundTestCase(providerCtx, loader),
 		getExternalStateCompleteRoleTestCase(providerCtx, loader),
 		createGetExternalStateWithInlinePoliciesTestCase(providerCtx, loader),
+		createGetExternalStateWithTagsAndManagedPoliciesTestCase(providerCtx, loader),
+	}
+
+	// Create a wrapper function that matches the expected signature
+	roleResourceWrapper := func(
+		serviceFactory pluginutils.ServiceFactory[*aws.Config, iamservice.Service],
+		configStore pluginutils.ServiceConfigStore[*aws.Config],
+	) provider.Resource {
+		return RoleResource(serviceFactory, mockResourceGroupTaggingServiceFactory, configStore)
 	}
 
 	plugintestutils.RunResourceGetExternalStateTestCases(
 		testCases,
-		RoleResource,
+		roleResourceWrapper,
 		&s.Suite,
 	)
 }
@@ -127,6 +137,9 @@ func getExternalStateBasicRoleTestCase(
 						}]
 					}`),
 				},
+			}),
+			iammock.WithListAttachedRolePoliciesOutput(&iam.ListAttachedRolePoliciesOutput{
+				AttachedPolicies: []types.AttachedPolicy{},
 			}),
 			iammock.WithListRolePoliciesOutput(&iam.ListRolePoliciesOutput{
 				PolicyNames: []string{},
@@ -267,6 +280,9 @@ func getExternalStateCompleteRoleTestCase(
 					}`),
 				},
 			}),
+			iammock.WithListAttachedRolePoliciesOutput(&iam.ListAttachedRolePoliciesOutput{
+				AttachedPolicies: []types.AttachedPolicy{},
+			}),
 			iammock.WithListRolePoliciesOutput(&iam.ListRolePoliciesOutput{
 				PolicyNames: []string{},
 			}),
@@ -308,6 +324,9 @@ func createGetExternalStateWithInlinePoliciesTestCase(
 					}]
 				}`),
 			},
+		}),
+		iammock.WithListAttachedRolePoliciesOutput(&iam.ListAttachedRolePoliciesOutput{
+			AttachedPolicies: []types.AttachedPolicy{},
 		}),
 		iammock.WithListRolePoliciesOutput(&iam.ListRolePoliciesOutput{
 			PolicyNames: []string{"DynamoDBAccess"},
@@ -396,6 +415,120 @@ func createGetExternalStateWithInlinePoliciesTestCase(
 									},
 								},
 							},
+						},
+					},
+				},
+			},
+		},
+		ExpectError: false,
+	}
+}
+
+func createGetExternalStateWithTagsAndManagedPoliciesTestCase(
+	providerCtx provider.Context,
+	loader *testutils.MockAWSConfigLoader,
+) plugintestutils.ResourceGetExternalStateTestCase[*aws.Config, iamservice.Service] {
+	service := iammock.CreateIamServiceMock(
+		iammock.WithGetRoleOutput(&iam.GetRoleOutput{
+			Role: &types.Role{
+				RoleName: aws.String("TestRoleWithExtras"),
+				Arn:      aws.String("arn:aws:iam::123456789012:role/TestRoleWithExtras"),
+				RoleId:   aws.String("AROA1234567890123456"),
+				AssumeRolePolicyDocument: aws.String(`{
+					"Version": "2012-10-17",
+					"Statement": [{
+						"Effect": "Allow",
+						"Principal": {"Service": "lambda.amazonaws.com"},
+						"Action": "sts:AssumeRole"
+					}]
+				}`),
+				PermissionsBoundary: &types.AttachedPermissionsBoundary{
+					PermissionsBoundaryArn:  aws.String("arn:aws:iam::123456789012:policy/MyPermissionsBoundary"),
+					PermissionsBoundaryType: types.PermissionsBoundaryAttachmentTypePolicy,
+				},
+				Tags: []types.Tag{
+					{Key: aws.String("Environment"), Value: aws.String("test")},
+					{Key: aws.String("Team"), Value: aws.String("platform")},
+				},
+			},
+		}),
+		iammock.WithListAttachedRolePoliciesOutput(&iam.ListAttachedRolePoliciesOutput{
+			AttachedPolicies: []types.AttachedPolicy{
+				{PolicyArn: aws.String("arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"), PolicyName: aws.String("AmazonS3ReadOnlyAccess")},
+				{PolicyArn: aws.String("arn:aws:iam::123456789012:policy/CustomPolicy"), PolicyName: aws.String("CustomPolicy")},
+			},
+		}),
+		iammock.WithListRolePoliciesOutput(&iam.ListRolePoliciesOutput{
+			PolicyNames: []string{},
+		}),
+	)
+
+	return plugintestutils.ResourceGetExternalStateTestCase[*aws.Config, iamservice.Service]{
+		Name: "successfully gets role state with tags and managed policies",
+		ServiceFactory: func(awsConfig *aws.Config, providerContext provider.Context) iamservice.Service {
+			return service
+		},
+		ConfigStore: utils.NewAWSConfigStore(
+			[]string{},
+			utils.AWSConfigFromProviderContext,
+			loader,
+			utils.AWSConfigCacheKey,
+		),
+		Input: &provider.ResourceGetExternalStateInput{
+			ProviderContext: providerCtx,
+			CurrentResourceSpec: &core.MappingNode{
+				Fields: map[string]*core.MappingNode{
+					"arn": core.MappingNodeFromString("arn:aws:iam::123456789012:role/TestRoleWithExtras"),
+				},
+			},
+		},
+		ExpectedOutput: &provider.ResourceGetExternalStateOutput{
+			ResourceSpecState: &core.MappingNode{
+				Fields: map[string]*core.MappingNode{
+					"roleName": core.MappingNodeFromString("TestRoleWithExtras"),
+					"arn":      core.MappingNodeFromString("arn:aws:iam::123456789012:role/TestRoleWithExtras"),
+					"roleId":   core.MappingNodeFromString("AROA1234567890123456"),
+					"assumeRolePolicyDocument": {
+						Fields: map[string]*core.MappingNode{
+							"Version": core.MappingNodeFromString("2012-10-17"),
+							"Statement": {
+								Items: []*core.MappingNode{
+									{
+										Fields: map[string]*core.MappingNode{
+											"Effect": core.MappingNodeFromString("Allow"),
+											"Principal": {
+												Fields: map[string]*core.MappingNode{
+													"Service": core.MappingNodeFromString("lambda.amazonaws.com"),
+												},
+											},
+											"Action": core.MappingNodeFromString("sts:AssumeRole"),
+										},
+									},
+								},
+							},
+						},
+					},
+					"permissionsBoundary": core.MappingNodeFromString("arn:aws:iam::123456789012:policy/MyPermissionsBoundary"),
+					"tags": {
+						Items: []*core.MappingNode{
+							{
+								Fields: map[string]*core.MappingNode{
+									"key":   core.MappingNodeFromString("Environment"),
+									"value": core.MappingNodeFromString("test"),
+								},
+							},
+							{
+								Fields: map[string]*core.MappingNode{
+									"key":   core.MappingNodeFromString("Team"),
+									"value": core.MappingNodeFromString("platform"),
+								},
+							},
+						},
+					},
+					"managedPolicyArns": {
+						Items: []*core.MappingNode{
+							core.MappingNodeFromString("arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"),
+							core.MappingNodeFromString("arn:aws:iam::123456789012:policy/CustomPolicy"),
 						},
 					},
 				},

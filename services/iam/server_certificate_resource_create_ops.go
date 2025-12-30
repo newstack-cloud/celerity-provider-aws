@@ -28,17 +28,25 @@ func (s *serverCertificateCreate) Prepare(
 	specData *core.MappingNode,
 	changes *provider.Changes,
 ) (bool, pluginutils.SaveOperationContext, error) {
+	deployInput, ok := saveOpCtx.Data["ResourceDeployInput"].(*provider.ResourceDeployInput)
+	if !ok || deployInput == nil {
+		return false, saveOpCtx, fmt.Errorf("ResourceDeployInput not found in SaveOperationContext.Data")
+	}
+
 	name, err := s.getServerCertificateName(specData, changes)
 	if err != nil {
 		return false, saveOpCtx, err
 	}
 
-	tags, err := iamTagsFromSpecData(specData)
+	userTags, err := iamTagsFromSpecData(specData)
 	if err != nil {
 		return false, saveOpCtx, err
 	}
 
-	input := newSpecToUploadServerCertificateInput(specData, name, tags)
+	// Merge Bluelink system tags with user-defined tags
+	mergedTags := mergeBluelinkTagsWithIAMTags(deployInput, userTags)
+
+	input := newSpecToUploadServerCertificateInput(specData, name, mergedTags)
 
 	s.input = input
 

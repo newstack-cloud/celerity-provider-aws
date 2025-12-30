@@ -17,6 +17,7 @@ import (
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/schema"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/plugintestutils"
+	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -43,9 +44,17 @@ func (s *IAMSAMLProviderResourceCreateSuite) Test_create_iam_saml_provider() {
 		createSAMLProviderMissingMetadataTestCase(providerCtx, loader),
 	}
 
+	// Create a wrapper function that matches the expected signature
+	samlProviderResourceWrapper := func(
+		serviceFactory pluginutils.ServiceFactory[*aws.Config, iamservice.Service],
+		configStore pluginutils.ServiceConfigStore[*aws.Config],
+	) provider.Resource {
+		return SAMLProviderResource(serviceFactory, mockResourceGroupTaggingServiceFactory, configStore)
+	}
+
 	plugintestutils.RunResourceDeployTestCases(
 		testCases,
-		SAMLProviderResource,
+		samlProviderResourceWrapper,
 		&s.Suite,
 	)
 }

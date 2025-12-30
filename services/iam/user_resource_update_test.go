@@ -18,6 +18,7 @@ import (
 	"github.com/newstack-cloud/bluelink/libs/blueprint/schema"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/state"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/plugintestutils"
+	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -49,9 +50,17 @@ func (s *IAMUserResourceUpdateSuite) Test_update_iam_user() {
 		recreateUserOnUserNameChangeTestCase(providerCtx, loader),
 	}
 
+	// Create a wrapper function that matches the expected signature
+	userResourceWrapper := func(
+		serviceFactory pluginutils.ServiceFactory[*aws.Config, iamservice.Service],
+		configStore pluginutils.ServiceConfigStore[*aws.Config],
+	) provider.Resource {
+		return UserResource(serviceFactory, mockResourceGroupTaggingServiceFactory, configStore)
+	}
+
 	plugintestutils.RunResourceDeployTestCases(
 		testCases,
-		UserResource,
+		userResourceWrapper,
 		&s.Suite,
 	)
 }

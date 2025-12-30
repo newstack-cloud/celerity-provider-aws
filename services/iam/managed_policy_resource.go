@@ -7,7 +7,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
+	resgrouptagservice "github.com/newstack-cloud/bluelink-provider-aws/services/resgrouptag/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/utils"
+	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/providerv1"
@@ -19,6 +21,7 @@ var managedPolicyExamples embed.FS
 // ManagedPolicyResource returns a resource implementation for an AWS IAM Managed Policy.
 func ManagedPolicyResource(
 	iamServiceFactory pluginutils.ServiceFactory[*aws.Config, iamservice.Service],
+	resourceGroupTaggingServiceFactory pluginutils.ServiceFactory[*aws.Config, resgrouptagservice.Service],
 	awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
 ) provider.Resource {
 	basicExample, _ := managedPolicyExamples.ReadFile("examples/resources/iam_managed_policy_basic.md")
@@ -26,9 +29,10 @@ func ManagedPolicyResource(
 	jsoncExample, _ := managedPolicyExamples.ReadFile("examples/resources/iam_managed_policy_jsonc.md")
 
 	iamManagedPolicyActions := &iamManagedPolicyResourceActions{
-		iamServiceFactory:   iamServiceFactory,
-		awsConfigStore:      awsConfigStore,
-		uniqueNameGenerator: utils.IAMPolicyNameGenerator,
+		iamServiceFactory:                  iamServiceFactory,
+		resourceGroupTaggingServiceFactory: resourceGroupTaggingServiceFactory,
+		awsConfigStore:                     awsConfigStore,
+		uniqueNameGenerator:                utils.IAMPolicyNameGenerator,
 	}
 	return &providerv1.ResourceDefinition{
 		Type:             "aws/iam/managedPolicy",
@@ -36,8 +40,9 @@ func ManagedPolicyResource(
 		PlainTextSummary: "A resource for managing an AWS IAM managed policy.",
 		FormattedDescription: "The resource type used to define an [IAM managed policy](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_managed-vs-inline.html#aws-managed-policies) " +
 			"that is deployed to AWS.",
-		Schema:  iamManagedPolicyResourceSchema(),
-		IDField: "arn",
+		Schema:         iamManagedPolicyResourceSchema(),
+		IDField:        "arn",
+		TaggingSupport: provider.TaggingSupportFull,
 		// A managed policy is commonly used by other resources that need to attach policies
 		CommonTerminal: false,
 		FormattedExamples: []string{
@@ -55,9 +60,10 @@ func ManagedPolicyResource(
 }
 
 type iamManagedPolicyResourceActions struct {
-	iamServiceFactory   pluginutils.ServiceFactory[*aws.Config, iamservice.Service]
-	awsConfigStore      pluginutils.ServiceConfigStore[*aws.Config]
-	uniqueNameGenerator utils.UniqueNameGenerator
+	iamServiceFactory                  pluginutils.ServiceFactory[*aws.Config, iamservice.Service]
+	resourceGroupTaggingServiceFactory pluginutils.ServiceFactory[*aws.Config, resgrouptagservice.Service]
+	awsConfigStore                     pluginutils.ServiceConfigStore[*aws.Config]
+	uniqueNameGenerator                utils.UniqueNameGenerator
 }
 
 func (i *iamManagedPolicyResourceActions) getIamService(
@@ -74,4 +80,25 @@ func (i *iamManagedPolicyResourceActions) getIamService(
 	}
 
 	return i.iamServiceFactory(awsConfig, providerContext), nil
+}
+
+func (i *iamManagedPolicyResourceActions) getResourceGroupTaggingService(
+	ctx context.Context,
+	providerContext provider.Context,
+) (resgrouptagservice.Service, error) {
+	// IAM is a global service - Resource Groups Tagging API must use us-east-1
+	// to query IAM resources regardless of the configured region.
+	meta := map[string]*core.MappingNode{
+		"region": core.MappingNodeFromString("us-east-1"),
+	}
+	awsConfig, err := i.awsConfigStore.FromProviderContext(
+		ctx,
+		providerContext,
+		meta,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return i.resourceGroupTaggingServiceFactory(awsConfig, providerContext), nil
 }

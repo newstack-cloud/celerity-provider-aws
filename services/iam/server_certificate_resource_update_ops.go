@@ -98,8 +98,10 @@ func (s *serverCertificateTagsUpdate) Prepare(
 
 	s.serverCertificateName = core.StringValue(serverCertificateName)
 
-	diffResult := utils.DiffTags(
+	deployInput, _ := saveOpCtx.Data["ResourceDeployInput"].(*provider.ResourceDeployInput)
+	diffResult := utils.DiffTagsWithBluelink(
 		changes,
+		deployInput,
 		"$.tags",
 		toIAMTag,
 	)

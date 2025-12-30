@@ -44,11 +44,17 @@ func (s *IAMManagedPolicyResourceUpdateSuite) Test_update_iam_managed_policy() {
 		recreateManagedPolicyOnNameOrPathChangeTestCase(providerCtx, loader),
 	}
 
+	// Create a wrapper function that matches the expected signature
+	managedPolicyResourceWrapper := func(
+		serviceFactory pluginutils.ServiceFactory[*aws.Config, iamservice.Service],
+		configStore pluginutils.ServiceConfigStore[*aws.Config],
+	) provider.Resource {
+		return ManagedPolicyResource(serviceFactory, mockResourceGroupTaggingServiceFactory, configStore)
+	}
+
 	plugintestutils.RunResourceDeployTestCases(
 		testCases,
-		func(serviceFactory pluginutils.ServiceFactory[*aws.Config, iamservice.Service], configStore pluginutils.ServiceConfigStore[*aws.Config]) provider.Resource {
-			return ManagedPolicyResource(serviceFactory, configStore)
-		},
+		managedPolicyResourceWrapper,
 		&s.Suite,
 	)
 }

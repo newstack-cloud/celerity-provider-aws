@@ -30,15 +30,18 @@ func (s *samlProviderCreate) Prepare(
 	specData *core.MappingNode,
 	changes *provider.Changes,
 ) (bool, pluginutils.SaveOperationContext, error) {
+	deployInput, ok := saveOpCtx.Data["ResourceDeployInput"].(*provider.ResourceDeployInput)
+	if !ok || deployInput == nil {
+		return false, saveOpCtx, fmt.Errorf("ResourceDeployInput not found in SaveOperationContext.Data")
+	}
+
 	// Extract name from spec data or generate one
 	name, hasName := pluginutils.GetValueByPath("$.name", specData)
 	if hasName && core.StringValue(name) != "" {
 		s.name = core.StringValue(name)
 	} else {
 		// Generate a unique name if not provided
-		generatedName, err := s.uniqueSAMLProviderNameGenerator(&provider.ResourceDeployInput{
-			Changes: changes,
-		})
+		generatedName, err := s.uniqueSAMLProviderNameGenerator(deployInput)
 		if err != nil {
 			return false, saveOpCtx, fmt.Errorf("failed to generate unique name: %w", err)
 		}
@@ -52,12 +55,12 @@ func (s *samlProviderCreate) Prepare(
 	}
 	s.samlMetadataDocument = core.StringValue(samlMetadataDocument)
 
-	// Extract tags
-	tags, err := iamTagsFromSpecData(specData)
+	// Extract user tags and merge with Bluelink system tags
+	userTags, err := iamTagsFromSpecData(specData)
 	if err != nil {
 		return false, saveOpCtx, err
 	}
-	s.tags = tags
+	s.tags = mergeBluelinkTagsWithIAMTags(deployInput, userTags)
 
 	return true, saveOpCtx, nil
 }

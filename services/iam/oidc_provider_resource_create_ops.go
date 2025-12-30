@@ -32,6 +32,11 @@ func (o *oidcProviderCreate) Prepare(
 	specData *core.MappingNode,
 	changes *provider.Changes,
 ) (bool, pluginutils.SaveOperationContext, error) {
+	deployInput, ok := saveOpCtx.Data["ResourceDeployInput"].(*provider.ResourceDeployInput)
+	if !ok || deployInput == nil {
+		return false, saveOpCtx, fmt.Errorf("ResourceDeployInput not found in SaveOperationContext.Data")
+	}
+
 	// Extract URL from spec data
 	url, hasUrl := pluginutils.GetValueByPath("$.url", specData)
 	if !hasUrl || core.StringValue(url) == "" {
@@ -59,12 +64,12 @@ func (o *oidcProviderCreate) Prepare(
 		}
 	}
 
-	// Extract tags
-	tags, err := iamTagsFromSpecData(specData)
+	// Extract user tags and merge with Bluelink system tags
+	userTags, err := iamTagsFromSpecData(specData)
 	if err != nil {
 		return false, saveOpCtx, err
 	}
-	o.tags = tags
+	o.tags = mergeBluelinkTagsWithIAMTags(deployInput, userTags)
 
 	return true, saveOpCtx, nil
 }

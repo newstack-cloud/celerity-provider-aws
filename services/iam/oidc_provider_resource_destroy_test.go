@@ -16,6 +16,7 @@ import (
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/state"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/plugintestutils"
+	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -41,9 +42,17 @@ func (s *IAMOIDCProviderResourceDestroySuite) Test_destroy_iam_oidc_provider() {
 		destroyOIDCProviderServiceErrorTestCase(providerCtx, loader),
 	}
 
+	// Create a wrapper function that matches the expected signature
+	oidcProviderResourceWrapper := func(
+		serviceFactory pluginutils.ServiceFactory[*aws.Config, iamservice.Service],
+		configStore pluginutils.ServiceConfigStore[*aws.Config],
+	) provider.Resource {
+		return OIDCProviderResource(serviceFactory, mockResourceGroupTaggingServiceFactory, configStore)
+	}
+
 	plugintestutils.RunResourceDestroyTestCases(
 		testCases,
-		OIDCProviderResource,
+		oidcProviderResourceWrapper,
 		&s.Suite,
 	)
 }

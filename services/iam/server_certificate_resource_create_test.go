@@ -49,13 +49,19 @@ func (s *ServerCertificateResourceCreateSuite) Test_create_iam_server_certificat
 		createServerCertificateFailureTestCase(providerCtx, loader),
 	}
 
+	// Create a wrapper function that matches the expected signature
+	serverCertificateResourceWrapper := func(
+		serviceFactory pluginutils.ServiceFactory[*aws.Config, iamservice.Service],
+		configStore pluginutils.ServiceConfigStore[*aws.Config],
+	) provider.Resource {
+		return serverCertificateResourceWithNameGen(serviceFactory, mockResourceGroupTaggingServiceFactory, configStore, func(input *provider.ResourceDeployInput) (string, error) {
+			return "generated-server-certificate", nil
+		})
+	}
+
 	plugintestutils.RunResourceDeployTestCases(
 		testCases,
-		func(iamServiceFactory pluginutils.ServiceFactory[*aws.Config, iamservice.Service], awsConfigStore pluginutils.ServiceConfigStore[*aws.Config]) provider.Resource {
-			return serverCertificateResourceWithNameGen(iamServiceFactory, awsConfigStore, func(input *provider.ResourceDeployInput) (string, error) {
-				return "generated-server-certificate", nil
-			})
-		},
+		serverCertificateResourceWrapper,
 		&s.Suite,
 	)
 }

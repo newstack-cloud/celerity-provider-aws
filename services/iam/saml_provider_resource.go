@@ -7,7 +7,9 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
+	resgrouptagservice "github.com/newstack-cloud/bluelink-provider-aws/services/resgrouptag/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/utils"
+	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/providerv1"
@@ -16,6 +18,7 @@ import (
 // SAMLProviderResource returns a resource implementation for an AWS IAM SAML Provider.
 func SAMLProviderResource(
 	iamServiceFactory pluginutils.ServiceFactory[*aws.Config, iamservice.Service],
+	resourceGroupTaggingServiceFactory pluginutils.ServiceFactory[*aws.Config, resgrouptagservice.Service],
 	awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
 ) provider.Resource {
 	basicExample, _ := examples.ReadFile("examples/resources/iam_saml_provider_basic.md")
@@ -23,9 +26,10 @@ func SAMLProviderResource(
 	jsoncExample, _ := examples.ReadFile("examples/resources/iam_saml_provider_jsonc.md")
 
 	iamSAMLProviderActions := &iamSAMLProviderResourceActions{
-		iamServiceFactory:   iamServiceFactory,
-		awsConfigStore:      awsConfigStore,
-		uniqueNameGenerator: utils.IAMSAMLProviderNameGenerator,
+		iamServiceFactory:                  iamServiceFactory,
+		resourceGroupTaggingServiceFactory: resourceGroupTaggingServiceFactory,
+		awsConfigStore:                     awsConfigStore,
+		uniqueNameGenerator:                utils.IAMSAMLProviderNameGenerator,
 	}
 	return &providerv1.ResourceDefinition{
 		Type:             "aws/iam/samlProvider",
@@ -34,8 +38,9 @@ func SAMLProviderResource(
 		FormattedDescription: "The resource type used to define an [IAM SAML provider](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_saml.html) " +
 			"that is deployed to AWS. SAML providers are entities in IAM that describe an external identity provider (IdP) service that supports the " +
 			"Security Assertion Markup Language (SAML) 2.0 standard.",
-		Schema:  iamSAMLProviderResourceSchema(),
-		IDField: "arn",
+		Schema:         iamSAMLProviderResourceSchema(),
+		IDField:        "arn",
+		TaggingSupport: provider.TaggingSupportFull,
 		// An IAM SAML provider is commonly referenced by other resources that need to use it
 		CommonTerminal: false,
 		FormattedExamples: []string{
@@ -53,9 +58,10 @@ func SAMLProviderResource(
 }
 
 type iamSAMLProviderResourceActions struct {
-	iamServiceFactory   pluginutils.ServiceFactory[*aws.Config, iamservice.Service]
-	awsConfigStore      pluginutils.ServiceConfigStore[*aws.Config]
-	uniqueNameGenerator utils.UniqueNameGenerator
+	iamServiceFactory                  pluginutils.ServiceFactory[*aws.Config, iamservice.Service]
+	resourceGroupTaggingServiceFactory pluginutils.ServiceFactory[*aws.Config, resgrouptagservice.Service]
+	awsConfigStore                     pluginutils.ServiceConfigStore[*aws.Config]
+	uniqueNameGenerator                utils.UniqueNameGenerator
 }
 
 func (i *iamSAMLProviderResourceActions) getIamService(
@@ -72,6 +78,27 @@ func (i *iamSAMLProviderResourceActions) getIamService(
 	}
 
 	return i.iamServiceFactory(awsConfig, providerContext), nil
+}
+
+func (i *iamSAMLProviderResourceActions) getResourceGroupTaggingService(
+	ctx context.Context,
+	providerContext provider.Context,
+) (resgrouptagservice.Service, error) {
+	// IAM is a global service - Resource Groups Tagging API must use us-east-1
+	// to query IAM resources regardless of the configured region.
+	meta := map[string]*core.MappingNode{
+		"region": core.MappingNodeFromString("us-east-1"),
+	}
+	awsConfig, err := i.awsConfigStore.FromProviderContext(
+		ctx,
+		providerContext,
+		meta,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return i.resourceGroupTaggingServiceFactory(awsConfig, providerContext), nil
 }
 
 // extractNameFromArn extracts the name from a SAML provider ARN
