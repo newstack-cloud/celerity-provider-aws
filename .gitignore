@@ -67,3 +67,7 @@ misc
 
 # Files for instructions and notes for cursor to generate integrations.
 .cursor
+
+# Claude workflow/plan files used by individuals to streamline
+# resource, link and data source development.
+CLAUDE.md

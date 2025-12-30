@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/newstack-cloud/bluelink-provider-aws/provider"
+	dynamodbservice "github.com/newstack-cloud/bluelink-provider-aws/services/dynamodb/service"
 	ec2service "github.com/newstack-cloud/bluelink-provider-aws/services/ec2/service"
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
 	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
@@ -38,6 +39,7 @@ func main() {
 			ec2service.NewService,
 			resgrouptagservice.NewService,
 			sqsservice.NewService,
+			dynamodbservice.NewService,
 			utils.NewAWSConfigStore(
 				os.Environ(),
 				utils.AWSConfigFromProviderContext,
@@ -53,7 +55,7 @@ func main() {
 	config := plugin.ServePluginConfiguration{
 		ID: "newstack-cloud/aws",
 		PluginMetadata: &pluginservicev1.PluginMetadata{
-			PluginVersion:        "0.1.0",
+			PluginVersion:        version,
 			DisplayName:          "AWS",
 			FormattedDescription: string(providerDescription),
 			RepositoryUrl:        "https://github.com/newstack-cloud/bluelink-provider-aws",

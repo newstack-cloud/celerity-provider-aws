@@ -23,10 +23,10 @@ require (
 	github.com/stretchr/testify v1.11.1
 )
 
-replace (
-	github.com/newstack-cloud/bluelink/libs/blueprint => ../bluelink/libs/blueprint
-	github.com/newstack-cloud/bluelink/libs/plugin-framework => ../bluelink/libs/plugin-framework
-)
+// replace (
+// 	github.com/newstack-cloud/bluelink/libs/blueprint => ../bluelink/libs/blueprint
+// 	github.com/newstack-cloud/bluelink/libs/plugin-framework => ../bluelink/libs/plugin-framework
+// )
 
 require (
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.10 // indirect
