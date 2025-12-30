@@ -8,7 +8,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
 	ec2service "github.com/newstack-cloud/bluelink-provider-aws/services/ec2/service"
+	"github.com/newstack-cloud/bluelink-provider-aws/utils"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
@@ -44,7 +46,22 @@ func (v *vpcResourceActions) GetExternalState(
 
 	vpc, err := v.getVPCByNameTag(ctx, service, vpcName)
 	if err != nil {
-		return nil, err
+		// If no VPC found by flex VPC name tag, attempt fallback lookup by Bluelink tags
+		// This handles interrupted resource creation where the VPC may exist but without
+		// the expected flex VPC tags.
+		fallbackVPC, fallbackErr := v.lookupVPCByBluelinkTags(ctx, input, meta)
+		if fallbackErr != nil {
+			return nil, fmt.Errorf("failed to lookup VPC by tags: %w", fallbackErr)
+		}
+		if fallbackVPC == nil {
+			// Resource doesn't exist yet
+			return &provider.ResourceGetExternalStateOutput{
+				ResourceSpecState: &core.MappingNode{
+					Fields: map[string]*core.MappingNode{},
+				},
+			}, nil
+		}
+		vpc = fallbackVPC
 	}
 
 	vpcAttributes, err := v.getVPCAttributes(ctx, service, vpc.VpcId)
@@ -416,4 +433,76 @@ func getSubnetNATGateway(
 		}
 	}
 	return nil
+}
+
+// lookupVPCByBluelinkTags attempts to find a VPC by its Bluelink provenance tags.
+// This is used as a fallback when the VPC cannot be found by its flex VPC name tag
+// (e.g., interrupted resource creation).
+// Returns nil if no matching VPC is found.
+func (v *vpcResourceActions) lookupVPCByBluelinkTags(
+	ctx context.Context,
+	input *provider.ResourceGetExternalStateInput,
+	meta map[string]*core.MappingNode,
+) (*types.Vpc, error) {
+	tagFilters := utils.BuildBluelinkTagFiltersForLookup(input)
+	if tagFilters == nil {
+		// Tagging is not enabled, cannot perform fallback lookup
+		return nil, nil
+	}
+
+	taggingService, err := v.getResourceGroupTaggingService(ctx, input.ProviderContext, meta)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := taggingService.GetResources(ctx, &resourcegroupstaggingapi.GetResourcesInput{
+		TagFilters:          tagFilters,
+		ResourceTypeFilters: []string{"ec2:vpc"},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if len(result.ResourceTagMappingList) == 0 {
+		return nil, nil
+	}
+
+	// Extract VPC ID from ARN
+	// ARN format: arn:aws:ec2:region:account-id:vpc/vpc-id
+	vpcARN := aws.ToString(result.ResourceTagMappingList[0].ResourceARN)
+	vpcID := extractVPCIDFromARN(vpcARN)
+	if vpcID == "" {
+		return nil, fmt.Errorf("failed to extract VPC ID from ARN: %s", vpcARN)
+	}
+
+	// Fetch the full VPC details using the VPC ID
+	service, _, err := v.getEC2ServiceWithRegion(ctx, input.ProviderContext, meta)
+	if err != nil {
+		return nil, err
+	}
+
+	vpcsOutput, err := service.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{
+		VpcIds: []string{vpcID},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if len(vpcsOutput.Vpcs) == 0 {
+		return nil, nil
+	}
+
+	return &vpcsOutput.Vpcs[0], nil
+}
+
+// extractVPCIDFromARN extracts the VPC ID from an ARN.
+// ARN format: arn:aws:ec2:region:account-id:vpc/vpc-id.
+func extractVPCIDFromARN(arn string) string {
+	// Find the last "/" and extract everything after it
+	for i := len(arn) - 1; i >= 0; i-- {
+		if arn[i] == '/' {
+			return arn[i+1:]
+		}
+	}
+	return ""
 }

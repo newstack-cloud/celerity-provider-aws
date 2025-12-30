@@ -40,8 +40,9 @@ func VPCResource(
 			"presets that follow industry best practices. " +
 			"When using a flex VPC, you can simply link resources together and the networking " +
 			"configuration required to _activate_ the link will be automatically configured.",
-		Schema:  vpcResourceSchema(),
-		IDField: "name",
+		Schema:         vpcResourceSchema(),
+		IDField:        "name",
+		TaggingSupport: provider.TaggingSupportFull,
 		// A flex VPC typically needs to link out to the resources
 		// that will be deployed in the VPC.
 		CommonTerminal: false,

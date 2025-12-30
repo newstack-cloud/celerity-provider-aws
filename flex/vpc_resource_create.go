@@ -18,6 +18,7 @@ import (
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
+	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/providerv1"
 )
 
 // The timeout for waiting for a VPC to be available.
@@ -87,7 +88,7 @@ func (l *vpcResourceActions) Create(
 		return nil, err
 	}
 
-	return l.createFlexVPCResources(ctx, service, resourceSpecData, region)
+	return l.createFlexVPCResources(ctx, service, resourceSpecData, region, input)
 }
 
 func (l *vpcResourceActions) validateVPCDoesNotExist(
@@ -185,8 +186,12 @@ func (l *vpcResourceActions) createFlexVPCResources(
 	service ec2service.Service,
 	resourceSpecData *core.MappingNode,
 	region string,
+	input *provider.ResourceDeployInput,
 ) (*provider.ResourceDeployOutput, error) {
-	createVPCInput, vpcName, err := createVPCInputFromSpec(resourceSpecData)
+	// Get Bluelink system tags for provenance tracking
+	bluelinkTags := getBluelinkTagsAsEC2Tags(input)
+
+	createVPCInput, vpcName, err := createVPCInputFromSpec(resourceSpecData, bluelinkTags)
 	if err != nil {
 		return nil, err
 	}
@@ -913,7 +918,10 @@ func waitForNATGatewayAvailable(
 	)
 }
 
-func createVPCInputFromSpec(resourceSpecData *core.MappingNode) (*ec2.CreateVpcInput, string, error) {
+func createVPCInputFromSpec(
+	resourceSpecData *core.MappingNode,
+	bluelinkTags []types.Tag,
+) (*ec2.CreateVpcInput, string, error) {
 	cidrBlock, hasCidrBlock := pluginutils.GetValueByPath("$.cidrBlock", resourceSpecData)
 	if !hasCidrBlock {
 		return nil, "", errors.New("cidrBlock is required to create a flex VPC")
@@ -932,31 +940,59 @@ func createVPCInputFromSpec(resourceSpecData *core.MappingNode) (*ec2.CreateVpcI
 	return &ec2.CreateVpcInput{
 		CidrBlock:                   aws.String(core.StringValue(cidrBlock)),
 		AmazonProvidedIpv6CidrBlock: aws.Bool(true),
-		TagSpecifications:           vpcElementTagSpecifications(core.StringValue(name), tags),
+		TagSpecifications:           vpcElementTagSpecifications(core.StringValue(name), tags, bluelinkTags),
 	}, core.StringValue(name), nil
 }
 
-func vpcElementTagSpecifications(name string, tags *core.MappingNode) []types.TagSpecification {
+// getBluelinkTagsAsEC2Tags extracts Bluelink system tags from the deploy input
+// and converts them to EC2 tag format for resource provenance tracking.
+func getBluelinkTagsAsEC2Tags(input *provider.ResourceDeployInput) []types.Tag {
+	bluelinkTags := providerv1.GetBluelinkTags(input)
+	if bluelinkTags == nil {
+		return nil
+	}
+
+	tagsMap := providerv1.ToMap(bluelinkTags)
+	ec2Tags := make([]types.Tag, 0, len(tagsMap))
+	for key, value := range tagsMap {
+		ec2Tags = append(ec2Tags, types.Tag{
+			Key:   aws.String(key),
+			Value: aws.String(value),
+		})
+	}
+	return ec2Tags
+}
+
+func vpcElementTagSpecifications(
+	name string,
+	tags *core.MappingNode,
+	bluelinkTags []types.Tag,
+) []types.TagSpecification {
 	return []types.TagSpecification{
 		{
 			ResourceType: types.ResourceTypeVpc,
-			Tags:         vpcElementTags(name, tags),
+			Tags:         vpcElementTags(name, tags, bluelinkTags),
 		},
 	}
 }
 
-func vpcElementTags(name string, tags *core.MappingNode) []types.Tag {
-	tagList := []types.Tag{
-		{
+func vpcElementTags(name string, tags *core.MappingNode, bluelinkTags []types.Tag) []types.Tag {
+	// Start with Bluelink system tags for provenance tracking
+	tagList := append([]types.Tag{}, bluelinkTags...)
+
+	// Add flex VPC identification tags
+	tagList = append(tagList,
+		types.Tag{
 			Key:   aws.String(TagFlexVPCName),
 			Value: aws.String(name),
 		},
-		{
+		types.Tag{
 			Key:   aws.String(TagFlexVPCResource),
 			Value: aws.String("true"),
 		},
-	}
+	)
 
+	// Add user-provided tags (these take precedence on key conflicts)
 	if core.IsObjectMappingNode(tags) {
 		for key, value := range tags.Fields {
 			tagList = append(tagList, types.Tag{
