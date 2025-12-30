@@ -1,0 +1,114 @@
+version: "1.0.0"
+resourceDefinitions:
+  - type: aws/dynamodb/table
+    label: Amazon DynamoDB Table
+    requiredFields:
+      - tableName
+      - attributeDefinitions
+      - keySchema
+    computedFields:
+      - arn
+      - tableId
+      - latestStreamArn
+      - latestStreamLabel
+    operations:
+      create:
+        - CreateTable
+      update:
+        - UpdateTable
+        - UpdateTimeToLive
+        - UpdateContinuousBackups
+      destroy:
+        - DeleteTable
+      getExternalState:
+        - DescribeTable
+        - DescribeTimeToLive
+        - DescribeContinuousBackups
+    tags:
+      saveTags: TagResource
+      removeTags: UntagResource
+    docLinks:
+      - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_CreateTable.html
+      - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_UpdateTable.html
+      - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_DeleteTable.html
+      - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_DescribeTable.html
+      - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_UpdateTimeToLive.html
+      - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_DescribeTimeToLive.html
+      - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_UpdateContinuousBackups.html
+      - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_DescribeContinuousBackups.html
+      - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TagResource.html
+      - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_UntagResource.html
+      - https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-dynamodb-table.html
+    propertyDocLinks:
+      attributeDefinitions: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-dynamodb-table-attributedefinition.html
+      keySchema: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-dynamodb-table-keyschema.html
+      globalSecondaryIndexes: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-dynamodb-table-globalsecondaryindex.html
+      localSecondaryIndexes: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-dynamodb-table-localsecondaryindex.html
+      provisionedThroughput: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-dynamodb-table-provisionedthroughput.html
+      streamSpecification: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-dynamodb-table-streamspecification.html
+      sseSpecification: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-dynamodb-table-ssespecification.html
+      timeToLiveSpecification: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-dynamodb-table-timetolivespecification.html
+      pointInTimeRecoverySpecification: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-dynamodb-table-pointintimerecoveryspecification.html
+
+  - type: aws/dynamodb/globalTable
+    label: Amazon DynamoDB Global Table
+    requiredFields:
+      - tableName
+      - attributeDefinitions
+      - keySchema
+      - replicas
+    computedFields:
+      - arn
+      - tableId
+      - streamArn
+    operations:
+      create:
+        - CreateTable
+      update:
+        - UpdateTable
+        - UpdateTableReplicaAutoScaling
+      destroy:
+        - DeleteTable
+      getExternalState:
+        - DescribeTable
+        - DescribeTableReplicaAutoScaling
+    tags:
+      saveTags: TagResource
+      removeTags: UntagResource
+    docLinks:
+      - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_CreateTable.html
+      - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_UpdateTable.html
+      - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_DeleteTable.html
+      - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_DescribeTable.html
+      - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_UpdateTableReplicaAutoScaling.html
+      - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_DescribeTableReplicaAutoScaling.html
+      - https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-dynamodb-globaltable.html
+    propertyDocLinks:
+      attributeDefinitions: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-dynamodb-globaltable-attributedefinition.html
+      keySchema: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-dynamodb-globaltable-keyschema.html
+      replicas: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-dynamodb-globaltable-replicaspecification.html
+      globalSecondaryIndexes: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-dynamodb-globaltable-globalsecondaryindex.html
+      streamSpecification: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-dynamodb-globaltable-streamspecification.html
+      sseSpecification: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-dynamodb-globaltable-ssespecification.html
+
+dataSourceDefinitions:
+  - type: aws/dynamodb/table
+    filterableFields:
+      - tableName
+      - arn
+    docLinks:
+      - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_DescribeTable.html
+      - https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/dynamodb_table
+
+  - type: aws/dynamodb/globalTable
+    filterableFields:
+      - tableName
+      - arn
+    docLinks:
+      - https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_DescribeTable.html
+      - https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/dynamodb_table
+    notes: |
+      A global table is a DynamoDB table with replicas. Use DescribeTable to retrieve
+      global table information, checking for the presence of replicas.
+
+linkDefinitions: []

@@ -1,0 +1,162 @@
+version: "1.0.0"
+resourceDefinitions: []
+dataSourceDefinitions: []
+
+linkDefinitions:
+  # Link 1: Lambda function triggered by DynamoDB Streams
+  # The Lambda function (A) subscribes to changes from the DynamoDB table (B) via Event Source Mapping
+  - resourceTypeA: aws/lambda/function
+    resourceTypeB: aws/dynamodb/table
+    kind: soft
+    priorityResource: B
+    summary: A link that configures a Lambda function to be triggered by DynamoDB Streams from a table.
+    annotations:
+      resourceA:
+        - name: aws.lambda.eventSourceMapping.batchSize
+          valueType: integer
+          description: "The maximum number of records to retrieve per batch."
+          default: 100
+          min: 1
+          max: 10000
+        - name: aws.lambda.eventSourceMapping.batchWindow
+          valueType: integer
+          description: "The maximum amount of time (in seconds) to gather records before invoking the function."
+          default: 0
+          min: 0
+          max: 300
+        - name: aws.lambda.eventSourceMapping.startingPosition
+          valueType: enum
+          description: "The position in the stream where AWS Lambda should start reading."
+          required: true
+          allowedValues:
+            - TRIM_HORIZON
+            - LATEST
+        - name: aws.lambda.eventSourceMapping.parallelizationFactor
+          valueType: integer
+          description: "The number of batches to process from each shard concurrently."
+          default: 1
+          min: 1
+          max: 10
+        - name: aws.lambda.eventSourceMapping.maximumRetryAttempts
+          valueType: integer
+          description: "The maximum number of retry attempts. -1 for infinite retries."
+          default: -1
+          min: -1
+          max: 10000
+        - name: aws.lambda.eventSourceMapping.maximumRecordAgeInSeconds
+          valueType: integer
+          description: "The maximum age (in seconds) of a record that Lambda sends to a function. -1 for infinite."
+          default: -1
+          min: -1
+          max: 604800
+        - name: aws.lambda.eventSourceMapping.bisectBatchOnFunctionError
+          valueType: boolean
+          description: "When true, splits the batch and retries on a smaller batch when a function returns an error."
+          default: false
+        - name: aws.lambda.eventSourceMapping.filterCriteria
+          valueType: string
+          description: "JSON-encoded filter criteria to specify which events to send to the Lambda function."
+        - name: aws.lambda.eventSourceMapping.enabled
+          valueType: boolean
+          description: "When true, the event source mapping is active."
+          default: true
+      resourceB: []
+    operations:
+      updateResourceA: {}
+      updateResourceB: {}
+      updateIntermediaryResources:
+        aws/lambda/eventSourceMapping:
+          create:
+            - CreateEventSourceMapping
+          update:
+            - UpdateEventSourceMapping
+          destroy:
+            - DeleteEventSourceMapping
+          config:
+            intermediaryType: managed
+            config:
+              eventSourceArn: resourceB.state.latestStreamArn
+              functionName: resourceA.state.arn
+    docLinks:
+      - https://docs.aws.amazon.com/lambda/latest/dg/with-ddb.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_CreateEventSourceMapping.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_UpdateEventSourceMapping.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_DeleteEventSourceMapping.html
+      - https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.Lambda.html
+    notes: |
+      This link creates a managed Event Source Mapping that connects the Lambda function to
+      the DynamoDB table's stream. The table must have StreamSpecification enabled with
+      StreamViewType set (e.g., NEW_AND_OLD_IMAGES, NEW_IMAGE, OLD_IMAGE, or KEYS_ONLY).
+
+      The link also requires the Lambda function's execution role to have permissions to:
+      - dynamodb:DescribeStream
+      - dynamodb:GetRecords
+      - dynamodb:GetShardIterator
+      - dynamodb:ListStreams
+
+      These permissions should be configured via a separate link to the IAM role.
+
+  # Link 2: Lambda function with read/write access to DynamoDB table
+  # Configures IAM permissions for the Lambda function to access the table
+  - resourceTypeA: aws/lambda/function
+    resourceTypeB: aws/dynamodb/table
+    kind: soft
+    priorityResource: none
+    summary: A link that grants a Lambda function read/write access to a DynamoDB table.
+    annotations:
+      resourceA:
+        - name: aws.lambda.dynamodb.populateEnvVars
+          valueType: boolean
+          description: "When true, populates environment variables for all linked DynamoDB tables."
+          default: true
+        - name: aws.lambda.dynamodb.<targetTable>.populateEnvVars
+          valueType: boolean
+          description: "When true, populates environment variables for the specific target table. Overrides the global setting."
+        - name: aws.lambda.dynamodb.<targetTable>.envVarName
+          valueType: string
+          description: "Custom environment variable name for the target table name/ARN. Defaults to an auto-generated name based on the table name."
+        - name: aws.lambda.dynamodb.<targetTable>.accessLevel
+          valueType: enum
+          description: "The level of access to grant to the DynamoDB table."
+          default: readwrite
+          allowedValues:
+            - read
+            - write
+            - readwrite
+      resourceB: []
+    operations:
+      updateResourceA:
+        create:
+          - UpdateFunctionConfiguration
+        update:
+          - UpdateFunctionConfiguration
+        destroy:
+          - UpdateFunctionConfiguration
+      updateResourceB: {}
+      updateIntermediaryResources:
+        aws/iam/role:
+          create:
+            - PutRolePolicy
+          update:
+            - PutRolePolicy
+          destroy:
+            - DeleteRolePolicy
+          config:
+            intermediaryType: existing
+            intermediaryExternalIdSource: resourceA.spec.role
+    docLinks:
+      - https://docs.aws.amazon.com/lambda/latest/dg/with-ddb.html
+      - https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/iam-policy-specific-table-indexes.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_UpdateFunctionConfiguration.html
+    notes: |
+      This link configures the Lambda function to access the DynamoDB table by:
+      1. Optionally populating environment variables with the table name/ARN (controlled by annotations)
+      2. Adding an inline IAM policy to the function's execution role with DynamoDB permissions
+
+      The accessLevel annotation controls the permissions granted:
+      - "read": dynamodb:GetItem, dynamodb:Query, dynamodb:Scan, dynamodb:BatchGetItem
+      - "write": dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:DeleteItem, dynamodb:BatchWriteItem
+      - "readwrite" (default): Both read and write permissions
+
+      The IAM role is an intermediary resource that must be defined in the same blueprint.
+      The implementation sources the role from resourceA.spec.role.

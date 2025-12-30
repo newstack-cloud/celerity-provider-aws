@@ -1,0 +1,134 @@
+version: "1.0.0"
+resourceDefinitions:
+  - type: aws/flex/vpc
+    label: AWS Flex VPC
+    requiredFields:
+      - name
+      - preset
+      - cidrBlock
+      - region
+    computedFields:
+      - vpcId
+      - subnets
+      - routeTables
+      - securityGroups
+      - networkAcls
+      - gateways
+    operations:
+      create:
+        # EC2 VPC operations
+        - CreateVpc
+        - ModifyVpcAttribute
+        - DescribeAvailabilityZones
+        # Subnet operations
+        - CreateSubnet
+        - ModifySubnetAttribute
+        # Route table operations
+        - CreateRouteTable
+        - AssociateRouteTable
+        - CreateRoute
+        # Internet Gateway operations
+        - CreateInternetGateway
+        - AttachInternetGateway
+        # NAT Gateway operations
+        - AllocateAddress
+        - CreateNatGateway
+        # Security Group operations
+        - CreateSecurityGroup
+        - RevokeSecurityGroupEgress
+        # Network ACL operations
+        - CreateNetworkAcl
+        - CreateNetworkAclEntry
+        - DescribeNetworkAcls
+        - ReplaceNetworkAclAssociation
+        # Resource Groups Tagging API for validation
+        - GetResources
+      update:
+        - ModifyVpcAttribute
+        - CreateTags
+        - DeleteTags
+      destroy:
+        # Network ACL cleanup
+        - DescribeNetworkAcls
+        - ReplaceNetworkAclAssociation
+        - DeleteNetworkAcl
+        # Security Group cleanup
+        - DeleteSecurityGroup
+        # Route Table cleanup
+        - DescribeRouteTables
+        - DisassociateRouteTable
+        - DeleteRouteTable
+        # NAT Gateway cleanup
+        - DeleteNatGateway
+        - ReleaseAddress
+        # Internet Gateway cleanup
+        - DetachInternetGateway
+        - DeleteInternetGateway
+        # Subnet cleanup
+        - DeleteSubnet
+        # VPC cleanup
+        - DeleteVpc
+      getExternalState:
+        - DescribeVpcs
+        - DescribeVpcAttribute
+        - DescribeSubnets
+        - DescribeRouteTables
+        - DescribeSecurityGroups
+        - DescribeNetworkAcls
+        - DescribeInternetGateways
+        - DescribeNatGateways
+        # Fallback lookup by Bluelink tags
+        - GetResources
+      stabilised:
+        - DescribeVpcs
+        - DescribeNatGateways
+    tags:
+      saveTags: CreateTags
+      removeTags: DeleteTags
+    docLinks:
+      - https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_CreateVpc.html
+      - https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_ModifyVpcAttribute.html
+      - https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DeleteVpc.html
+      - https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_CreateSubnet.html
+      - https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_CreateRouteTable.html
+      - https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_CreateInternetGateway.html
+      - https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_CreateNatGateway.html
+      - https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_CreateSecurityGroup.html
+      - https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_CreateNetworkAcl.html
+      - https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_CreateTags.html
+      - https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DeleteTags.html
+    propertyDocLinks:
+      preset: https://docs.aws.amazon.com/vpc/latest/userguide/default-vpc.html
+      cidrBlock: https://docs.aws.amazon.com/vpc/latest/userguide/vpc-cidr-blocks.html
+      enableDNSSupport: https://docs.aws.amazon.com/vpc/latest/userguide/vpc-dns.html#vpc-dns-support
+      enableDNSHostnames: https://docs.aws.amazon.com/vpc/latest/userguide/vpc-dns.html#vpc-dns-hostnames
+    notes: |
+      The Flex VPC is a high-level convenience resource that manages a complete VPC infrastructure
+      based on presets. It is NOT a standard AWS resource but a Bluelink abstraction that creates
+      and manages multiple underlying AWS resources:
+
+      - VPC with IPv4 and IPv6 CIDR blocks
+      - Public and/or private subnets across availability zones
+      - Route tables with appropriate routing
+      - Internet gateway (for public subnets)
+      - NAT gateways with Elastic IPs (for private subnet internet access)
+      - Security groups with deny-all egress (links activate egress rules)
+      - Network ACLs (deny-all for public-only VPCs)
+
+      Presets:
+      - standard: 3 public + 3 private subnets across 3 AZs (high availability)
+      - public: 3 public subnets across 3 AZs
+      - isolated: 3 private subnets across 3 AZs (no internet access)
+      - light: 1 public + 1 private subnet in 1 AZ (cost-effective)
+      - light-public: 1 public subnet in 1 AZ (most cost-effective)
+
+      Modes:
+      - create: Creates new VPC infrastructure
+      - reference: References existing VPC infrastructure (no resources created/destroyed)
+
+      The resource uses custom flex VPC tags (bluelink:flex-vpc:*) to identify and
+      manage its child resources. User tags are propagated to all child resources.
+
+dataSourceDefinitions: []
+
+linkDefinitions: []

@@ -57,6 +57,10 @@ properties:
               type: array
               items:
                 type: string
+            stabilised:
+              type: array
+              items:
+                type: string
         tags:
           type: object
           required: [saveTags, removeTags]
@@ -122,9 +126,19 @@ properties:
         summary:
           type: string
         annotations:
-          type: array
-          items:
-            type: string
+          type: object
+          description: "Annotations grouped by which resource in the link relationship they configure."
+          properties:
+            resourceA:
+              type: array
+              items:
+                $ref: "#/$defs/annotationDefinition"
+              description: "Annotations that configure resourceA in the link relationship."
+            resourceB:
+              type: array
+              items:
+                $ref: "#/$defs/annotationDefinition"
+              description: "Annotations that configure resourceB in the link relationship."
         operations:
           type: object
           properties:
@@ -202,3 +216,44 @@ properties:
             type: string
         notes:
           type: string
+
+$defs:
+  annotationDefinition:
+    type: object
+    required: [name, valueType, description]
+    properties:
+      name:
+        type: string
+        description: |
+          The annotation key name. Must follow the pattern: aws.<service>.<context>.<setting>
+          May contain a single <placeholder> segment to indicate dynamic targeting based on
+          the linked resource name (e.g., aws.lambda.function.<targetFunction>.envVarName).
+        pattern: "^aws\\.[a-z]+\\.[a-z]+\\.(<[a-zA-Z]+>\\.)?(\\*|[a-zA-Z]+)$"
+      valueType:
+        type: string
+        description: "The expected type of the annotation value."
+        enum:
+          - boolean
+          - string
+          - integer
+          - enum
+      description:
+        type: string
+        description: "A human-readable description of what this annotation configures."
+      required:
+        type: boolean
+        description: "Whether this annotation must be provided. Defaults to false."
+        default: false
+      default:
+        description: "The default value if the annotation is not provided. Type should match valueType."
+      allowedValues:
+        type: array
+        description: "For enum valueType, the list of allowed values."
+        items:
+          type: string
+      min:
+        type: integer
+        description: "For integer valueType, the minimum allowed value."
+      max:
+        type: integer
+        description: "For integer valueType, the maximum allowed value."

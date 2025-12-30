@@ -314,7 +314,9 @@ linkDefinitions:
     kind: hard
     priorityResource: B
     summary: A link from a lambda function to a code signing config.
-    annotations: []
+    annotations:
+      resourceA: []
+      resourceB: []
     operations:
       updateResourceA:
         create:
@@ -334,9 +336,18 @@ linkDefinitions:
     priorityResource: none
     summary: A link that configures a lambda function to be able to invoke another lambda function.
     annotations:
-      - aws.lambda.function.populateEnvVars
-      - aws.lambda.function.<targetFunction>.populateEnvVars
-      - aws.lambda.function.<targetFunction>.envVarName
+      resourceA:
+        - name: aws.lambda.function.populateEnvVars
+          valueType: boolean
+          description: "When true, populates environment variables for all linked target functions."
+          default: true
+        - name: aws.lambda.function.<targetFunction>.populateEnvVars
+          valueType: boolean
+          description: "When true, populates environment variables for the specific target function. Overrides the global setting."
+        - name: aws.lambda.function.<targetFunction>.envVarName
+          valueType: string
+          description: "Custom environment variable name for the target function ARN. Defaults to an auto-generated name based on the target function name."
+      resourceB: []
     operations:
       updateResourceA:
         create:

@@ -31,6 +31,17 @@ resourceDefinitions:
     propertyDocLinks:
       tags: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-sqs-queue-tag.html
 
+dataSourceDefinitions:
+  - type: aws/sqs/queue
+    filterableFields:
+      - queueName
+      - queueUrl
+      - arn
+    docLinks:
+      - https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_GetQueueUrl.html
+      - https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_GetQueueAttributes.html
+      - https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/sqs_queue
+
 linkDefinitions:
   - resourceTypeA: aws/sqs/queue
     resourceTypeB: aws/sqs/queue
@@ -38,7 +49,14 @@ linkDefinitions:
     priorityResource: none
     summary: A link that configures the linked to queue as the dead-letter queue for the linked from queue.
     annotations:
-      - aws.sqs.redrive.maxReceiveCount
+      resourceA:
+        - name: aws.sqs.redrive.maxReceiveCount
+          valueType: integer
+          description: "The number of times a message is received before being sent to the dead-letter queue."
+          required: true
+          min: 1
+          max: 1000
+      resourceB: []
     operations:
       updateResourceA:
         create:
