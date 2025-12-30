@@ -58,7 +58,7 @@ elif [ "$TEST_MODE" == "all" ]; then
   TEST_TAGS="unit,integration"
 fi
 
-if [ "$TEST_MODE" == "integration" ] && [ -f ".env.test" ]; then
+if [[ "$TEST_MODE" == "integration" || "$TEST_MODE" == "all" ]] && [ -f ".env.test" ]; then
   echo "Exporting environment variables from .env.test for integration tests ..."
   set -o allexport
   source .env.test
