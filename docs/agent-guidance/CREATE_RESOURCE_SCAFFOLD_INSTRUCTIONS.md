@@ -105,9 +105,18 @@ Example JSONC format:
 - Follow naming and file structure conventions from existing resources.
 - Use TODO comments to indicate where logic will be added later.
 - Ensure all files are created, even if empty or with only a stub.
-- This approach enables iterative, logic-driven development after scaffolding is complete. 
+- This approach enables iterative, logic-driven development after scaffolding is complete.
 - Ensure that the correct methods, function and type placeholders are inserted into each file.
 - Always return empty values that fulfil the return type of action methods that will be implemented later.
 - Do not try to use convenience helpers for creating `core.MappingNode` array or map values. Stick to using the `core.MappingNode` type directly, populating the `Items` property for arrays and `Fields` property for maps.
 - Always check the signatures of the equivalent action methods for existing resource implementations for the `{resource}ResourceActions` struct methods.
 - In each resource implementation file, the "github.com/newstack-cloud/bluelink-provider-aws/services/{package}/service" package should be imported as `{package}service` (e.g. `iamservice`) and then referenced as the package containing the service for the generic types in the file.
+
+### CommonTerminal Field
+
+The `CommonTerminal` field in the ResourceDefinition indicates whether the resource is expected to link OUT to other resources:
+
+- `CommonTerminal: true` - The resource is NOT expected to link out to other resources (it's a terminal/leaf node in the resource graph). Examples: Lambda alias, function URL, layer version permission, event source mapping.
+- `CommonTerminal: false` - The resource IS expected to link out to other resources. Examples: Lambda function, SQS queue, DynamoDB table, IAM role.
+
+This field is used to hint to users if they have forgotten to link a resource that should typically link to others. Choose the appropriate value based on whether the resource being scaffolded typically acts as an endpoint/consumer (terminal) or typically connects to other resources (non-terminal).

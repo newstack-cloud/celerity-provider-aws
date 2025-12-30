@@ -100,3 +100,12 @@ You should inspect existing examples closely in the `services/${service}/example
 - Do not follow the SaveOperation pattern for the `Destroy` method of plugins as the SDK doesn't have an equivalent helper for destroying resources and in most cases destroying resources is a lot simpler than creating or updating them. If the functionality is complex, it can be broken down into multiple methods instead of the declarative SDK pattern.
 - When embedding examples, reuse a single examples variable per service, there is no need to instantiate a new embedded file system for each resource. A single, shared examples variable should be defined in an `examples_embed.go` file in the `services/${service}` package.
 - Include tags in the `Create*` AWS SDK call when the API for the resource supports tags instead of making separate calls to add tags to the resource.
+
+### CommonTerminal Field
+
+The `CommonTerminal` field in the ResourceDefinition indicates whether the resource is expected to link OUT to other resources:
+
+- `CommonTerminal: true` - The resource is NOT expected to link out to other resources (it's a terminal/leaf node in the resource graph). Examples: Lambda alias, function URL, layer version permission, event source mapping.
+- `CommonTerminal: false` - The resource IS expected to link out to other resources. Examples: Lambda function, SQS queue, DynamoDB table, IAM role.
+
+This field is used to hint to users if they have forgotten to link a resource that should typically link to others. Choose the appropriate value based on whether the resource typically acts as an endpoint/consumer (terminal) or typically connects to other resources (non-terminal).
