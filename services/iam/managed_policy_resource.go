@@ -50,7 +50,6 @@ func ManagedPolicyResource(
 			string(completeExample),
 			string(jsoncExample),
 		},
-		ResourceCanLinkTo:    []string{},
 		GetExternalStateFunc: iamManagedPolicyActions.GetExternalState,
 		CreateFunc:           iamManagedPolicyActions.Create,
 		UpdateFunc:           iamManagedPolicyActions.Update,

@@ -45,7 +45,6 @@ func QueueResource(
 			string(jsoncExample),
 			string(fifoExample),
 		},
-		ResourceCanLinkTo:    []string{"aws/sqs/queue", "aws/lambda/function", "aws/lambda/version", "aws/lambda/alias"},
 		GetExternalStateFunc: sqsQueueActions.GetExternalState,
 		CreateFunc:           sqsQueueActions.Create,
 		UpdateFunc:           sqsQueueActions.Update,

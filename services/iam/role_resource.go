@@ -47,7 +47,6 @@ func RoleResource(
 			string(completeExample),
 			string(jsoncExample),
 		},
-		ResourceCanLinkTo:    []string{},
 		GetExternalStateFunc: iamRoleActions.GetExternalState,
 		CreateFunc:           iamRoleActions.Create,
 		UpdateFunc:           iamRoleActions.Update,

@@ -57,7 +57,6 @@ func serverCertificateResourceWithNameGen(
 		DestroyBeforeCreate:  true,
 		CommonTerminal:       false,
 		FormattedExamples:    []string{string(basicExample), string(completeExample), string(jsoncExample)},
-		ResourceCanLinkTo:    []string{},
 		GetExternalStateFunc: actions.GetExternalState,
 		CreateFunc:           actions.Create,
 		UpdateFunc:           actions.Update,

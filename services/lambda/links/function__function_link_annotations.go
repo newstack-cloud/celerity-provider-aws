@@ -6,9 +6,11 @@ import (
 )
 
 func lambdaFunctionFunctionLinkAnnotations() map[string]*provider.LinkAnnotationDefinition {
+	// Intra-service link annotations use aws.lambda.invoke.* pattern
+	// where "invoke" is the feature being configured
 	return map[string]*provider.LinkAnnotationDefinition{
-		"aws/lambda/function::aws.lambda.function.populateEnvVars": {
-			Name:  "aws.lambda.function.populateEnvVars",
+		"aws/lambda/function::aws.lambda.invoke.populateEnvVars": {
+			Name:  "aws.lambda.invoke.populateEnvVars",
 			Label: "Populate Environment Variables",
 			Type:  core.ScalarTypeBool,
 			Description: "A boolean flag to determine whether or not environment variables should be populated " +
@@ -16,9 +18,10 @@ func lambdaFunctionFunctionLinkAnnotations() map[string]*provider.LinkAnnotation
 				"This will populate environment variables for all target lambda functions that match the selector of the callee function.",
 			DefaultValue: core.ScalarFromBool(true),
 			Required:     false,
+			AppliesTo:    provider.LinkAnnotationResourceA,
 		},
-		"aws/lambda/function::aws.lambda.function.<targetFunction>.populateEnvVars": {
-			Name:  "aws.lambda.function.<targetFunction>.populateEnvVars",
+		"aws/lambda/function::aws.lambda.invoke.<targetFunction>.populateEnvVars": {
+			Name:  "aws.lambda.invoke.<targetFunction>.populateEnvVars",
 			Label: "Populate Environment Variables for Specific Target Function",
 			Type:  core.ScalarTypeBool,
 			Description: "A boolean flag to determine whether or not environment variables should be populated " +
@@ -26,9 +29,10 @@ func lambdaFunctionFunctionLinkAnnotations() map[string]*provider.LinkAnnotation
 				"The default behaviour is to populate environment variables for all target lambda functions that match the selector of the callee function.",
 			DefaultValue: core.ScalarFromBool(true),
 			Required:     false,
+			AppliesTo:    provider.LinkAnnotationResourceA,
 		},
-		"aws/lambda/function::aws.lambda.function.<targetFunction>.envVarName": {
-			Name:  "aws.lambda.function.<targetFunction>.envVarName",
+		"aws/lambda/function::aws.lambda.invoke.<targetFunction>.envVarName": {
+			Name:  "aws.lambda.invoke.<targetFunction>.envVarName",
 			Label: "Environment Variable Name",
 			Type:  core.ScalarTypeString,
 			Description: "The name of the environment variable to populate in the linked from lambda function " +
@@ -38,7 +42,8 @@ func lambdaFunctionFunctionLinkAnnotations() map[string]*provider.LinkAnnotation
 			Examples: []*core.ScalarValue{
 				core.ScalarFromString("AWS_LAMBDA_FUNCTION_ORDERS"),
 			},
-			Required: false,
+			Required:  false,
+			AppliesTo: provider.LinkAnnotationResourceA,
 		},
 	}
 }

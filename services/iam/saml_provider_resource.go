@@ -48,7 +48,6 @@ func SAMLProviderResource(
 			string(completeExample),
 			string(jsoncExample),
 		},
-		ResourceCanLinkTo:    []string{},
 		GetExternalStateFunc: iamSAMLProviderActions.GetExternalState,
 		CreateFunc:           iamSAMLProviderActions.Create,
 		UpdateFunc:           iamSAMLProviderActions.Update,

@@ -47,7 +47,6 @@ func InstanceProfileResource(
 			string(completeExample),
 			string(jsoncExample),
 		},
-		ResourceCanLinkTo:    []string{},
 		GetExternalStateFunc: iamInstanceProfileActions.GetExternalState,
 		CreateFunc:           iamInstanceProfileActions.Create,
 		UpdateFunc:           iamInstanceProfileActions.Update,

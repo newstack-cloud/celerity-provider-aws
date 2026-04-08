@@ -5,6 +5,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/newstack-cloud/bluelink-provider-aws/flex"
+	lambdadynamodb "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_dynamodb"
 	"github.com/newstack-cloud/bluelink-provider-aws/services/dynamodb"
 	dynamodbservice "github.com/newstack-cloud/bluelink-provider-aws/services/dynamodb/service"
 	ec2service "github.com/newstack-cloud/bluelink-provider-aws/services/ec2/service"
@@ -162,6 +163,21 @@ func NewProvider(
 			),
 		},
 		Links: map[string]provider.Link{
+			"aws/lambda/function::aws/lambda/function": lambdalinks.FunctionFunctionLink(
+				iamServiceFactory,
+				ec2ServiceFactory,
+			)(
+				lambdalinks.FunctionToFunctionLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
+						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
+						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
 			"aws/lambda/function::aws/lambda/codeSigningConfig": lambdalinks.FunctionCodeSigningConfigLink(
 				pluginutils.NewSingleLinkServiceDeps(
 					lambdaServiceFactory,
@@ -173,6 +189,35 @@ func NewProvider(
 					sqsServiceFactory,
 					awsConfigStore,
 				),
+			),
+			// Inter-service links: Lambda <-> DynamoDB
+			"aws/lambda/function::aws/dynamodb/table": lambdadynamodb.FunctionDynamoDBTableLink(
+				iamServiceFactory,
+			)(
+				lambdadynamodb.FunctionToDynamoDBTableLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
+						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, dynamodbservice.Service]{
+						ServiceFactory: dynamodbServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
+			"aws/dynamodb/table::aws/lambda/function": lambdadynamodb.DynamoDBTableLambdaFunctionLink(
+				iamServiceFactory,
+			)(
+				lambdadynamodb.DynamoDBTableToLambdaFunctionLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, dynamodbservice.Service]{
+						ServiceFactory: dynamodbServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
+						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
 			),
 		},
 		CustomVariableTypes: map[string]provider.CustomVariableType{},

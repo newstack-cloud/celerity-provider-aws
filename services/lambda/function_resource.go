@@ -45,7 +45,6 @@ func FunctionResource(
 			string(jsoncExample),
 			string(yamlInlineExample),
 		},
-		ResourceCanLinkTo:    []string{},
 		GetExternalStateFunc: lambdaFunctionActions.GetExternalState,
 		CreateFunc:           lambdaFunctionActions.Create,
 		UpdateFunc:           lambdaFunctionActions.Update,

@@ -3,6 +3,7 @@ package sqs
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
@@ -30,6 +31,8 @@ func (s *sqsQueueResourceActions) Create(
 			"ResourceDeployInput": input,
 		},
 	}
+
+	time.Sleep(60 * time.Second)
 
 	hasSavedValues, saveOpCtx, err := pluginutils.RunSaveOperations(
 		ctx,

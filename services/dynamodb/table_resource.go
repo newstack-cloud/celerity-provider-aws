@@ -43,7 +43,6 @@ func TableResource(
 			string(completeExample),
 			string(jsoncExample),
 		},
-		ResourceCanLinkTo:    []string{"aws/lambda/function"},
 		GetExternalStateFunc: tableActions.GetExternalState,
 		CreateFunc:           tableActions.Create,
 		UpdateFunc:           tableActions.Update,

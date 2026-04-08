@@ -43,7 +43,6 @@ func CodeSigningConfigResource(
 			string(completeExample),
 			string(jsoncExample),
 		},
-		ResourceCanLinkTo:    []string{},
 		GetExternalStateFunc: lambdaCodeSigningConfigActions.GetExternalState,
 		CreateFunc:           lambdaCodeSigningConfigActions.Create,
 		UpdateFunc:           lambdaCodeSigningConfigActions.Update,

@@ -46,9 +46,6 @@ func VPCResource(
 		// A flex VPC typically needs to link out to the resources
 		// that will be deployed in the VPC.
 		CommonTerminal: false,
-		ResourceCanLinkTo: []string{
-			"aws/lambda/function",
-		},
 		FormattedExamples: []string{
 			string(yamlExample),
 			string(yamlRefModeExample),

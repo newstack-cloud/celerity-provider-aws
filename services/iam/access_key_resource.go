@@ -42,7 +42,6 @@ func AccessKeyResource(
 			string(completeExample),
 			string(jsoncExample),
 		},
-		ResourceCanLinkTo:    []string{},
 		GetExternalStateFunc: iamAccessKeyActions.GetExternalState,
 		CreateFunc:           iamAccessKeyActions.Create,
 		UpdateFunc:           iamAccessKeyActions.Update,

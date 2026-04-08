@@ -47,7 +47,6 @@ func GroupResource(
 			string(completeExample),
 			string(jsoncExample),
 		},
-		ResourceCanLinkTo:    []string{},
 		GetExternalStateFunc: iamGroupActions.GetExternalState,
 		CreateFunc:           iamGroupActions.Create,
 		UpdateFunc:           iamGroupActions.Update,

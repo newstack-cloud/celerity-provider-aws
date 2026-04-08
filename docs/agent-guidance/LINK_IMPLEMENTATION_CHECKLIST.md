@@ -12,7 +12,11 @@ This checklist is for use by background agents (or human contributors) to track 
   - `*_link_stage_changes.go`
   - `*_link_stage_changes_test.go`
   - `*_link_annotations.go`
-- [ ] Files are placed in the correct directory (`services/${service}/links/` or `inter-service-links/` for cross-service links)
+  - `descriptions_embed.go`
+- [ ] Files are placed in the correct directory:
+  - Intra-service links: `services/${service}/links/`
+  - Inter-service links: `inter-service-links/${serviceA}_${serviceB}/`
+- [ ] For inter-service links: function signature includes all required service factories
 
 ## 2. Schema and Method Validation
 - [ ] Link schema matches the service definition schema (`definitions/services/${service}.yml` or `definitions/inter-service/${serviceA}-${serviceB}.yaml`).
@@ -78,6 +82,8 @@ This checklist is for use by background agents (or human contributors) to track 
 ## 10. Regression and Integration
 - [ ] All existing tests in the project pass (no regressions introduced).
 - [ ] Link integrates cleanly with the rest of the provider (no import or dependency issues).
+- [ ] Link registered in `provider/provider.go` under the `Links` map.
+- [ ] For inter-service links with bidirectional relationships: resource type order differentiates link purpose (e.g., `aws/lambda/function::aws/dynamodb/table` vs `aws/dynamodb/table::aws/lambda/function`).
 
 ## 11. Linting and Formatting
 - [ ] Code passes linting (e.g., `gofmt`, `golint`, or project-specific linter).

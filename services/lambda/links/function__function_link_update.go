@@ -999,14 +999,16 @@ func getLambdaFunctionLinkAnnotations(
 	resourceInfo *provider.ResourceInfo,
 	otherResourceInfo *provider.ResourceInfo,
 ) *lambdaFunctionLinkAnnotations {
+	// Intra-service link annotations use aws.lambda.invoke.* pattern
+	// where "invoke" is the feature being configured
 	populateEnvVars, _ := pluginutils.GetBoolAnnotation(
 		resourceInfo,
 		&pluginutils.AnnotationQuery[bool]{
 			Key: fmt.Sprintf(
-				"aws.lambda.function.%s.populateEnvVars",
+				"aws.lambda.invoke.%s.populateEnvVars",
 				otherResourceInfo.ResourceName,
 			),
-			FallbackKey: "aws.lambda.function.populateEnvVars",
+			FallbackKey: "aws.lambda.invoke.populateEnvVars",
 			Default:     true,
 		},
 	)
@@ -1015,7 +1017,7 @@ func getLambdaFunctionLinkAnnotations(
 		resourceInfo,
 		&pluginutils.AnnotationQuery[string]{
 			Key: fmt.Sprintf(
-				"aws.lambda.function.%s.envVarName",
+				"aws.lambda.invoke.%s.envVarName",
 				otherResourceInfo.ResourceName,
 			),
 		},

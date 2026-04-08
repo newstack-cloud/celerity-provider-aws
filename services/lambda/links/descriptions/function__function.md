@@ -2,6 +2,8 @@ The link type used to link a lambda function to another lambda function where th
 
 This will populate permissions and environment variables for the first function to be able to invoke the second function.
 
+Annotations use the `aws.lambda.invoke.*` pattern where "invoke" is the feature being configured.
+
 **Example for all target functions**
 
 ```yaml
@@ -12,7 +14,7 @@ resources:
             displayName: Orders Function
             annotations:
                 # Disable environment variable population which is enabled by default.
-                aws.lambda.function.populateEnvVars: false
+                aws.lambda.invoke.populateEnvVars: false
             labels:
                 app: orders
         linkSelector:
@@ -57,10 +59,10 @@ resources:
             annotations:
                 # These annotations will disable environment variable population for all
                 # target functions except for the logOrderEventsFunction.
-                aws.lambda.function.populateEnvVars: false
-                aws.lambda.function.logOrderEventsFunction.populateEnvVars: true
+                aws.lambda.invoke.populateEnvVars: false
+                aws.lambda.invoke.logOrderEventsFunction.populateEnvVars: true
                 # This annotation will set the environment variable name for the logOrderEventsFunction reference in the ordersFunction.
-                aws.lambda.function.logOrderEventsFunction.envVarName: AWS_LAMBDA_FUNCTION_LOG_ORDER_EVENTS
+                aws.lambda.invoke.logOrderEventsFunction.envVarName: AWS_LAMBDA_FUNCTION_LOG_ORDER_EVENTS
         linkSelector:
             byLabel:
                 app: orders

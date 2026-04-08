@@ -47,7 +47,6 @@ func UserResource(
 			string(completeExample),
 			string(jsoncExample),
 		},
-		ResourceCanLinkTo:    []string{},
 		GetExternalStateFunc: iamUserActions.GetExternalState,
 		CreateFunc:           iamUserActions.Create,
 		UpdateFunc:           iamUserActions.Update,

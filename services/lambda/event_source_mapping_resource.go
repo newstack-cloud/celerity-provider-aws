@@ -52,7 +52,6 @@ func EventSourceMappingResource(
 			string(documentdbExample),
 			string(mqExample),
 		},
-		ResourceCanLinkTo:    []string{},
 		GetExternalStateFunc: lambdaEventSourceMappingActions.GetExternalState,
 		CreateFunc:           lambdaEventSourceMappingActions.Create,
 		UpdateFunc:           lambdaEventSourceMappingActions.Update,

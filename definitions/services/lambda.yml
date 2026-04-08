@@ -337,14 +337,14 @@ linkDefinitions:
     summary: A link that configures a lambda function to be able to invoke another lambda function.
     annotations:
       resourceA:
-        - name: aws.lambda.function.populateEnvVars
+        - name: aws.lambda.invoke.populateEnvVars
           valueType: boolean
           description: "When true, populates environment variables for all linked target functions."
           default: true
-        - name: aws.lambda.function.<targetFunction>.populateEnvVars
+        - name: aws.lambda.invoke.<targetFunction>.populateEnvVars
           valueType: boolean
           description: "When true, populates environment variables for the specific target function. Overrides the global setting."
-        - name: aws.lambda.function.<targetFunction>.envVarName
+        - name: aws.lambda.invoke.<targetFunction>.envVarName
           valueType: string
           description: "Custom environment variable name for the target function ARN. Defaults to an auto-generated name based on the target function name."
       resourceB: []

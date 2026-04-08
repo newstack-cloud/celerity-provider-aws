@@ -1,8 +1,8 @@
 module github.com/newstack-cloud/bluelink-provider-aws
 
-go 1.24.0
+go 1.26
 
-toolchain go1.24.4
+toolchain go1.26.1
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.41.0
@@ -18,15 +18,10 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.33.20
 	github.com/aws/smithy-go v1.24.0
 	github.com/matoous/go-nanoid/v2 v2.1.0
-	github.com/newstack-cloud/bluelink/libs/blueprint v0.36.4
-	github.com/newstack-cloud/bluelink/libs/plugin-framework v0.0.0-20250909100037-01bb55e32888
+	github.com/newstack-cloud/bluelink/libs/blueprint v0.40.0
+	github.com/newstack-cloud/bluelink/libs/plugin-framework v0.4.0
 	github.com/stretchr/testify v1.11.1
 )
-
-// replace (
-// 	github.com/newstack-cloud/bluelink/libs/blueprint => ../bluelink/libs/blueprint
-// 	github.com/newstack-cloud/bluelink/libs/plugin-framework => ../bluelink/libs/plugin-framework
-// )
 
 require (
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.10 // indirect
@@ -41,7 +36,7 @@ require (
 	github.com/coreos/go-json v0.0.0-20231102161613-e49c8866685a // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/newstack-cloud/bluelink/libs/common v0.3.2 // indirect
+	github.com/newstack-cloud/bluelink/libs/common v0.4.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/tailscale/hujson v0.0.0-20250226034555-ec1d1c113d33 // indirect

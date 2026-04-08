@@ -48,7 +48,6 @@ func OIDCProviderResource(
 			string(completeExample),
 			string(jsoncExample),
 		},
-		ResourceCanLinkTo:    []string{},
 		GetExternalStateFunc: iamOIDCProviderActions.GetExternalState,
 		CreateFunc:           iamOIDCProviderActions.Create,
 		UpdateFunc:           iamOIDCProviderActions.Update,

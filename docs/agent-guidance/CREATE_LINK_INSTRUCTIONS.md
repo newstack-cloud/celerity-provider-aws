@@ -54,6 +54,61 @@ The link implementation should be structured as follows:
 - `*_link_stage_changes.go` - The stage changes implementation.
 - `*_link_stage_changes_test.go` - The stage changes test implementation.
 - `*_link_annotations.go` - The link annotations definition file.
+- `descriptions_embed.go` - Embed directive for loading description markdown files.
+
+### Intra-Service vs Inter-Service Links
+
+**Intra-service links** (resources in the same AWS service):
+- Location: `services/${service}/links/`
+- Schema: `definitions/services/${service}.yml` under `linkDefinitions`
+- Example: `aws/sqs/queue::aws/sqs/queue` (dead-letter queue configuration)
+
+**Inter-service links** (resources in different AWS services):
+- Location: `inter-service-links/${serviceA}_${serviceB}/`
+- Schema: `definitions/inter-service/${serviceA}-${serviceB}.yml`
+- Example: `aws/lambda/function::aws/dynamodb/table` (Lambda triggered by DynamoDB Streams)
+
+Inter-service links require service factories from multiple services. The function signature should include all required service dependencies:
+
+```go
+// Example: Lambda-DynamoDB Stream link requires Lambda service
+func FunctionTableStreamLink(
+    lambdaServiceFactory pluginutils.ServiceFactory[*aws.Config, lambdaservice.Service],
+    awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
+) provider.Link
+
+// Example: Lambda-DynamoDB access link requires Lambda, DynamoDB, and IAM services
+func FunctionTableAccessLink(
+    lambdaServiceFactory pluginutils.ServiceFactory[*aws.Config, lambdaservice.Service],
+    iamServiceFactory pluginutils.ServiceFactory[*aws.Config, iamservice.Service],
+    awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
+) provider.Link
+```
+
+For links that update intermediary resources in a third service (e.g., IAM roles), include that service factory as well.
+
+### Inter-Service Link Registration
+
+Inter-service links must be registered in `provider/provider.go` under the `Links` map with their full link type identifier:
+
+```go
+Links: map[string]provider.Link{
+    // Intra-service link
+    "aws/sqs/queue::aws/sqs/queue": sqslinks.QueueQueueLink(...),
+
+    // Inter-service links - use resource order to differentiate link types
+    // Lambda accessing DynamoDB (Lambda links TO DynamoDB)
+    "aws/lambda/function::aws/dynamodb/table": lambdadynamodb.FunctionTableLink(...),
+    // DynamoDB triggering Lambda via streams (DynamoDB links TO Lambda)
+    "aws/dynamodb/table::aws/lambda/function": lambdadynamodb.TableFunctionLink(...),
+},
+```
+
+When the same two services can have multiple relationship types, use resource type order to differentiate:
+- `aws/lambda/function::aws/dynamodb/table` = Lambda needs access to DynamoDB
+- `aws/dynamodb/table::aws/lambda/function` = DynamoDB triggers Lambda via streams
+
+This allows bidirectional relationships where both resources can link to each other for different purposes.
 
 ### Link Methods
 
@@ -101,6 +156,54 @@ The contents of the `<..>` placeholder can be anything but it must always point 
 This must be considered when creating link implementations and using the annotations in the change staging and update operations.
 
 See `services/lambda/links/function__function_link_annotations.go` for an example of how to define link annotations with dynamic keys.
+
+#### Annotation Placement (resourceA vs resourceB)
+
+When designing link annotations, carefully consider which resource the annotations should be placed on in the schema definition:
+
+**Access links** (e.g., Lambda→DynamoDB, Lambda→SQS for read/write access):
+- Annotations go on **resourceA** (the one doing the accessing)
+- These annotations configure how resourceA accesses resourceB
+- Example: `aws.lambda.dynamodb.<targetTable>.accessLevel` on Lambda configures Lambda's access to a specific table
+
+**Event-driven trigger links** (e.g., DynamoDB→Lambda, SQS→Lambda for event triggers):
+- Annotations go on **resourceB** (the target being triggered)
+- These annotations configure the event source mapping for this specific target
+- A source can trigger multiple targets, each with different configurations
+- Example: `aws.dynamodb.lambda.batchSize` on Lambda (resourceB) configures this function's batch processing
+
+**Exception - Source resource configuration:**
+- Some annotations genuinely configure the source resource itself (not the relationship)
+- Example: `aws.dynamodb.stream.viewType` configures the DynamoDB table's stream format
+- These stay on resourceA because they affect the table regardless of which functions consume it
+
+**Rationale:**
+- A source resource can link to multiple targets, each with different configurations
+- Each link relationship has its own configuration (e.g., batch size, filters)
+- Putting configuration on the wrong resource creates ambiguity when one-to-many relationships exist
+
+#### Link Annotation Naming Convention
+
+Annotation names must clearly distinguish between **resource configuration** and **relationship configuration**:
+
+**Resource configuration** (single service namespace):
+- Pattern: `aws.{service}.{feature}.{setting}`
+- Example: `aws.dynamodb.stream.viewType` - configures DynamoDB table's stream format
+- These affect the resource regardless of which other resources link to it
+
+**Intra-service relationship configuration** (same service):
+- Pattern: `aws.{service}.{feature}.{setting}` or `aws.{service}.{feature}.<target>.{setting}`
+- Examples:
+  - `aws.lambda.invoke.<targetFunction>.populateEnvVars` - configures Lambda→Lambda invocation
+  - `aws.sqs.dlq.maxReceiveCount` - configures SQS queue→DLQ relationship
+- For intra-service links, repeating the service name would be redundant
+
+**Inter-service relationship configuration** (different services):
+- Pattern: `aws.{serviceA}.{serviceB}.{feature}.{setting}` or `aws.{serviceA}.{serviceB}.<target>.{setting}`
+- Examples:
+  - `aws.dynamodb.lambda.stream.batchSize` - configures DynamoDB→Lambda stream event source mapping
+  - `aws.lambda.dynamodb.<targetTable>.accessLevel` - configures Lambda's access to a specific table
+- Including both service names and the feature clarifies what aspect of the relationship is being configured
 
 ### About Intermediary Resources
 
