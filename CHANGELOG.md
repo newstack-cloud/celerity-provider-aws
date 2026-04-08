@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1 (2026-04-08)
+
+
+### Bug Fixes
+
+* force bump to 0.1.1 ([6aab365](https://github.com/newstack-cloud/bluelink-provider-aws/commit/6aab365bb343c65fcd5dd9bd3046d466d599593d))
+
 ## [0.2.1](https://github.com/newstack-cloud/bluelink-provider-aws/compare/v0.2.0...v0.2.1) (2026-04-08)
 
 
