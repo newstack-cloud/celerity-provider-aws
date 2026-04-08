@@ -3,7 +3,8 @@
         ".": {
             "release-type": "go",
             "prerelease-type": "next",
-            "draft": true
+            "draft": true,
+            "release-as": "0.2.0"
         }
     }
 }
