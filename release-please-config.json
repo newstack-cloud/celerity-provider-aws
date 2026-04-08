@@ -1,5 +1,9 @@
 {
-    "release-type": "go",
-    "prerelease-type": "next",
-    "draft": true
+    "packages": {
+        ".": {
+            "release-type": "go",
+            "prerelease-type": "next",
+            "draft": true
+        }
+    }
 }
