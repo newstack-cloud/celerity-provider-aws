@@ -13,11 +13,9 @@ func AWSServiceList() string {
 	servicesSB := strings.Builder{}
 
 	for service, aliases := range Services {
-		servicesSB.WriteString(fmt.Sprintf("- %s", service))
+		fmt.Fprintf(&servicesSB, "- %s", service)
 		if len(aliases) > 0 {
-			servicesSB.WriteString(
-				fmt.Sprintf(" (%s)\n", strings.Join(aliases, ", ")),
-			)
+			fmt.Fprintf(&servicesSB, " (%s)\n", strings.Join(aliases, ", "))
 		}
 	}
 

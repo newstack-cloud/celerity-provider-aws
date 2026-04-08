@@ -65,7 +65,7 @@ if [[ "$TEST_MODE" == "integration" || "$TEST_MODE" == "all" ]] && [ -f ".env.te
   set +o allexport
 fi
 
-go test -tags="$TEST_TAGS" -timeout 90000ms -race -coverprofile=coverage.txt -coverpkg=./... -covermode=atomic `go list ./... | egrep -v '(/(testutils))$'`
+go test -tags="$TEST_TAGS" -count=1 -timeout 90000ms -race -coverprofile=coverage.txt -coverpkg=./... -covermode=atomic `go list ./... | egrep -v '(/(testutils))$'`
 
 if [ -z "$GITHUB_ACTION" ]; then
   # We are on a dev machine so produce html output of coverage
@@ -75,5 +75,5 @@ fi
 
 if [ -n "$GITHUB_ACTION" ]; then
   # We are in a CI environment so run tests again to generate JSON report.
-  go test -timeout 90000ms -json -tags "$TEST_TAGS" `go list ./... | egrep -v '(/(testutils))$'` > report.json
+  go test -count=1 -timeout 90000ms -json -tags "$TEST_TAGS" `go list ./... | egrep -v '(/(testutils))$'` > report.json
 fi

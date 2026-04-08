@@ -685,15 +685,15 @@ func dynamoDBStreamActions() []string {
 }
 
 type streamTriggerAnnotations struct {
-	batchSize                   int
-	batchWindow                 int
-	startingPosition            string
-	parallelizationFactor       int
-	maximumRetryAttempts        int
-	maximumRecordAgeInSeconds   int
-	bisectBatchOnFunctionError  bool
-	filterCriteria              string
-	enabled                     bool
+	batchSize                  int
+	batchWindow                int
+	startingPosition           string
+	parallelizationFactor      int
+	maximumRetryAttempts       int
+	maximumRecordAgeInSeconds  int
+	bisectBatchOnFunctionError bool
+	filterCriteria             string
+	enabled                    bool
 }
 
 func getStreamTriggerAnnotations(
