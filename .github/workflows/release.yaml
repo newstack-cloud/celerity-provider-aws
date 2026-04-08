@@ -1,23 +1,47 @@
 # Bluelink Plugin release workflow.
+# Combines release-please (PR management, tagging, draft release creation)
+# with goreleaser (artifact building, signing, publishing).
+#
+# This must be a single workflow because tags created by the default
+# GITHUB_TOKEN in GitHub Actions do not trigger other workflows.
+#
+# Flow:
+# 1. release-please maintains a release PR based on conventional commits
+# 2. When the release PR is merged, release-please creates a tag and draft release
+# 3. goreleaser builds artifacts and uploads them to the draft release
+# 4. The draft release is published, firing the "published" event
+# 5. The Bluelink Registry webhook picks up the published event with all artifacts available
 name: Release
 
-# This GitHub action creates a release when a tag that matches the pattern
-# "v*" (e.g. v0.1.0) is created.
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
 
-# Releases need permissions to read and write the repository contents.
-# GitHub considers creating releases and uploading assets as writing contents.
 permissions:
   contents: write
+  pull-requests: write
+  issues: write
 
 jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
   goreleaser:
     runs-on: ubuntu-latest
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           # Allow goreleaser to access older tag information.
           fetch-depth: 0
@@ -50,10 +74,9 @@ jobs:
         with:
           args: release --clean
         env:
-          # GitHub sets the GITHUB_TOKEN secret automatically.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
       - name: Publish Draft Release
-        run: gh release edit "${{ github.ref_name }}" --draft=false
+        run: gh release edit "${{ needs.release-please.outputs.tag_name }}" --draft=false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

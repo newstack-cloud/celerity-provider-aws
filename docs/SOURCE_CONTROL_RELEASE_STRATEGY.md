@@ -19,12 +19,24 @@ e.g. 0.1.0, 1.0.0-next.1
 
 ## Release workflow
 
-1. Ensure all relevant changes have been merged (rebased) into the trunk (main). The release-please GitHub actions workflow will maintain a release PR that will be updated with the latest changes based on the conventional commit messages.
+Release-please and goreleaser run in a **single combined workflow** (`.github/workflows/release.yaml`). This is required because tags created by the default `GITHUB_TOKEN` in GitHub Actions do not trigger other workflows — so a separate tag-triggered release workflow would never fire.
+
+The workflow runs on every push to `main` and has two jobs:
+
+1. **release-please** — maintains a release PR based on conventional commit messages. When the PR is merged, it creates a tag and a **draft** GitHub release.
+2. **goreleaser** — runs conditionally when release-please creates a release. Builds all platform binaries, generates `docs.json`, uploads artifacts to the draft release, and then publishes it.
+
+### Step-by-step release process
+
+1. Ensure all relevant changes have been merged (rebased) into the trunk (main). The release workflow will maintain a release PR that is updated with the latest changes based on conventional commit messages.
 2. Ensure the version in `main.go` is updated to the next version number indicated in the release PR.
 3. Review the release notes and change log changes in the release PR, update the release notes as necessary.
 4. Once the release notes are ready, merge the release PR into main.
-5. The release-please GitHub actions workflow will create a release tag and a **draft** release. The creation of the tag will trigger the release publishing workflow.
-6. The release publishing workflow will build all the artifacts for the provider, generate a `docs.json` file for the plugin (to be consumed by the Bluelink Registry), upload all artifacts to the draft release, and then publish it.
+5. The merge triggers the release workflow:
+   - release-please creates a tag and **draft** release (no `published` event fired)
+   - goreleaser builds artifacts and uploads them to the draft release
+   - The final step publishes the draft (`gh release edit --draft=false`), firing the `published` event
+6. The Bluelink Registry webhook receives the `published` event with all artifacts available.
 
 ### Why draft releases matter
 
@@ -37,12 +49,12 @@ If release-please were to create a **published** (non-draft) release directly, t
 The draft release approach solves this race condition:
 
 ```
-1. release-please creates a draft release + tag
+1. release-please creates a draft release + tag (within the same workflow)
    → No "published" event fired
    → Registry is not notified
 
-2. Tag push triggers the release workflow
-   → goreleaser builds binaries for all platforms
+2. goreleaser job runs (conditional on release_created output)
+   → Builds binaries for all platforms
    → plugin-docgen generates docs.json
    → All artifacts are uploaded to the draft release
 
@@ -53,6 +65,12 @@ The draft release approach solves this race condition:
 ```
 
 **Do not remove `"draft": true` from `release-please-config.json`**.
+
+### Why a single workflow
+
+GitHub Actions does not trigger workflows from events created by the default `GITHUB_TOKEN`. This means if release-please creates a tag in one workflow, a separate `on: push: tags: 'v*'` workflow will **not** be triggered.
+
+The solution is to combine release-please and goreleaser into a single workflow with two jobs. The goreleaser job uses `needs: release-please` and a conditional (`if: release_created == 'true'`) so it only runs when a release is actually created.
 
 ### Release artifacts
 
