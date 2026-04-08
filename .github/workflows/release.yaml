@@ -56,9 +56,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.release-please.outputs.tag_name || format('v{0}', inputs.version) }}
           # Allow goreleaser to access older tag information.
           fetch-depth: 0
+      - name: Checkout release tag
+        if: ${{ github.event_name != 'workflow_dispatch' }}
+        run: git checkout "${{ needs.release-please.outputs.tag_name }}"
       - uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
