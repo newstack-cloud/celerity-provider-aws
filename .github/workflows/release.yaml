@@ -79,7 +79,13 @@ jobs:
           PRERELEASE=$(jq -r '.prerelease // false' .release.json)
           echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
 
-      - name: Install svu
+      - name: Setup Go for version calculation
+        if: ${{ steps.check-merge.outputs.release_merged == 'false' }}
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+      - name: Install svu binary
         if: ${{ steps.check-merge.outputs.release_merged == 'false' }}
         run: go install github.com/caarlos0/svu@latest
 
