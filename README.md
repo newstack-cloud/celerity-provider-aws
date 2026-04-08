@@ -5,7 +5,7 @@
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=newstack-cloud_bluelink-provider-aws&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=newstack-cloud_bluelink-provider-aws)
 
 The Bluelink Provider plugin for AWS.
-This plugin provides a collection of resources, data sources, custom variables, functions and links to interact with AWS services.
+This plugin provides a collection of resources, data sources, custom variables, links and functions to interact with AWS services.
 
 For the full list of supported resources, data sources, links and more, see the [Bluelink Registry](https://registry.bluelink.dev).
 
