@@ -1,5 +1,4 @@
 {
     "release-type": "go",
-    "prerelease-type": "next",
-    "draft": true
+    "prerelease-type": "next"
 }
