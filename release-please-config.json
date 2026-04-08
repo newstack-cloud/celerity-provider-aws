@@ -1,10 +1,11 @@
 {
-    "bootstrap-sha": "0820a1d",
+    "bootstrap-sha": "71d38ae2a11c63082d9aba36bbed1cad449ee722",
     "packages": {
         ".": {
             "release-type": "go",
             "prerelease-type": "next",
-            "draft": true
+            "draft": true,
+            "release-as": "0.1.1"
         }
     }
 }
