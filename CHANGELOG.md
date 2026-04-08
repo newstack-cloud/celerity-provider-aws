@@ -1,0 +1,93 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## [0.1.1] - 2026-04-08
+
+### Bug Fixes
+
+- Bump for initial 0.1.1 release([2229cd4](https://github.com/newstack-cloud/bluelink-provider-aws/commit/2229cd4df43ebb2ccabc9d24997ea033099d45a9))
+## [0.1.0] - 2026-04-08
+
+### Bug Fixes
+
+- Add missing nil checks and a full test suite for get external state([4c09ef0](https://github.com/newstack-cloud/bluelink-provider-aws/commit/4c09ef028f239237cde84c9d347b870484ab02e1))
+- Add corrections to function version examples([690f31a](https://github.com/newstack-cloud/bluelink-provider-aws/commit/690f31a44576c97a959da59c6c3ee517166c28b4))
+- Correct formatting in layer version get external state file([9bd563e](https://github.com/newstack-cloud/bluelink-provider-aws/commit/9bd563e1f0186255522aead60d723f6d6020bcc7))
+- Remove zipFile field from lambda layer version([6f1aba5](https://github.com/newstack-cloud/bluelink-provider-aws/commit/6f1aba58cbd08296faca83b1aa4d03e07eba3879))
+- Correct examples for lambda layer version resource([dc57ae9](https://github.com/newstack-cloud/bluelink-provider-aws/commit/dc57ae94ebb6bdd793ff20ee475e49348082a100))
+- Ensure iam resources are registered with the plugin provider([505f2b6](https://github.com/newstack-cloud/bluelink-provider-aws/commit/505f2b68b49025e941037f6a3cd78feee864398a))
+- Add missing computed fields from oidc provider update response([f542b5d](https://github.com/newstack-cloud/bluelink-provider-aws/commit/f542b5d2c0640e769cc509d3adedcb08617a9cca))
+- Add various fixes for iam and integrate limited support for provenance tagging([0f55aef](https://github.com/newstack-cloud/bluelink-provider-aws/commit/0f55aefcccfcba6ecbebeb7a73de886cf4d27176))
+- Add various fixes to sqs and support for provenance tagging([181b43e](https://github.com/newstack-cloud/bluelink-provider-aws/commit/181b43eb31d284e9774e9fe9e49aabba74f680a5))
+- Bump initial version to force 0.1.1 release([0351a24](https://github.com/newstack-cloud/bluelink-provider-aws/commit/0351a24425c702accb47db54382f0bb43e4975cd))
+- Force version bump to 0.1.1([449276c](https://github.com/newstack-cloud/bluelink-provider-aws/commit/449276c5d0dd26e15aa8ef1f2f5861dba1ffe8b5))
+- Force next release as 0.2.0([13efd52](https://github.com/newstack-cloud/bluelink-provider-aws/commit/13efd5225d953547dfd2934285574abd9160bbe0))
+- Update docs to get first proper release([c00a0fc](https://github.com/newstack-cloud/bluelink-provider-aws/commit/c00a0fc32173d77f588caa17faba568018d5ab99))
+- Force bump to 0.1.1([6aab365](https://github.com/newstack-cloud/bluelink-provider-aws/commit/6aab365bb343c65fcd5dd9bd3046d466d599593d))
+
+### Features
+
+- Add implementation of the lambda function resource([7a519d9](https://github.com/newstack-cloud/bluelink-provider-aws/commit/7a519d9d5a67d07156a7e496ab3b2c5e1bca55ad))
+- Add implementation of lambda function version resource([11c8efb](https://github.com/newstack-cloud/bluelink-provider-aws/commit/11c8efb8fe7c28f132d594df98613613cf27dc46))
+- Add lambda alias resource implementation([21d825f](https://github.com/newstack-cloud/bluelink-provider-aws/commit/21d825f75d8233781067824989c54045db0946d4))
+- Add lambda code signing config resource implementation([10ae1ca](https://github.com/newstack-cloud/bluelink-provider-aws/commit/10ae1ca04a41c32ebb821557eb6919c0a7074c89))
+- Add alias resource implementation([d8c4188](https://github.com/newstack-cloud/bluelink-provider-aws/commit/d8c418825805f778391df6a038e950c02b9baaf4))
+- Add function version resource implementation([6a531a7](https://github.com/newstack-cloud/bluelink-provider-aws/commit/6a531a725e96817ff043fb4f62a184db8e7d5a98))
+- Add code signing config resource implementation([60a2f02](https://github.com/newstack-cloud/bluelink-provider-aws/commit/60a2f02cad1acece43dcbcd4ed93e692f8a8639d))
+- Add event source mapping resource implementation([903c912](https://github.com/newstack-cloud/bluelink-provider-aws/commit/903c91292f821ca31215f3b57088fbafb44d6cf2))
+- Add alias data source implementation([365b8b7](https://github.com/newstack-cloud/bluelink-provider-aws/commit/365b8b7a90c2f6f3e7c0c4781132958dc89284dd))
+- Add code signing config data source implementation([97944c2](https://github.com/newstack-cloud/bluelink-provider-aws/commit/97944c2c8f5b660cf45b34280c8c3949f33eb094))
+- Add function url resource implementation([2755b27](https://github.com/newstack-cloud/bluelink-provider-aws/commit/2755b27ba8abc7612d4a0bbdf1c36024f9355c08))
+- Add implementation of lambda layer version resource([19e6a6a](https://github.com/newstack-cloud/bluelink-provider-aws/commit/19e6a6a56ebb10887f601abae63debb1253472b6))
+- Add lambda event invoke config resource implementation([c00add2](https://github.com/newstack-cloud/bluelink-provider-aws/commit/c00add26156940f5e2f8ba86ee84febbbe99ea0e))
+- Add lambda layer version permission resource implementation([6dede22](https://github.com/newstack-cloud/bluelink-provider-aws/commit/6dede228de7160098649914dc70eb425f8cc95f4))
+- Add lambda function url data source implementation([9a34b1e](https://github.com/newstack-cloud/bluelink-provider-aws/commit/9a34b1e7c58186aad5fc234f114b15f7381ebe25))
+- Add lambda layer version data source implementation([b49be69](https://github.com/newstack-cloud/bluelink-provider-aws/commit/b49be69f833969592bdc7ccd47fc37990c6efa8c))
+- Add lambda function to code signing config link implementation([1990c78](https://github.com/newstack-cloud/bluelink-provider-aws/commit/1990c7885ab8562bc25c7d24ab876e5cac0e1dda))
+- Add iam role resource implementation([3e0fb0e](https://github.com/newstack-cloud/bluelink-provider-aws/commit/3e0fb0ecd39706404d4ac9558f4624873289e764))
+- Update function to csc link to return resource data mappings([073dead](https://github.com/newstack-cloud/bluelink-provider-aws/commit/073dead45a7b9339d83f1805808acbb02142fb87))
+- Add missing tag and policy diff behaviour for roles([b3260a6](https://github.com/newstack-cloud/bluelink-provider-aws/commit/b3260a6af5c16a297641910832ea3d262f152e53))
+- Add missing perm boundary updates and tag sorting([89e7ac6](https://github.com/newstack-cloud/bluelink-provider-aws/commit/89e7ac682bb3c08e2496dd903d84b5740e50ca0b))
+- Add iam group resource implementation([a36e60b](https://github.com/newstack-cloud/bluelink-provider-aws/commit/a36e60b60157901ad31f2439ff89c9b4b57f1b49))
+- Add iam access key resource implementation([151dc7d](https://github.com/newstack-cloud/bluelink-provider-aws/commit/151dc7d58173a136691e21b2435700ec1272b3ef))
+- Add iam instance profile resource implementation([b3158a1](https://github.com/newstack-cloud/bluelink-provider-aws/commit/b3158a178a1104c00fce9372faa1eb14c2c77d12))
+- Add iam managed policy resource([f76fedc](https://github.com/newstack-cloud/bluelink-provider-aws/commit/f76fedc1aa9b43967c1bdca45dfb6beb370c620f))
+- Add iam oidc provider resource([dd4a8b9](https://github.com/newstack-cloud/bluelink-provider-aws/commit/dd4a8b9db1b437b7eba1203b81e4b838dd5042bf))
+- Add iam saml provider resource implementation([a9936cf](https://github.com/newstack-cloud/bluelink-provider-aws/commit/a9936cf4b3bd331f289daa1bbc60c98a484a1526))
+- Add iam server certificate resource([51f95a8](https://github.com/newstack-cloud/bluelink-provider-aws/commit/51f95a861a3515b67ed0ee3af688062f3ae69f74))
+- Add flex vpc resource implementation([b2feed4](https://github.com/newstack-cloud/bluelink-provider-aws/commit/b2feed4882156ff1d073ba5dd58fbcb5b402c665))
+- Integrate provenance tagging into flex vpc([dfd1ac8](https://github.com/newstack-cloud/bluelink-provider-aws/commit/dfd1ac880d07ff30b6b610cbfd23e5f85f2b653c))
+- Integrate support for provenance tagging in lambda resources([cb16e71](https://github.com/newstack-cloud/bluelink-provider-aws/commit/cb16e710820ab392e0aefd013a231fc23f510e63))
+- Add utils for bluelink tags and data conversions([8527aef](https://github.com/newstack-cloud/bluelink-provider-aws/commit/8527aef0ea514a08bac3fb1927cbfdac4f5729d3))
+- Register new resources with the provider([c6730d8](https://github.com/newstack-cloud/bluelink-provider-aws/commit/c6730d8404acbc1bedebbbf609a9afebab3f6ce4))
+- Add version file to bundle plugin version in code at build time([603a93d](https://github.com/newstack-cloud/bluelink-provider-aws/commit/603a93da9a543a5913f9a8429d4f5cb65bf8db57))
+- Bundle build-time version into plugin metadata([b4c72f6](https://github.com/newstack-cloud/bluelink-provider-aws/commit/b4c72f6fcb1261da20268ae20db2a6bbd5b9b7f8))
+- Add lambda function ddb table links and inter-service link structure([42d7a21](https://github.com/newstack-cloud/bluelink-provider-aws/commit/42d7a213fc2702facf866b9533cf41994eccd5a2))
+
+### Refactoring
+
+- Remove references to two-hundred([de97aa7](https://github.com/newstack-cloud/bluelink-provider-aws/commit/de97aa78b40fdc571b7f96e06234a128e4c5261d))
+- Reduce code duplication by create a shared tags schema function([6d0247b](https://github.com/newstack-cloud/bluelink-provider-aws/commit/6d0247b4575c55c0f9d1b3035276e76e91586fcd))
+- Reduce duplicate code with shared value extractors([172f0f6](https://github.com/newstack-cloud/bluelink-provider-aws/commit/172f0f6967bdf6010ab5a6a7da5316ba4d3b978e))
+- Reduce duplicate code for alias value extractors([13be60f](https://github.com/newstack-cloud/bluelink-provider-aws/commit/13be60f25dd3aa9d7d46c06bbc58849f0c3efbc1))
+- Re-organise to share mocks and service interfaces between packages([4529ce6](https://github.com/newstack-cloud/bluelink-provider-aws/commit/4529ce63dadbf52bf6ffc728d4564bd280bbea6d))
+- Reduce duplicate code for cors setters([a84850c](https://github.com/newstack-cloud/bluelink-provider-aws/commit/a84850c89aa6cf59c90f7a4acef7be49c3359f1c))
+- Update to work with bluelink([5a3c6a7](https://github.com/newstack-cloud/bluelink-provider-aws/commit/5a3c6a7b8cb941e500e31c8633fc45784b2e5bbb))
+- Correct tag diff checking and reduce duplication([b7828cb](https://github.com/newstack-cloud/bluelink-provider-aws/commit/b7828cb97890b15c546ce7c936cad6db5f8082f1))
+- Add tags to differentiate between unit and integration tests([a996cf0](https://github.com/newstack-cloud/bluelink-provider-aws/commit/a996cf0f7b7bacc53534bcc34a9cb2f08a83a536))
+
+### Testing
+
+- Add tests for provider and custom config validation([f996f4e](https://github.com/newstack-cloud/bluelink-provider-aws/commit/f996f4e87800ad715fb33c98b84135d2b21490a9))
+- Add test suite for destroying lambda functions([615d9a1](https://github.com/newstack-cloud/bluelink-provider-aws/commit/615d9a13a19f1f224cf4c5c26bbaaebd273172f0))
+- Add tests for lambda function stabilised check([1cd37d7](https://github.com/newstack-cloud/bluelink-provider-aws/commit/1cd37d776fd4ff98fa5c170b6af03c67bf32dc97))
+- Add missing tests for the event invoke configuration resource([81b7d35](https://github.com/newstack-cloud/bluelink-provider-aws/commit/81b7d35a256a8bf0a21020b8ca12f891bedb526a))
+- Remove references to old string-based policy docs([ffec7c6](https://github.com/newstack-cloud/bluelink-provider-aws/commit/ffec7c62cf3f18cdd2db7dd34f87c8ea5c859214))
+- Add missing tests for updating iam user resource([d346454](https://github.com/newstack-cloud/bluelink-provider-aws/commit/d346454f28e240fd6480d91b14900e2ed1c5a7f5))
+- Add test suites for iam group resource([b09945b](https://github.com/newstack-cloud/bluelink-provider-aws/commit/b09945b320ebfec3a2e2a66cf1d030120be2b15b))
+- Add test cases for resource re-creation([90b1164](https://github.com/newstack-cloud/bluelink-provider-aws/commit/90b116441636d5c446de17374addbd6d1ad6b740))
+- Add recreate test cases for lambda resources([d1d12eb](https://github.com/newstack-cloud/bluelink-provider-aws/commit/d1d12eb60f80ffbadd9f4b1670994172274e4ca6))
+- Add support for integration tests([90805f6](https://github.com/newstack-cloud/bluelink-provider-aws/commit/90805f6aa5ecc8750a0ed244a322327171e2de81))
+- Ensure env vars are exported in all mode and add dynamodb service mocks([958fec9](https://github.com/newstack-cloud/bluelink-provider-aws/commit/958fec951fb19b34fefd7e7b21ee4f0e79006bf0))
+
