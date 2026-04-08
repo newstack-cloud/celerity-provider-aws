@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/newstack-cloud/bluelink-provider-aws/compare/v0.2.0...v0.2.1) (2026-04-08)
+
+
+### Bug Fixes
+
+* update docs to get first proper release ([c00a0fc](https://github.com/newstack-cloud/bluelink-provider-aws/commit/c00a0fc32173d77f588caa17faba568018d5ab99))
+
 ## [0.2.0](https://github.com/newstack-cloud/bluelink-provider-aws/compare/v0.1.0...v0.2.0) (2026-04-08)
 
 
