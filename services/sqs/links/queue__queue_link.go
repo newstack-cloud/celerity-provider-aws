@@ -34,6 +34,10 @@ func QueueQueueLink(
 	return &providerv1.LinkDefinition{
 		ResourceTypeA: "aws/sqs/queue",
 		ResourceTypeB: "aws/sqs/queue",
+		CardinalityA: provider.LinkCardinality{
+			// A source queue can only have one dead-letter queue.
+			Max: 1,
+		},
 		// It doesn't matter which queue is created first,
 		// the source queue will be configured with a redrive policy
 		// to send failed messages to the dead-letter queue once both have been created.
