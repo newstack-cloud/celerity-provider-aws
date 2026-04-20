@@ -46,6 +46,8 @@ linkDefinitions:
   - resourceTypeA: aws/sqs/queue
     resourceTypeB: aws/sqs/queue
     kind: soft
+    cardinalityA:
+      max: 1
     priorityResource: none
     summary: A link that configures the linked to queue as the dead-letter queue for the linked from queue.
     annotations:

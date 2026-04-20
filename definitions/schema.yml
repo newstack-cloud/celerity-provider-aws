@@ -210,6 +210,12 @@ properties:
                         description: |
                           When the intermediary resource is of type 'existing', this field should be set to the source of the external ID of the intermediary resource.
                           This should be of the form `resource(A|B).spec.<field>`.
+        cardinalityA:
+          $ref: "#/$defs/linkCardinality"
+          description: "Cardinality constraint on the A side: how many B's each A may link to."
+        cardinalityB:
+          $ref: "#/$defs/linkCardinality"
+          description: "Cardinality constraint on the B side: how many A's may link to each B."
         docLinks:
           type: array
           items:
@@ -218,6 +224,23 @@ properties:
           type: string
 
 $defs:
+  linkCardinality:
+    type: object
+    description: |
+      Specifies min/max number of links allowed on one side of a link relationship.
+      Zero (or omitted) means no constraint.
+    properties:
+      min:
+        type: integer
+        description: "Minimum number of links required. 0 or omitted means no minimum."
+        default: 0
+        minimum: 0
+      max:
+        type: integer
+        description: "Maximum number of links allowed. 0 or omitted means unlimited."
+        default: 0
+        minimum: 0
+
   annotationDefinition:
     type: object
     required: [name, valueType, description]

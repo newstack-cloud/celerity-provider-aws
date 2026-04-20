@@ -312,6 +312,8 @@ linkDefinitions:
   - resourceTypeA: aws/lambda/function
     resourceTypeB: aws/lambda/codeSigningConfig
     kind: hard
+    cardinalityA:
+      max: 1
     priorityResource: B
     summary: A link from a lambda function to a code signing config.
     annotations:
