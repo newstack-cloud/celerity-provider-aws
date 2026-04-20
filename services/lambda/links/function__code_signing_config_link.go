@@ -28,8 +28,12 @@ func FunctionCodeSigningConfigLink(
 	}
 
 	return &providerv1.LinkDefinition{
-		ResourceTypeA:                   "aws/lambda/function",
-		ResourceTypeB:                   "aws/lambda/codeSigningConfig",
+		ResourceTypeA: "aws/lambda/function",
+		ResourceTypeB: "aws/lambda/codeSigningConfig",
+		CardinalityA: provider.LinkCardinality{
+			// A lambda function can only have one signing config.
+			Max: 1,
+		},
 		Kind:                            provider.LinkKindHard,
 		PriorityResource:                provider.LinkPriorityResourceB,
 		PlainTextSummary:                "A link from a lambda function to a code signing config.",
