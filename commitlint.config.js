@@ -12,6 +12,7 @@ module.exports = {
         "feat",
         "chore",
         "ci",
+        "deps",
         "docs",
         "style",
         "refactor",

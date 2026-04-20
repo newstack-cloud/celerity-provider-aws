@@ -18,8 +18,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.33.20
 	github.com/aws/smithy-go v1.24.0
 	github.com/matoous/go-nanoid/v2 v2.1.0
-	github.com/newstack-cloud/bluelink/libs/blueprint v0.41.0
-	github.com/newstack-cloud/bluelink/libs/plugin-framework v0.4.0
+	github.com/newstack-cloud/bluelink/libs/blueprint v0.42.1
+	github.com/newstack-cloud/bluelink/libs/plugin-framework v0.5.0
 	github.com/stretchr/testify v1.11.1
 )
 
@@ -42,11 +42,11 @@ require (
 	github.com/tailscale/hujson v0.0.0-20250226034555-ec1d1c113d33 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	go.uber.org/zap v1.27.1 // indirect
-	golang.org/x/net v0.46.1-0.20251013234738-63d1a5100f82 // indirect
-	golang.org/x/sys v0.37.0 // indirect
-	golang.org/x/text v0.30.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20251022142026-3a174f9686a8 // indirect
-	google.golang.org/grpc v1.77.0 // indirect
+	golang.org/x/net v0.47.0 // indirect
+	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/text v0.31.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20251029180050-ab9386a59fda // indirect
+	google.golang.org/grpc v1.78.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
