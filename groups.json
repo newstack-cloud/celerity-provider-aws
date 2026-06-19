@@ -1,0 +1,28 @@
+{
+  "groups": {
+    "dynamodb": {
+      "label": "DynamoDB",
+      "description": "Amazon DynamoDB fully managed NoSQL database resources, data sources and links."
+    },
+    "events": {
+      "label": "EventBridge",
+      "description": "Amazon EventBridge event bus, rule and target resources, data sources and links."
+    },
+    "flex": {
+      "label": "Flex",
+      "description": "Higher-level abstractions with presets that simplify what would otherwise be complex AWS configuration."
+    },
+    "iam": {
+      "label": "IAM",
+      "description": "AWS Identity and Access Management (IAM) role, user and group resources."
+    },
+    "lambda": {
+      "label": "Lambda",
+      "description": "AWS Lambda serverless compute function and alias resources, data sources and links."
+    },
+    "sqs": {
+      "label": "SQS",
+      "description": "Amazon Simple Queue Service (SQS) queue resources and links."
+    }
+  }
+}
