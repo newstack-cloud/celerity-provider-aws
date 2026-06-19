@@ -10,6 +10,7 @@ import (
 	"github.com/newstack-cloud/bluelink-provider-aws/provider"
 	dynamodbservice "github.com/newstack-cloud/bluelink-provider-aws/services/dynamodb/service"
 	ec2service "github.com/newstack-cloud/bluelink-provider-aws/services/ec2/service"
+	eventsservice "github.com/newstack-cloud/bluelink-provider-aws/services/events/service"
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
 	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
 	resgrouptagservice "github.com/newstack-cloud/bluelink-provider-aws/services/resgrouptag/service"
@@ -40,6 +41,7 @@ func main() {
 			resgrouptagservice.NewService,
 			sqsservice.NewService,
 			dynamodbservice.NewService,
+			eventsservice.NewService,
 			utils.NewAWSConfigStore(
 				os.Environ(),
 				utils.AWSConfigFromProviderContext,

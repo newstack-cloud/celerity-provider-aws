@@ -451,6 +451,20 @@ type Service interface {
 		params *lambda.UpdateFunctionEventInvokeConfigInput,
 		optFns ...func(*lambda.Options),
 	) (*lambda.UpdateFunctionEventInvokeConfigOutput, error)
+	// Grants a principal permission to use a function via the function's
+	// resource-based policy. Used, for example, to allow EventBridge to invoke a function.
+	AddPermission(
+		ctx context.Context,
+		params *lambda.AddPermissionInput,
+		optFns ...func(*lambda.Options),
+	) (*lambda.AddPermissionOutput, error)
+	// Revokes function-use permission from a principal by removing a statement from
+	// the function's resource-based policy.
+	RemovePermission(
+		ctx context.Context,
+		params *lambda.RemovePermissionInput,
+		optFns ...func(*lambda.Options),
+	) (*lambda.RemovePermissionOutput, error)
 }
 
 // NewService creates a new instance of the AWS Lambda service

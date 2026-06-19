@@ -385,7 +385,7 @@ func (l *lambdaFunctionFunctionLinkActions) addNewRolePolicy(
 				linkutils.PermissionFieldName,
 				invokePermissionNode,
 				linkutils.PolicyNameFieldName,
-				policyName,
+				core.MappingNodeFromString(policyName),
 			),
 		),
 		ResourceDataMappings: map[string]string{
@@ -452,7 +452,7 @@ func (l *lambdaFunctionFunctionLinkActions) updateExistingRolePolicy(
 				linkutils.PermissionFieldName,
 				invokePermissionNode,
 				linkutils.PolicyNameFieldName,
-				policyName,
+				core.MappingNodeFromString(policyName),
 			),
 		),
 		ResourceDataMappings: map[string]string{

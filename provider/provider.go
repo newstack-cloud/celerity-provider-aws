@@ -5,10 +5,15 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/newstack-cloud/bluelink-provider-aws/flex"
+	eventslambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/events_lambda"
+	eventssqs "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/events_sqs"
 	lambdadynamodb "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_dynamodb"
 	"github.com/newstack-cloud/bluelink-provider-aws/services/dynamodb"
 	dynamodbservice "github.com/newstack-cloud/bluelink-provider-aws/services/dynamodb/service"
 	ec2service "github.com/newstack-cloud/bluelink-provider-aws/services/ec2/service"
+	"github.com/newstack-cloud/bluelink-provider-aws/services/events"
+	eventslinks "github.com/newstack-cloud/bluelink-provider-aws/services/events/links"
+	eventsservice "github.com/newstack-cloud/bluelink-provider-aws/services/events/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/services/iam"
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/services/lambda"
@@ -33,6 +38,7 @@ func NewProvider(
 	resourceGroupTaggingServiceFactory pluginutils.ServiceFactory[*aws.Config, resgrouptagservice.Service],
 	sqsServiceFactory pluginutils.ServiceFactory[*aws.Config, sqsservice.Service],
 	dynamodbServiceFactory pluginutils.ServiceFactory[*aws.Config, dynamodbservice.Service],
+	eventsServiceFactory pluginutils.ServiceFactory[*aws.Config, eventsservice.Service],
 	awsConfigStore *utils.AWSConfigStore,
 ) provider.Provider {
 	return &providerv1.ProviderPluginDefinition{
@@ -135,6 +141,37 @@ func NewProvider(
 				resourceGroupTaggingServiceFactory,
 				awsConfigStore,
 			),
+			"aws/dynamodb/globalTable": dynamodb.GlobalTableResource(
+				dynamodbServiceFactory,
+				resourceGroupTaggingServiceFactory,
+				awsConfigStore,
+			),
+			"aws/events/eventBus": events.EventBusResource(
+				eventsServiceFactory,
+				resourceGroupTaggingServiceFactory,
+				awsConfigStore,
+			),
+			"aws/events/rule": events.RuleResource(
+				eventsServiceFactory,
+				resourceGroupTaggingServiceFactory,
+				awsConfigStore,
+			),
+			"aws/events/target": events.TargetResource(
+				eventsServiceFactory,
+				awsConfigStore,
+			),
+			"aws/events/archive": events.ArchiveResource(
+				eventsServiceFactory,
+				awsConfigStore,
+			),
+			"aws/events/connection": events.ConnectionResource(
+				eventsServiceFactory,
+				awsConfigStore,
+			),
+			"aws/events/apiDestination": events.ApiDestinationResource(
+				eventsServiceFactory,
+				awsConfigStore,
+			),
 		},
 		DataSources: map[string]provider.DataSource{
 			"aws/lambda/function": lambda.FunctionDataSource(
@@ -159,6 +196,22 @@ func NewProvider(
 			),
 			"aws/dynamodb/table": dynamodb.TableDataSource(
 				dynamodbServiceFactory,
+				awsConfigStore,
+			),
+			"aws/dynamodb/globalTable": dynamodb.GlobalTableDataSource(
+				dynamodbServiceFactory,
+				awsConfigStore,
+			),
+			"aws/events/eventBus": events.EventBusDataSource(
+				eventsServiceFactory,
+				awsConfigStore,
+			),
+			"aws/events/rule": events.RuleDataSource(
+				eventsServiceFactory,
+				awsConfigStore,
+			),
+			"aws/sqs/queue": sqs.QueueDataSource(
+				sqsServiceFactory,
 				awsConfigStore,
 			),
 		},
@@ -215,6 +268,60 @@ func NewProvider(
 					},
 					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
 						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
+			// Inter-service links: EventBridge <-> Lambda / SQS
+			"aws/lambda/function::aws/events/eventBus": eventslambda.FunctionEventBusLink(
+				iamServiceFactory,
+			)(
+				eventslambda.FunctionToEventBusLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
+						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, eventsservice.Service]{
+						ServiceFactory: eventsServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
+			"aws/events/target::aws/lambda/function": eventslambda.TargetFunctionLink(
+				eventslambda.TargetToFunctionLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, eventsservice.Service]{
+						ServiceFactory: eventsServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
+						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
+			"aws/events/target::aws/sqs/queue": eventssqs.TargetQueueLink(
+				eventssqs.TargetToQueueLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, eventsservice.Service]{
+						ServiceFactory: eventsServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, sqsservice.Service]{
+						ServiceFactory: sqsServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
+			// Intra-service links: EventBridge target <-> API destination
+			"aws/events/target::aws/events/apiDestination": eventslinks.TargetApiDestinationLink(
+				iamServiceFactory,
+			)(
+				eventslinks.TargetToApiDestinationLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, eventsservice.Service]{
+						ServiceFactory: eventsServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, eventsservice.Service]{
+						ServiceFactory: eventsServiceFactory,
 						ConfigStore:    awsConfigStore,
 					},
 				},
