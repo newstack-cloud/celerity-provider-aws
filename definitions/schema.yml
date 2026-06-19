@@ -251,7 +251,7 @@ $defs:
           The annotation key name. Must follow the pattern: aws.<service>.<context>.<setting>
           May contain a single <placeholder> segment to indicate dynamic targeting based on
           the linked resource name (e.g., aws.lambda.function.<targetFunction>.envVarName).
-        pattern: "^aws\\.[a-z]+\\.[a-z]+\\.(<[a-zA-Z]+>\\.)?(\\*|[a-zA-Z]+)$"
+        pattern: "^aws\\.[a-z]+\\.[a-z]+\\.([a-zA-Z]+\\.)?(<[a-zA-Z]+>\\.)?(\\*|[a-zA-Z]+)$"
       valueType:
         type: string
         description: "The expected type of the annotation value."
