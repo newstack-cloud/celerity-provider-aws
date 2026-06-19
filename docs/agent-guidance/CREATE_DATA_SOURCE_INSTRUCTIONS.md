@@ -42,9 +42,15 @@ You must provide tests for all the methods mentioned in the [Data Source Methods
 You should include examples in the data source schema definition file.
 Examples are defined in the `services/${service}/examples/datasources` directory and should be markdown files. You can use existing data source examples as a guide.
 
-Be sure to use the "```javascript ... ```" code block syntax for JSONC examples.
+Each data source example file presents the same blueprint in three formats, in this order, bundled in one file:
 
-There is no need to add an explanation section at the bottom of the examples, only a description above the example code block(s).
+1. **Blueprintlang (PRIMARY):** the "```blueprintlang ... ```" code block, listed first. Data sources use the `data <name>: <type> { filter "<field>" == "<value>"  export <field>: <type> }` form (and top-level `export name: type { field = datasources.<name>.<field> }`).
+2. **YAML:** the "```yaml ... ```" code block, using the `datasources:` section with `filter` (field/operator/search) and typed `exports`.
+3. **JSONC:** the "```javascript ... ```" code block.
+
+Use `services/events/examples/datasources/events_event_bus.md` as the canonical reference.
+
+There is no need to add an explanation section at the bottom of the examples, only a description above the example code blocks.
 
 Make sure you always close open code blocks in the example markdown files.
 

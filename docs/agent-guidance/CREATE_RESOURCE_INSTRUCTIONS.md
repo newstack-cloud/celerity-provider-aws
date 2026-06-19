@@ -83,9 +83,15 @@ You must provide tests for all the methods mentioned in the [Resource Methods](#
 You should include examples in the resource schema definition file.
 Examples are defined in the `services/${service}/examples/resources` directory and should be markdown files. You can use existing resource examples as a guide.
 
-Be sure to use the "```javascript ... ```" code block syntax for JSONC examples.
+Each resource example file (basic/complete) presents the SAME blueprint in three formats, in this order:
 
-There is no need to add an explanation section at the bottom of the examples, only a description above the example code block(s).
+1. **Blueprintlang (PRIMARY):** the "```blueprintlang ... ```" code block, listed first as the canonical/primary format.
+2. **YAML:** the "```yaml ... ```" code block.
+3. **JSONC:** the "```javascript ... ```" code block.
+
+Bundle all three formats in the same example file; do not create a separate per-format file (e.g. no standalone `*_jsonc.md` for resources).
+
+There is no need to add an explanation section at the bottom of the examples, only a description above the example code blocks.
 
 Make sure you always close any code blocks that open with "\`\`\`" (usually followed by a language identifier) with "\`\`\`" on a new line.
 
