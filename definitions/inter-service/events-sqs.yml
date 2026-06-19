@@ -1,0 +1,52 @@
+version: "1.0.0"
+resourceDefinitions: []
+dataSourceDefinitions: []
+
+linkDefinitions:
+  # Link 1: EventBridge target delivers to an SQS queue
+  # The target (A) links to the queue (B) to grant SendMessage permission
+  # Semantics: "This target is allowed to send messages to this SQS queue"
+  #
+  # The target -> queue wiring (PutTargets) and all per-target user input
+  # (input/inputTransformer/sqsParameters.messageGroupId/retryPolicy/...) live on
+  # the aws/events/target resource, referencing the queue via target.arn. This link
+  # carries no user input - only the resource-based queue policy side-effect.
+  - resourceTypeA: aws/events/target
+    resourceTypeB: aws/sqs/queue
+    kind: soft
+    priorityResource: none
+    summary: A link that grants an EventBridge target permission to send messages to an SQS queue via the queue's resource-based policy.
+    annotations:
+      resourceA: []
+      resourceB: []
+    operations:
+      updateResourceA: {}
+      updateResourceB:
+        create:
+          - SetQueueAttributes
+        update:
+          - SetQueueAttributes
+        destroy:
+          - SetQueueAttributes
+      updateIntermediaryResources: {}
+    docLinks:
+      - https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_SetQueueAttributes.html
+      - https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-use-resource-based.html
+    notes: |
+      For SQS targets, EventBridge relies on the queue's resource-based policy. This
+      link carries no user input: it updates the queue Policy attribute via
+      SetQueueAttributes with a statement (deterministic Sid derived from the link)
+      allowing Principal events.amazonaws.com to perform sqs:SendMessage on the
+      queue, with an aws:SourceArn condition scoped to the rule ARN that the target
+      belongs to (derived from resourceA.spec.rule). On destroy, the link removes
+      only its own statement from the policy, preserving any other statements.
+
+      The target -> queue wiring itself (PutTargets), the FIFO messageGroupId
+      (sqsParameters.messageGroupId) and all other per-target input are owned by the
+      aws/events/target resource via a substitution reference (target.arn), not by
+      this link.
+
+      SQS queues encrypted with a customer managed KMS key require the key policy
+      to allow events.amazonaws.com (kms:GenerateDataKey, kms:Decrypt); this is
+      outside the link's control and should be surfaced in the link's rich
+      description.

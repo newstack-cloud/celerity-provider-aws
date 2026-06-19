@@ -1,0 +1,346 @@
+version: "1.0.0"
+resourceDefinitions:
+  - type: aws/events/eventBus
+    label: Amazon EventBridge Event Bus
+    requiredFields:
+      - name
+    computedFields:
+      - arn
+    operations:
+      create:
+        - CreateEventBus
+        - PutPermission
+      update:
+        - UpdateEventBus
+        - PutPermission
+        - RemovePermission
+      destroy:
+        - DeleteEventBus
+      getExternalState:
+        - DescribeEventBus
+    tags:
+      saveTags: TagResource
+      removeTags: UntagResource
+    docLinks:
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_CreateEventBus.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_UpdateEventBus.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_DeleteEventBus.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_DescribeEventBus.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_PutPermission.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_RemovePermission.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_TagResource.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_UntagResource.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_ListTagsForResource.html
+      - https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-events-eventbus.html
+    propertyDocLinks:
+      deadLetterConfig: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-events-eventbus-deadletterconfig.html
+      logConfig: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-events-eventbus-logconfig.html
+      tags: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-events-eventbus-tag.html
+    notes: |
+      The event bus name is create-only; changing it requires replacement. Custom
+      bus names must not start with "aws." and "default" is reserved for the
+      account default bus. UpdateEventBus covers description, kmsKeyIdentifier,
+      deadLetterConfig and logConfig. The resource-based policy for cross-account
+      access is folded into this resource as an optional spec field managed via
+      PutPermission (which accepts a full policy document via its Policy parameter)
+      and RemovePermission, mirroring how the SQS queue policy is folded into the
+      queue resource. The policy returned by DescribeEventBus should be used for
+      drift detection of the policy field.
+
+  - type: aws/events/rule
+    label: Amazon EventBridge Rule
+    requiredFields:
+      - name
+    computedFields:
+      - arn
+    operations:
+      create:
+        - PutRule
+      update:
+        - PutRule
+      destroy:
+        - DeleteRule
+      getExternalState:
+        - DescribeRule
+    tags:
+      saveTags: TagResource
+      removeTags: UntagResource
+    docLinks:
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_PutRule.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_DeleteRule.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_DescribeRule.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_TagResource.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_UntagResource.html
+      - https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-events-rule.html
+    propertyDocLinks:
+      eventPattern: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-event-patterns.html
+      scheduleExpression: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-create-rule-schedule.html
+    notes: |
+      A rule must define at least one of eventPattern or scheduleExpression. This
+      either/or constraint cannot be expressed in requiredFields and must be
+      enforced in custom validation. PutRule fully replaces the rule on update:
+      omitted arguments are reset to null, so updates must always send the
+      complete desired configuration. Tags passed to PutRule are ignored when
+      updating an existing rule; tag updates must go through
+      TagResource/UntagResource. The state field accepts ENABLED, DISABLED and
+      ENABLED_WITH_ALL_CLOUDTRAIL_MANAGEMENT_EVENTS. eventBusName is effectively
+      create-only: a rule belongs to exactly one bus, and schedule rules are only
+      supported on the default event bus. The eventBusName field is populated by a
+      substitution reference to a custom bus (e.g. "${myBus.spec.name}"), not by a
+      link. Targets are NOT part of this resource; each target is modelled as a
+      separate aws/events/target resource that references this rule (target.rule)
+      and its destination (target.arn) via substitution and carries the per-target
+      user input. The IAM role EventBridge assumes for targets that need one (API
+      destinations, ECS, Kinesis, Step Functions) lives on the target resource
+      (target.roleArn), not on the rule; Lambda and SQS targets use resource-based
+      policies granted by the target -> destination links instead.
+
+  - type: aws/events/archive
+    label: Amazon EventBridge Archive
+    requiredFields:
+      - archiveName
+      - eventSourceArn
+    computedFields:
+      - arn
+      - state
+      - stateReason
+    operations:
+      create:
+        - CreateArchive
+      update:
+        - UpdateArchive
+      destroy:
+        - DeleteArchive
+      getExternalState:
+        - DescribeArchive
+      stabilised:
+        - DescribeArchive
+    docLinks:
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_CreateArchive.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_UpdateArchive.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_DeleteArchive.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_DescribeArchive.html
+      - https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-events-archive.html
+    propertyDocLinks:
+      eventPattern: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-event-patterns.html
+    notes: |
+      Archives do not support tagging (TagResource only supports rules and event
+      buses). eventSourceArn is create-only: UpdateArchive accepts only
+      description, eventPattern, retentionDays and kmsKeyIdentifier, so changing
+      the source bus requires replacement. retentionDays of 0 (the default)
+      retains events indefinitely. The API returns ArchiveArn, which maps to the
+      computed arn field. The archive transitions through CREATING/UPDATING
+      states; stabilisation should poll DescribeArchive until state is ENABLED
+      (or DISABLED), surfacing stateReason on CREATE_FAILED/UPDATE_FAILED.
+
+  - type: aws/events/connection
+    label: Amazon EventBridge Connection
+    requiredFields:
+      - name
+      - authorizationType
+      - authParameters
+    computedFields:
+      - arn
+      - secretArn
+      - connectionState
+      - stateReason
+    operations:
+      create:
+        - CreateConnection
+      update:
+        - UpdateConnection
+      destroy:
+        - DeleteConnection
+      getExternalState:
+        - DescribeConnection
+      stabilised:
+        - DescribeConnection
+    docLinks:
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_CreateConnection.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_UpdateConnection.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_DeleteConnection.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_DescribeConnection.html
+      - https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-events-connection.html
+    propertyDocLinks:
+      authParameters: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-events-connection-authparameters.html
+    notes: |
+      Connections do not support tagging. authorizationType is one of BASIC,
+      OAUTH_CLIENT_CREDENTIALS or API_KEY, and authParameters must only include
+      the parameters for the chosen type. Credentials are stored by EventBridge
+      in AWS Secrets Manager; the computed secretArn exposes that secret. Secret
+      values (password, apiKeyValue, clientSecret) are write-only:
+      DescribeConnection never returns them, so drift detection must exclude
+      these fields. Optional fields include description, kmsKeyIdentifier and
+      invocationConnectivityParameters (for private API endpoints). The
+      connection transitions through CREATING/UPDATING/AUTHORIZING states;
+      stabilisation should poll DescribeConnection until connectionState is
+      AUTHORIZED or ACTIVE.
+
+  - type: aws/events/apiDestination
+    label: Amazon EventBridge API Destination
+    requiredFields:
+      - name
+      - connectionArn
+      - invocationEndpoint
+      - httpMethod
+    computedFields:
+      - arn
+      - apiDestinationState
+    operations:
+      create:
+        - CreateApiDestination
+      update:
+        - UpdateApiDestination
+      destroy:
+        - DeleteApiDestination
+      getExternalState:
+        - DescribeApiDestination
+      stabilised:
+        - DescribeApiDestination
+    docLinks:
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_CreateApiDestination.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_UpdateApiDestination.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_DeleteApiDestination.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_DescribeApiDestination.html
+      - https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-api-destinations.html
+      - https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-events-apidestination.html
+    propertyDocLinks: {}
+    notes: |
+      API destinations do not support tagging. httpMethod is one of POST, GET,
+      HEAD, OPTIONS, PUT, PATCH or DELETE. invocationRateLimitPerSecond is
+      optional with a minimum of 1 and a service default of 300. connectionArn
+      is required by the AWS API; when the apiDestination -> connection link is
+      used, the link populates this field. apiDestinationState is ACTIVE or
+      INACTIVE. Private endpoints (interface VPC endpoints) are not supported as
+      invocation endpoints.
+
+  - type: aws/events/target
+    label: Amazon EventBridge Target
+    requiredFields:
+      - rule
+      - targetId
+      - arn
+    computedFields: []
+    operations:
+      create:
+        - PutTargets
+      update:
+        - PutTargets
+      destroy:
+        - RemoveTargets
+      getExternalState:
+        - ListTargetsByRule
+    docLinks:
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_PutTargets.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_RemoveTargets.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_ListTargetsByRule.html
+      - https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-events-rule-target.html
+    propertyDocLinks:
+      inputTransformer: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-events-rule-inputtransformer.html
+      httpParameters: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-events-rule-httpparameters.html
+      retryPolicy: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-events-rule-retrypolicy.html
+      deadLetterConfig: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-events-rule-deadletterconfig.html
+      sqsParameters: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-events-rule-sqsparameters.html
+      ecsParameters: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-events-rule-ecsparameters.html
+      kinesisParameters: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-events-rule-kinesisparameters.html
+      runCommandParameters: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-events-rule-runcommandparameters.html
+      redshiftDataParameters: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-events-rule-redshiftdataparameters.html
+      sageMakerPipelineParameters: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-events-rule-sagemakerpipelineparameters.html
+      batchParameters: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-events-rule-batchparameters.html
+    notes: |
+      A target is an entry in a rule's target list, managed via PutTargets and
+      RemoveTargets. AWS does not expose a target as a standalone resource (it has
+      no ARN of its own and is read back via ListTargetsByRule), but it carries
+      rich, per-target user input, so it is modelled as a first-class resource per
+      LINK_DESIGN_GUIDANCE.md ("Links never carry structured user input"). This
+      mirrors Terraform's aws_cloudwatch_event_target and the way
+      aws/lambda/eventSourceMapping is modelled as a resource.
+
+      Connections to other resources are expressed as substitution references, not
+      links:
+        - rule: the rule the target is attached to (e.g. "${myRule.spec.name}"),
+          combined with the optional eventBusName field (defaults to the rule's
+          bus).
+        - arn: the destination ARN - a Lambda function, SQS queue, API destination,
+          Kinesis stream, ECS cluster, Step Functions state machine, etc.
+          (e.g. "${myFunction.state.arn}").
+        - roleArn: an IAM role EventBridge assumes to invoke the target. Required
+          for target types such as API destinations, ECS, Kinesis and Step
+          Functions; NOT needed for Lambda or SQS, which use resource-based
+          policies granted by the target -> destination links.
+
+      Structured user input lives on this resource's spec: input / inputPath /
+      inputTransformer (mutually exclusive), httpParameters (headerParameters,
+      queryStringParameters, pathParameterValues for API destination targets),
+      retryPolicy (maximumRetryAttempts 0-185, maximumEventAgeInSeconds 60-86400),
+      deadLetterConfig (arn), sqsParameters (messageGroupId for FIFO queues) and
+      the target-type parameter blocks (ecsParameters, kinesisParameters,
+      runCommandParameters, redshiftDataParameters, sageMakerPipelineParameters,
+      batchParameters).
+
+      targetId is a required spec field that must be unique within the rule and is
+      used as the PutTargets/RemoveTargets Id and as the resource's IDField (a
+      target has no standalone ARN). EventBridge allows a maximum of 5 targets per
+      rule, enforced across all aws/events/target resources that reference the same
+      rule.
+
+dataSourceDefinitions:
+  - type: aws/events/eventBus
+    filterableFields:
+      - name
+      - arn
+    docLinks:
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_DescribeEventBus.html
+      - https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/cloudwatch_event_bus
+  - type: aws/events/rule
+    filterableFields:
+      - name
+      - eventBusName
+      - arn
+    docLinks:
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_DescribeRule.html
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_ListRules.html
+
+linkDefinitions:
+  # An EventBridge target may invoke an API destination
+  # The target (A) links to the API destination (B) to grant invoke permission
+  # Semantics: "This target is allowed to invoke this API destination"
+  - resourceTypeA: aws/events/target
+    resourceTypeB: aws/events/apiDestination
+    kind: soft
+    priorityResource: none
+    summary: A link that grants an EventBridge target permission to invoke an API destination by populating the target's IAM role.
+    annotations:
+      resourceA: []
+      resourceB: []
+    operations:
+      updateResourceA: {}
+      updateResourceB: {}
+      updateIntermediaryResources:
+        aws/iam/role:
+          create:
+            - PutRolePolicy
+          update:
+            - PutRolePolicy
+          destroy:
+            - DeleteRolePolicy
+          config:
+            intermediaryType: existing
+            intermediaryExternalIdSource: resourceA.spec.roleArn
+    docLinks:
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_PutTargets.html
+      - https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-api-destinations.html
+      - https://docs.aws.amazon.com/IAM/latest/APIReference/API_PutRolePolicy.html
+    notes: |
+      This link carries no user input. It only populates the existing IAM role
+      referenced by the target's roleArn field
+      (intermediaryExternalIdSource: resourceA.spec.roleArn) with an inline policy
+      granting events:InvokeApiDestination on the destination (resourceB.state.arn),
+      and removes that statement when the link is destroyed. The role is a minimal
+      placeholder the practitioner defines as a top-level blueprint resource; the
+      link "activates" it, mirroring the lambda -> dynamodb access link.
+
+      The target -> destination wiring itself (the PutTargets entry) is owned by the
+      aws/events/target resource via substitution references, not by this link. The
+      role is shared across a target's API destination and accumulates one
+      InvokeApiDestination statement per destination it is used for.

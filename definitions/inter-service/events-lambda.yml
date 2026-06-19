@@ -1,0 +1,105 @@
+version: "1.0.0"
+resourceDefinitions: []
+dataSourceDefinitions: []
+
+linkDefinitions:
+  # Link 1: EventBridge target invokes a Lambda function
+  # The target (A) links to the Lambda function (B) to grant invoke permission
+  # Semantics: "This target is allowed to invoke this Lambda function"
+  #
+  # The target -> function wiring (PutTargets) and all per-target user input
+  # (input/inputTransformer/retryPolicy/deadLetterConfig/...) live on the
+  # aws/events/target resource, referencing the function via target.arn. This link
+  # carries no user input - only the resource-based permission side-effect.
+  - resourceTypeA: aws/events/target
+    resourceTypeB: aws/lambda/function
+    kind: soft
+    priorityResource: none
+    summary: A link that grants an EventBridge target permission to invoke a Lambda function via the function's resource-based policy.
+    annotations:
+      resourceA: []
+      resourceB: []
+    operations:
+      updateResourceA: {}
+      updateResourceB:
+        create:
+          - AddPermission
+        update:
+          - RemovePermission
+          - AddPermission
+        destroy:
+          - RemovePermission
+      updateIntermediaryResources: {}
+    docLinks:
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_AddPermission.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_RemovePermission.html
+      - https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-use-resource-based.html
+    notes: |
+      For Lambda targets, EventBridge relies on the function's resource-based policy
+      rather than an execution role, so no roleArn is needed on the target. This
+      link carries no user input: it grants invocation permission on the function
+      via AddPermission with a deterministic StatementId, Action
+      lambda:InvokeFunction, Principal events.amazonaws.com and SourceArn set to the
+      rule ARN that the target belongs to (derived from resourceA.spec.rule), and
+      removes the statement via RemovePermission when the link is destroyed.
+
+      The target -> function wiring itself (PutTargets) is owned by the
+      aws/events/target resource via a substitution reference (target.arn), not by
+      this link.
+
+  # Link 2: Lambda function publishes events to an event bus (access link)
+  # The Lambda function (A) links to the event bus (B) to send events to it
+  # Semantics: "My Lambda function publishes events to this event bus"
+  - resourceTypeA: aws/lambda/function
+    resourceTypeB: aws/events/eventBus
+    kind: soft
+    priorityResource: none
+    summary: A link that grants a Lambda function permission to publish events to an EventBridge event bus.
+    annotations:
+      resourceA:
+        - name: aws.lambda.events.populateEnvVars
+          valueType: boolean
+          description: "When true, populates environment variables for all linked event buses."
+          default: true
+        - name: aws.lambda.events.<targetBus>.populateEnvVars
+          valueType: boolean
+          description: "When true, populates environment variables for the specific target event bus. Overrides the global setting."
+        - name: aws.lambda.events.<targetBus>.envVarName
+          valueType: string
+          description: "Custom environment variable name for the target event bus name/ARN. Defaults to an auto-generated name based on the bus name."
+      resourceB: []
+    operations:
+      updateResourceA:
+        create:
+          - UpdateFunctionConfiguration
+        update:
+          - UpdateFunctionConfiguration
+        destroy:
+          - UpdateFunctionConfiguration
+      updateResourceB: {}
+      updateIntermediaryResources:
+        aws/iam/role:
+          create:
+            - PutRolePolicy
+          update:
+            - PutRolePolicy
+          destroy:
+            - DeleteRolePolicy
+          config:
+            intermediaryType: existing
+            intermediaryExternalIdSource: resourceA.spec.role
+    docLinks:
+      - https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_PutEvents.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_UpdateFunctionConfiguration.html
+      - https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazoneventbridge.html
+    notes: |
+      This link configures the Lambda function to publish events to the event bus
+      by:
+      1. Optionally populating environment variables with the bus name/ARN
+         (controlled by annotations)
+      2. Adding an inline IAM policy to the function's execution role granting
+         events:PutEvents on the event bus ARN (resourceB.state.arn)
+
+      The IAM role is an existing intermediary resource that must be defined in
+      the same blueprint. The implementation sources the role from
+      resourceA.spec.role, mirroring the lambda -> dynamodb access link.
