@@ -48,7 +48,6 @@ func (i *iamUserResourceActions) Destroy(
 	return nil
 }
 
-// cleanupUserResources removes all resources attached to the user before deletion.
 func (i *iamUserResourceActions) cleanupUserResources(
 	ctx context.Context,
 	iamService iamservice.Service,

@@ -2,7 +2,6 @@ package iam
 
 import (
 	"context"
-	"embed"
 	"fmt"
 	"strings"
 
@@ -15,16 +14,13 @@ import (
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/providerv1"
 )
 
-//go:embed examples/resources/*.md
-var instanceProfileExamples embed.FS
-
 // InstanceProfileResource returns a resource implementation for an AWS IAM Instance Profile.
 func InstanceProfileResource(
 	iamServiceFactory pluginutils.ServiceFactory[*aws.Config, iamservice.Service],
 	awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
 ) provider.Resource {
-	basicExample, _ := instanceProfileExamples.ReadFile("examples/resources/iam_instance_profile_basic.md")
-	completeExample, _ := instanceProfileExamples.ReadFile("examples/resources/iam_instance_profile_complete.md")
+	basicExample, _ := examples.ReadFile("examples/resources/iam_instance_profile_basic.md")
+	completeExample, _ := examples.ReadFile("examples/resources/iam_instance_profile_complete.md")
 
 	iamInstanceProfileActions := &iamInstanceProfileResourceActions{
 		iamServiceFactory:   iamServiceFactory,

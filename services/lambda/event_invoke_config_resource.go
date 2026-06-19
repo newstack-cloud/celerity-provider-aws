@@ -17,7 +17,6 @@ func EventInvokeConfigResource(
 	awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
 ) provider.Resource {
 	yamlExample, _ := examples.ReadFile("examples/resources/lambda_event_invoke_config_basic.md")
-	jsoncExample, _ := examples.ReadFile("examples/resources/lambda_event_invoke_config_jsonc.md")
 	completeExample, _ := examples.ReadFile("examples/resources/lambda_event_invoke_config_complete.md")
 
 	lambdaEventInvokeConfigActions := &lambdaEventInvokeConfigResourceActions{
@@ -37,7 +36,6 @@ func EventInvokeConfigResource(
 		CommonTerminal: false,
 		FormattedExamples: []string{
 			string(yamlExample),
-			string(jsoncExample),
 			string(completeExample),
 		},
 		GetExternalStateFunc: lambdaEventInvokeConfigActions.GetExternalState,

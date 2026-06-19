@@ -19,7 +19,6 @@ func FunctionResource(
 	awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
 ) provider.Resource {
 	yamlExample, _ := examples.ReadFile("examples/resources/lambda_function_yaml.md")
-	jsoncExample, _ := examples.ReadFile("examples/resources/lambda_function_jsonc.md")
 	yamlInlineExample, _ := examples.ReadFile("examples/resources/lambda_function_inline_yaml.md")
 
 	lambdaFunctionActions := &lambdaFunctionResourceActions{
@@ -42,7 +41,6 @@ func FunctionResource(
 		CommonTerminal: false,
 		FormattedExamples: []string{
 			string(yamlExample),
-			string(jsoncExample),
 			string(yamlInlineExample),
 		},
 		GetExternalStateFunc: lambdaFunctionActions.GetExternalState,

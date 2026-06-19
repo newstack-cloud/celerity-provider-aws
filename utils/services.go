@@ -29,6 +29,7 @@ var Services = map[string][]string{
 	"iam":      {},
 	"dynamodb": {},
 	"sqs":      {},
+	"events":   {"eventbridge"},
 }
 
 // GetEndpointFromProviderConfig returns the endpoint for a given service or one of its aliases.

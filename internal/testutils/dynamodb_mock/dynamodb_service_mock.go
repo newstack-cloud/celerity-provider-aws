@@ -56,6 +56,14 @@ type dynamodbServiceMock struct {
 	// ListTagsOfResource-related mock fields
 	listTagsOfResourceOutput *dynamodb.ListTagsOfResourceOutput
 	listTagsOfResourceError  error
+
+	// UpdateTableReplicaAutoScaling-related mock fields
+	updateTableReplicaAutoScalingOutput *dynamodb.UpdateTableReplicaAutoScalingOutput
+	updateTableReplicaAutoScalingError  error
+
+	// DescribeTableReplicaAutoScaling-related mock fields
+	describeTableReplicaAutoScalingOutput *dynamodb.DescribeTableReplicaAutoScalingOutput
+	describeTableReplicaAutoScalingError  error
 }
 
 // CreateDynamoDBServiceMock creates a new instance of the DynamoDB service mock with the provided options.
@@ -224,6 +232,38 @@ func WithListTagsOfResourceError(err error) DynamoDBServiceMockOption {
 	}
 }
 
+// WithUpdateTableReplicaAutoScalingOutput sets the mock output for UpdateTableReplicaAutoScaling.
+func WithUpdateTableReplicaAutoScalingOutput(
+	output *dynamodb.UpdateTableReplicaAutoScalingOutput,
+) DynamoDBServiceMockOption {
+	return func(mock *dynamodbServiceMock) {
+		mock.updateTableReplicaAutoScalingOutput = output
+	}
+}
+
+// WithUpdateTableReplicaAutoScalingError sets the mock error for UpdateTableReplicaAutoScaling.
+func WithUpdateTableReplicaAutoScalingError(err error) DynamoDBServiceMockOption {
+	return func(mock *dynamodbServiceMock) {
+		mock.updateTableReplicaAutoScalingError = err
+	}
+}
+
+// WithDescribeTableReplicaAutoScalingOutput sets the mock output for DescribeTableReplicaAutoScaling.
+func WithDescribeTableReplicaAutoScalingOutput(
+	output *dynamodb.DescribeTableReplicaAutoScalingOutput,
+) DynamoDBServiceMockOption {
+	return func(mock *dynamodbServiceMock) {
+		mock.describeTableReplicaAutoScalingOutput = output
+	}
+}
+
+// WithDescribeTableReplicaAutoScalingError sets the mock error for DescribeTableReplicaAutoScaling.
+func WithDescribeTableReplicaAutoScalingError(err error) DynamoDBServiceMockOption {
+	return func(mock *dynamodbServiceMock) {
+		mock.describeTableReplicaAutoScalingError = err
+	}
+}
+
 // CreateTable implements the DynamoDB service interface.
 func (m *dynamodbServiceMock) CreateTable(
 	ctx context.Context,
@@ -365,6 +405,32 @@ func (m *dynamodbServiceMock) ListTagsOfResource(
 		return nil, m.listTagsOfResourceError
 	}
 	return m.listTagsOfResourceOutput, nil
+}
+
+// UpdateTableReplicaAutoScaling implements the DynamoDB service interface.
+func (m *dynamodbServiceMock) UpdateTableReplicaAutoScaling(
+	ctx context.Context,
+	params *dynamodb.UpdateTableReplicaAutoScalingInput,
+	optFns ...func(*dynamodb.Options),
+) (*dynamodb.UpdateTableReplicaAutoScalingOutput, error) {
+	m.RegisterCall("UpdateTableReplicaAutoScaling", params)
+	if m.updateTableReplicaAutoScalingError != nil {
+		return nil, m.updateTableReplicaAutoScalingError
+	}
+	return m.updateTableReplicaAutoScalingOutput, nil
+}
+
+// DescribeTableReplicaAutoScaling implements the DynamoDB service interface.
+func (m *dynamodbServiceMock) DescribeTableReplicaAutoScaling(
+	ctx context.Context,
+	params *dynamodb.DescribeTableReplicaAutoScalingInput,
+	optFns ...func(*dynamodb.Options),
+) (*dynamodb.DescribeTableReplicaAutoScalingOutput, error) {
+	m.RegisterCall("DescribeTableReplicaAutoScaling", params)
+	if m.describeTableReplicaAutoScalingError != nil {
+		return nil, m.describeTableReplicaAutoScalingError
+	}
+	return m.describeTableReplicaAutoScalingOutput, nil
 }
 
 // CreateDynamoDBServiceMockFactory creates a factory function that returns the mock service.

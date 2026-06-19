@@ -12,8 +12,6 @@ import (
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 )
 
-// mockResourceGroupTaggingService is a mock implementation of the Resource Groups Tagging API
-// service for testing purposes. It returns empty results by default.
 type mockResourceGroupTaggingService struct{}
 
 func (m *mockResourceGroupTaggingService) GetResources(
@@ -26,8 +24,6 @@ func (m *mockResourceGroupTaggingService) GetResources(
 	}, nil
 }
 
-// mockResourceGroupTaggingServiceFactory creates a mock Resource Groups Tagging API
-// service factory for testing.
 func mockResourceGroupTaggingServiceFactory(
 	config *aws.Config,
 	ctx provider.Context,

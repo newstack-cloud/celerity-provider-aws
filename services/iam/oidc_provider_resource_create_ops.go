@@ -106,7 +106,6 @@ func newOIDCProviderCreate(generator utils.UniqueNameGenerator) *oidcProviderCre
 	}
 }
 
-// sortTagsByKeyForOIDC sorts a slice of types.Tag by their Key field.
 func sortTagsByKeyForOIDC(tags []types.Tag) []types.Tag {
 	sorted := make([]types.Tag, len(tags))
 	copy(sorted, tags)

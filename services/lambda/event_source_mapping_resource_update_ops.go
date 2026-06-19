@@ -189,7 +189,6 @@ func changesToUpdateEventSourceMappingInput(
 	return input, hasValuesToSave, nil
 }
 
-// Helper functions for update-specific building.
 func buildFilterCriteriaForUpdate(node *core.MappingNode) *types.FilterCriteria {
 	if node == nil || node.Fields["filters"] == nil {
 		return nil

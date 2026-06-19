@@ -22,7 +22,6 @@ func TableDataSource(
 	awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
 ) provider.DataSource {
 	yamlExample, _ := examples.ReadFile("examples/datasources/dynamodb_table_yaml.md")
-	jsoncExample, _ := examples.ReadFile("examples/datasources/dynamodb_table_jsonc.md")
 
 	fetcher := &dynamodbTableDataSourceFetcher{
 		dynamodbServiceFactory: dynamodbServiceFactory,
@@ -37,7 +36,6 @@ func TableDataSource(
 			"managed externally in AWS.",
 		MarkdownExamples: []string{
 			string(yamlExample),
-			string(jsoncExample),
 		},
 		Fields: dynamodbTableDataSourceSchema(),
 		FilterFields: map[string]*provider.DataSourceFilterSchema{
@@ -473,7 +471,6 @@ func extractTableNameFromFilters(
 	return nil
 }
 
-// extractRegionFromFilters extracts the region from data source filters.
 func extractRegionFromFilters(
 	filters *provider.ResolvedDataSourceFilters,
 ) *core.MappingNode {

@@ -14,7 +14,6 @@ import (
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 )
 
-// The timeout for waiting for a DynamoDB table to be available.
 const tableWaitTimeout = 10 * time.Minute
 
 func (a *dynamodbTableResourceActions) Create(

@@ -17,7 +17,6 @@ func LayerVersionResource(
 	awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
 ) provider.Resource {
 	basicExample, _ := examples.ReadFile("examples/resources/lambda_layer_version_basic.md")
-	jsoncExample, _ := examples.ReadFile("examples/resources/lambda_layer_version_jsonc.md")
 	completeExample, _ := examples.ReadFile("examples/resources/lambda_layer_version_complete.md")
 
 	lambdaLayerVersionActions := &lambdaLayerVersionResourceActions{
@@ -39,7 +38,6 @@ func LayerVersionResource(
 		CommonTerminal: true,
 		FormattedExamples: []string{
 			string(basicExample),
-			string(jsoncExample),
 			string(completeExample),
 		},
 		GetExternalStateFunc: lambdaLayerVersionActions.GetExternalState,

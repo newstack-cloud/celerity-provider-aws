@@ -13,6 +13,11 @@ import (
 type lambdaServiceMock struct {
 	plugintestutils.MockCalls
 
+	addPermissionOutput    *lambda.AddPermissionOutput
+	addPermissionError     error
+	removePermissionOutput *lambda.RemovePermissionOutput
+	removePermissionError  error
+
 	getFunctionOutput *lambda.GetFunctionOutput
 	getFunctionError  error
 
@@ -1152,4 +1157,52 @@ func WithRemoveLayerVersionPermissionError(err error) func(*lambdaServiceMock) {
 	return func(m *lambdaServiceMock) {
 		m.removeLayerVersionPermissionError = err
 	}
+}
+
+func WithAddPermissionOutput(output *lambda.AddPermissionOutput) func(*lambdaServiceMock) {
+	return func(m *lambdaServiceMock) {
+		m.addPermissionOutput = output
+	}
+}
+
+func WithAddPermissionError(err error) func(*lambdaServiceMock) {
+	return func(m *lambdaServiceMock) {
+		m.addPermissionError = err
+	}
+}
+
+func WithRemovePermissionOutput(output *lambda.RemovePermissionOutput) func(*lambdaServiceMock) {
+	return func(m *lambdaServiceMock) {
+		m.removePermissionOutput = output
+	}
+}
+
+func WithRemovePermissionError(err error) func(*lambdaServiceMock) {
+	return func(m *lambdaServiceMock) {
+		m.removePermissionError = err
+	}
+}
+
+func (m *lambdaServiceMock) AddPermission(
+	ctx context.Context,
+	params *lambda.AddPermissionInput,
+	optFns ...func(*lambda.Options),
+) (*lambda.AddPermissionOutput, error) {
+	m.RegisterCall("AddPermission", params)
+	if m.addPermissionError != nil {
+		return nil, m.addPermissionError
+	}
+	return m.addPermissionOutput, nil
+}
+
+func (m *lambdaServiceMock) RemovePermission(
+	ctx context.Context,
+	params *lambda.RemovePermissionInput,
+	optFns ...func(*lambda.Options),
+) (*lambda.RemovePermissionOutput, error) {
+	m.RegisterCall("RemovePermission", params)
+	if m.removePermissionError != nil {
+		return nil, m.removePermissionError
+	}
+	return m.removePermissionOutput, nil
 }

@@ -23,9 +23,8 @@ func FunctionDataSource(
 	lambdaServiceFactory pluginutils.ServiceFactory[*aws.Config, lambdaservice.Service],
 	awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
 ) provider.DataSource {
-	yamlExample, _ := examples.ReadFile("examples/datasources/lambda_function_yaml.md")
-	jsoncExample, _ := examples.ReadFile("examples/datasources/lambda_function_jsonc.md")
-	yamlExportAllExample, _ := examples.ReadFile("examples/datasources/lambda_function_yaml_export_all.md")
+	bundledExample, _ := examples.ReadFile("examples/datasources/lambda_function_yaml.md")
+	exportAllExample, _ := examples.ReadFile("examples/datasources/lambda_function_yaml_export_all.md")
 
 	lambdaFunctionFetcher := &lambdaFunctionDataSourceFetcher{
 		lambdaServiceFactory,
@@ -38,9 +37,8 @@ func FunctionDataSource(
 		FormattedDescription: "The data source type used to define a [Lambda function](https://docs.aws.amazon.com/lambda/latest/api/API_GetFunction.html) " +
 			"managed externally in AWS.",
 		MarkdownExamples: []string{
-			string(yamlExample),
-			string(jsoncExample),
-			string(yamlExportAllExample),
+			string(bundledExample),
+			string(exportAllExample),
 		},
 		Fields: lambdaFunctionDataSourceSchema(),
 		FilterFields: map[string]*provider.DataSourceFilterSchema{

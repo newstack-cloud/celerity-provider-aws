@@ -20,7 +20,6 @@ func TableResource(
 ) provider.Resource {
 	basicExample, _ := examples.ReadFile("examples/resources/dynamodb_table_basic.md")
 	completeExample, _ := examples.ReadFile("examples/resources/dynamodb_table_complete.md")
-	jsoncExample, _ := examples.ReadFile("examples/resources/dynamodb_table_jsonc.md")
 
 	tableActions := &dynamodbTableResourceActions{
 		dynamodbServiceFactory:             dynamodbServiceFactory,
@@ -41,7 +40,6 @@ func TableResource(
 		FormattedExamples: []string{
 			string(basicExample),
 			string(completeExample),
-			string(jsoncExample),
 		},
 		GetExternalStateFunc: tableActions.GetExternalState,
 		CreateFunc:           tableActions.Create,

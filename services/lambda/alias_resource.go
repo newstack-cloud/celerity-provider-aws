@@ -17,7 +17,6 @@ func AliasResource(
 	awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
 ) provider.Resource {
 	yamlExample, _ := examples.ReadFile("examples/resources/lambda_alias_basic.md")
-	jsoncExample, _ := examples.ReadFile("examples/resources/lambda_alias_jsonc.md")
 	trafficRoutingExample, _ := examples.ReadFile("examples/resources/lambda_alias_traffic_routing.md")
 	provisionedConcurrencyExample, _ := examples.ReadFile("examples/resources/lambda_alias_provisioned_concurrency.md")
 	completeExample, _ := examples.ReadFile("examples/resources/lambda_alias_complete.md")
@@ -42,7 +41,6 @@ func AliasResource(
 		CommonTerminal: true,
 		FormattedExamples: []string{
 			string(yamlExample),
-			string(jsoncExample),
 			string(trafficRoutingExample),
 			string(provisionedConcurrencyExample),
 			string(completeExample),

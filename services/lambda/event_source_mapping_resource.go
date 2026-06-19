@@ -23,7 +23,6 @@ func EventSourceMappingResource(
 	dynamodbExample, _ := examples.ReadFile("examples/resources/lambda_event_source_mapping_dynamodb.md")
 	kafkaExample, _ := examples.ReadFile("examples/resources/lambda_event_source_mapping_kafka.md")
 	completeExample, _ := examples.ReadFile("examples/resources/lambda_event_source_mapping_complete.md")
-	jsoncExample, _ := examples.ReadFile("examples/resources/lambda_event_source_mapping_jsonc.md")
 	documentdbExample, _ := examples.ReadFile("examples/resources/lambda_event_source_mapping_documentdb.md")
 	mqExample, _ := examples.ReadFile("examples/resources/lambda_event_source_mapping_mq.md")
 
@@ -48,7 +47,6 @@ func EventSourceMappingResource(
 			string(dynamodbExample),
 			string(kafkaExample),
 			string(completeExample),
-			string(jsoncExample),
 			string(documentdbExample),
 			string(mqExample),
 		},

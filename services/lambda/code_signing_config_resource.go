@@ -20,7 +20,6 @@ func CodeSigningConfigResource(
 ) provider.Resource {
 	basicExample, _ := examples.ReadFile("examples/resources/lambda_code_signing_config_basic.md")
 	completeExample, _ := examples.ReadFile("examples/resources/lambda_code_signing_config_complete.md")
-	jsoncExample, _ := examples.ReadFile("examples/resources/lambda_code_signing_config_jsonc.md")
 
 	lambdaCodeSigningConfigActions := &lambdaCodeSigningConfigResourceActions{
 		lambdaServiceFactory:               lambdaServiceFactory,
@@ -41,7 +40,6 @@ func CodeSigningConfigResource(
 		FormattedExamples: []string{
 			string(basicExample),
 			string(completeExample),
-			string(jsoncExample),
 		},
 		GetExternalStateFunc: lambdaCodeSigningConfigActions.GetExternalState,
 		CreateFunc:           lambdaCodeSigningConfigActions.Create,

@@ -51,8 +51,7 @@ func diffIAMPolicies(currentPolicies *core.MappingNode, newPolicies *core.Mappin
 	return result
 }
 
-// Helper function to compare policy documents.
-// A simple serialised JSON comparison is used to compare the policy documents
+// A simple serialised JSON comparison is used to compare policy documents
 // in the current implementation.
 func policiesEqual(policy1, policy2 *core.MappingNode) bool {
 	doc1JSON, err1 := json.Marshal(policy1.Fields["policyDocument"])

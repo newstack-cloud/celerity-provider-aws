@@ -20,8 +20,7 @@ func CodeSigningConfigDataSource(
 	lambdaServiceFactory pluginutils.ServiceFactory[*aws.Config, lambdaservice.Service],
 	awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
 ) provider.DataSource {
-	yamlExample, _ := examples.ReadFile("examples/datasources/lambda_code_signing_config_basic.md")
-	jsoncExample, _ := examples.ReadFile("examples/datasources/lambda_code_signing_config_jsonc.md")
+	bundledExample, _ := examples.ReadFile("examples/datasources/lambda_code_signing_config_basic.md")
 
 	lambdaCodeSigningConfigFetcher := &lambdaCodeSigningConfigDataSourceFetcher{
 		lambdaServiceFactory,
@@ -34,8 +33,7 @@ func CodeSigningConfigDataSource(
 		FormattedDescription: "The data source type used to define a [Lambda code signing configuration](https://docs.aws.amazon.com/lambda/latest/dg/configuration-codesigning.html) " +
 			"managed externally in AWS.",
 		MarkdownExamples: []string{
-			string(yamlExample),
-			string(jsoncExample),
+			string(bundledExample),
 		},
 		Fields: lambdaCodeSigningConfigDataSourceSchema(),
 		FilterFields: map[string]*provider.DataSourceFilterSchema{

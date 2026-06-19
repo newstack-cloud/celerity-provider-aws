@@ -527,7 +527,6 @@ func createFunctionMissingNameOrARNTestCase(
 	}
 }
 
-// Helper function to create a complex function configuration for testing.
 func createComplexTestFunctionConfig() *lambda.GetFunctionOutput {
 	return &lambda.GetFunctionOutput{
 		Configuration: &types.FunctionConfiguration{

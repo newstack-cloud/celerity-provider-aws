@@ -17,7 +17,6 @@ func FunctionVersionResource(
 	awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
 ) provider.Resource {
 	basicExample, _ := examples.ReadFile("examples/resources/lambda_function_version_basic.md")
-	jsoncExample, _ := examples.ReadFile("examples/resources/lambda_function_version_jsonc.md")
 	completeExample, _ := examples.ReadFile("examples/resources/lambda_function_version_complete.md")
 
 	lambdaFunctionVersionActions := &lambdaFunctionVersionResourceActions{
@@ -40,7 +39,6 @@ func FunctionVersionResource(
 		CommonTerminal: true,
 		FormattedExamples: []string{
 			string(basicExample),
-			string(jsoncExample),
 			string(completeExample),
 		},
 		GetExternalStateFunc: lambdaFunctionVersionActions.GetExternalState,

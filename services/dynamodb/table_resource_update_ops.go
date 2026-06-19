@@ -13,7 +13,6 @@ import (
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 )
 
-// tableUpdate handles updating table-level settings (billing mode, provisioned throughput, streams, etc.)
 type tableUpdate struct {
 	input *dynamodb.UpdateTableInput
 }
@@ -50,7 +49,6 @@ func (u *tableUpdate) Execute(
 	return saveOpCtx, nil
 }
 
-// ttlUpdate handles updating time-to-live settings.
 type ttlUpdate struct {
 	input *dynamodb.UpdateTimeToLiveInput
 }
@@ -79,7 +77,6 @@ func (u *ttlUpdate) Execute(
 	return saveOpCtx, err
 }
 
-// pitrUpdate handles updating point-in-time recovery settings.
 type pitrUpdate struct {
 	input *dynamodb.UpdateContinuousBackupsInput
 }
@@ -108,7 +105,6 @@ func (u *pitrUpdate) Execute(
 	return saveOpCtx, err
 }
 
-// tagsUpdate handles updating table tags.
 type tagsUpdate struct {
 	saveTagsInput   *dynamodb.TagResourceInput
 	removeTagsInput *dynamodb.UntagResourceInput
@@ -232,7 +228,6 @@ func changesToUpdateTableInput(
 	return input, hasUpdates
 }
 
-// hasFieldWithPrefix checks if any field in the changes starts with the given prefix.
 func hasFieldWithPrefix(fields []provider.FieldChange, prefix string) bool {
 	for _, field := range fields {
 		if strings.HasPrefix(field.FieldPath, prefix) {
@@ -335,7 +330,6 @@ func changesToUpdatePITRInput(
 	}, true
 }
 
-// extractTagsMapFromNode extracts tags from a MappingNode into a map.
 func extractTagsMapFromNode(node *core.MappingNode) map[string]string {
 	tags := make(map[string]string)
 	if node == nil || node.Items == nil {

@@ -129,7 +129,6 @@ func getItems(node *core.MappingNode) []*core.MappingNode {
 	return node.Items
 }
 
-// extractTagsMapFromNode extracts tags from a MappingNode into a map.
 func extractTagsMapFromNode(node *core.MappingNode) map[string]string {
 	tags := make(map[string]string)
 	if node == nil {
@@ -144,7 +143,6 @@ func extractTagsMapFromNode(node *core.MappingNode) map[string]string {
 	return tags
 }
 
-// changesToResourceTagUpdatesInputWithMergedTags creates tag update inputs from merged tags map.
 func changesToResourceTagUpdatesInputWithMergedTags(
 	arn string,
 	mergedTags map[string]string,
@@ -174,7 +172,6 @@ func changesToResourceTagUpdatesInputWithMergedTags(
 	}, hasUpdates
 }
 
-// Image Config Setters.
 func setImageConfigCommand(
 	value *core.MappingNode,
 	imageConfig *types.ImageConfig,
@@ -196,7 +193,6 @@ func setImageConfigWorkingDirectory(
 	imageConfig.WorkingDirectory = aws.String(core.StringValue(value))
 }
 
-// File System Config Setters.
 func setFileSystemConfigARN(
 	value *core.MappingNode,
 	fileSystemConfig *types.FileSystemConfig,
@@ -211,7 +207,6 @@ func setFileSystemConfigLocalMountPath(
 	fileSystemConfig.LocalMountPath = aws.String(core.StringValue(value))
 }
 
-// Logging Config Setters.
 func setLoggingConfigApplicationLogLevel(
 	value *core.MappingNode,
 	loggingConfig *types.LoggingConfig,
@@ -240,7 +235,6 @@ func setLoggingConfigSystemLogLevel(
 	loggingConfig.SystemLogLevel = types.SystemLogLevel(core.StringValue(value))
 }
 
-// VPC Config Setters.
 func setVPCConfigSecurityGroupIds(
 	value *core.MappingNode,
 	vpcConfig *types.VpcConfig,

@@ -2,7 +2,6 @@ package iam
 
 import (
 	"context"
-	"embed"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
@@ -11,16 +10,13 @@ import (
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/providerv1"
 )
 
-//go:embed examples/resources/*.md
-var accessKeyExamples embed.FS
-
 // AccessKeyResource returns a resource implementation for an AWS IAM Access Key.
 func AccessKeyResource(
 	iamServiceFactory pluginutils.ServiceFactory[*aws.Config, iamservice.Service],
 	awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
 ) provider.Resource {
-	basicExample, _ := accessKeyExamples.ReadFile("examples/resources/iam_access_key_basic.md")
-	completeExample, _ := accessKeyExamples.ReadFile("examples/resources/iam_access_key_complete.md")
+	basicExample, _ := examples.ReadFile("examples/resources/iam_access_key_basic.md")
+	completeExample, _ := examples.ReadFile("examples/resources/iam_access_key_complete.md")
 
 	iamAccessKeyActions := &iamAccessKeyResourceActions{
 		iamServiceFactory: iamServiceFactory,

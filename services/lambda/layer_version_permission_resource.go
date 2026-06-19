@@ -17,7 +17,6 @@ func LayerVersionPermissionResource(
 	awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
 ) provider.Resource {
 	basicExample, _ := examples.ReadFile("examples/resources/lambda_layer_version_permission_basic.md")
-	jsoncExample, _ := examples.ReadFile("examples/resources/lambda_layer_version_permission_jsonc.md")
 	completeExample, _ := examples.ReadFile("examples/resources/lambda_layer_version_permission_complete.md")
 
 	lambdaLayerVersionPermissionActions := &lambdaLayerVersionPermissionResourceActions{
@@ -35,7 +34,6 @@ func LayerVersionPermissionResource(
 		CommonTerminal: true,
 		FormattedExamples: []string{
 			string(basicExample),
-			string(jsoncExample),
 			string(completeExample),
 		},
 		GetExternalStateFunc: lambdaLayerVersionPermissionActions.GetExternalState,

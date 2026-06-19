@@ -202,7 +202,6 @@ func changesToCreateEventSourceMappingInput(
 	return input, hasValuesToSave, nil
 }
 
-// Helper functions with different names to avoid conflicts.
 func buildFilterCriteriaFromSpecNode(node *core.MappingNode) *types.FilterCriteria {
 	if node == nil || node.Fields["filters"] == nil {
 		return nil

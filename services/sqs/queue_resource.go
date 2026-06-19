@@ -20,7 +20,6 @@ func QueueResource(
 ) provider.Resource {
 	basicExample, _ := examples.ReadFile("examples/resources/sqs_queue_basic.md")
 	completeExample, _ := examples.ReadFile("examples/resources/sqs_queue_complete.md")
-	jsoncExample, _ := examples.ReadFile("examples/resources/sqs_queue_jsonc.md")
 	fifoExample, _ := examples.ReadFile("examples/resources/sqs_queue_fifo.md")
 
 	sqsQueueActions := &sqsQueueResourceActions{
@@ -42,7 +41,6 @@ func QueueResource(
 		FormattedExamples: []string{
 			string(basicExample),
 			string(completeExample),
-			string(jsoncExample),
 			string(fifoExample),
 		},
 		GetExternalStateFunc: sqsQueueActions.GetExternalState,

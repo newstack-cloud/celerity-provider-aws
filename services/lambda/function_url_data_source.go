@@ -19,8 +19,7 @@ func FunctionUrlDataSource(
 	lambdaServiceFactory pluginutils.ServiceFactory[*aws.Config, lambdaservice.Service],
 	awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
 ) provider.DataSource {
-	yamlExample, _ := examples.ReadFile("examples/datasources/lambda_function_url_yaml.md")
-	jsoncExample, _ := examples.ReadFile("examples/datasources/lambda_function_url_jsonc.md")
+	bundledExample, _ := examples.ReadFile("examples/datasources/lambda_function_url_yaml.md")
 
 	lambdaFunctionUrlFetcher := &lambdaFunctionUrlDataSourceFetcher{
 		lambdaServiceFactory,
@@ -33,8 +32,7 @@ func FunctionUrlDataSource(
 		FormattedDescription: "The data source type used to define a [Lambda function URL](https://docs.aws.amazon.com/lambda/latest/api/API_GetFunctionUrlConfig.html) " +
 			"managed externally in AWS.",
 		MarkdownExamples: []string{
-			string(yamlExample),
-			string(jsoncExample),
+			string(bundledExample),
 		},
 		Fields: lambdaFunctionUrlDataSourceSchema(),
 		FilterFields: map[string]*provider.DataSourceFilterSchema{

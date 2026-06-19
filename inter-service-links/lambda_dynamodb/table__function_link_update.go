@@ -675,8 +675,8 @@ func createStreamLinkDataExecutionRoleName(resourceInfo *provider.ResourceInfo) 
 	)
 }
 
-func dynamoDBStreamActions() []string {
-	return []string{
+func dynamoDBStreamActions() []any {
+	return []any{
 		"dynamodb:DescribeStream",
 		"dynamodb:GetRecords",
 		"dynamodb:GetShardIterator",

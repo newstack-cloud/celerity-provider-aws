@@ -366,7 +366,7 @@ func (l *lambdaFunctionDynamoDBTableLinkActions) addNewRolePolicy(
 				linkutils.PermissionFieldName,
 				permissionNode,
 				linkutils.PolicyNameFieldName,
-				policyName,
+				core.MappingNodeFromString(policyName),
 			),
 		),
 		ResourceDataMappings: map[string]string{
@@ -430,7 +430,7 @@ func (l *lambdaFunctionDynamoDBTableLinkActions) updateExistingRolePolicy(
 				linkutils.PermissionFieldName,
 				permissionNode,
 				linkutils.PolicyNameFieldName,
-				policyName,
+				core.MappingNodeFromString(policyName),
 			),
 		),
 		ResourceDataMappings: map[string]string{
@@ -563,17 +563,17 @@ func extractTableNameFromResourceInfo(resourceInfo *provider.ResourceInfo) (stri
 	return core.StringValue(tableName), true
 }
 
-func dynamoDBActionsForAccessLevel(accessLevel string) []string {
+func dynamoDBActionsForAccessLevel(accessLevel string) []any {
 	switch accessLevel {
 	case "read":
-		return []string{
+		return []any{
 			"dynamodb:GetItem",
 			"dynamodb:Query",
 			"dynamodb:Scan",
 			"dynamodb:BatchGetItem",
 		}
 	case "write":
-		return []string{
+		return []any{
 			"dynamodb:PutItem",
 			"dynamodb:UpdateItem",
 			"dynamodb:DeleteItem",
@@ -582,7 +582,7 @@ func dynamoDBActionsForAccessLevel(accessLevel string) []string {
 	case "readwrite":
 		fallthrough
 	default:
-		return []string{
+		return []any{
 			"dynamodb:GetItem",
 			"dynamodb:Query",
 			"dynamodb:Scan",

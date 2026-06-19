@@ -22,8 +22,7 @@ func AliasDataSource(
 	lambdaServiceFactory pluginutils.ServiceFactory[*aws.Config, lambdaservice.Service],
 	awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
 ) provider.DataSource {
-	yamlExample, _ := examples.ReadFile("examples/datasources/lambda_alias_basic.md")
-	jsoncExample, _ := examples.ReadFile("examples/datasources/lambda_alias_jsonc.md")
+	bundledExample, _ := examples.ReadFile("examples/datasources/lambda_alias_basic.md")
 
 	lambdaAliasFetcher := &lambdaAliasDataSourceFetcher{
 		lambdaServiceFactory,
@@ -36,8 +35,7 @@ func AliasDataSource(
 		FormattedDescription: "The data source type used to define a [Lambda alias](https://docs.aws.amazon.com/lambda/latest/api/API_GetAlias.html) " +
 			"managed externally in AWS.",
 		MarkdownExamples: []string{
-			string(yamlExample),
-			string(jsoncExample),
+			string(bundledExample),
 		},
 		Fields: lambdaAliasDataSourceSchema(),
 		FilterFields: map[string]*provider.DataSourceFilterSchema{

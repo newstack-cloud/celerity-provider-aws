@@ -2,7 +2,6 @@ package iam
 
 import (
 	"context"
-	"embed"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 
@@ -15,17 +14,14 @@ import (
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/providerv1"
 )
 
-//go:embed examples/resources/*.md
-var managedPolicyExamples embed.FS
-
 // ManagedPolicyResource returns a resource implementation for an AWS IAM Managed Policy.
 func ManagedPolicyResource(
 	iamServiceFactory pluginutils.ServiceFactory[*aws.Config, iamservice.Service],
 	resourceGroupTaggingServiceFactory pluginutils.ServiceFactory[*aws.Config, resgrouptagservice.Service],
 	awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
 ) provider.Resource {
-	basicExample, _ := managedPolicyExamples.ReadFile("examples/resources/iam_managed_policy_basic.md")
-	completeExample, _ := managedPolicyExamples.ReadFile("examples/resources/iam_managed_policy_complete.md")
+	basicExample, _ := examples.ReadFile("examples/resources/iam_managed_policy_basic.md")
+	completeExample, _ := examples.ReadFile("examples/resources/iam_managed_policy_complete.md")
 
 	iamManagedPolicyActions := &iamManagedPolicyResourceActions{
 		iamServiceFactory:                  iamServiceFactory,

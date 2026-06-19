@@ -54,7 +54,6 @@ func (i *iamGroupResourceActions) Destroy(
 	return nil
 }
 
-// cleanupGroupResources removes all resources attached to the group before deletion.
 func (i *iamGroupResourceActions) cleanupGroupResources(
 	ctx context.Context,
 	iamService iamservice.Service,

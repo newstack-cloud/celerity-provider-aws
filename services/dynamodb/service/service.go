@@ -89,6 +89,20 @@ type Service interface {
 		params *dynamodb.ListTagsOfResourceInput,
 		optFns ...func(*dynamodb.Options),
 	) (*dynamodb.ListTagsOfResourceOutput, error)
+
+	// UpdateTableReplicaAutoScaling updates auto scaling settings on your global tables at once.
+	UpdateTableReplicaAutoScaling(
+		ctx context.Context,
+		params *dynamodb.UpdateTableReplicaAutoScalingInput,
+		optFns ...func(*dynamodb.Options),
+	) (*dynamodb.UpdateTableReplicaAutoScalingOutput, error)
+
+	// DescribeTableReplicaAutoScaling describes auto scaling settings across replicas of the global table.
+	DescribeTableReplicaAutoScaling(
+		ctx context.Context,
+		params *dynamodb.DescribeTableReplicaAutoScalingInput,
+		optFns ...func(*dynamodb.Options),
+	) (*dynamodb.DescribeTableReplicaAutoScalingOutput, error)
 }
 
 // NewService creates a new instance of the AWS DynamoDB service
