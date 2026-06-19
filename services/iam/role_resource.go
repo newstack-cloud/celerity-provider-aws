@@ -23,7 +23,6 @@ func RoleResource(
 ) provider.Resource {
 	basicExample, _ := examples.ReadFile("examples/resources/iam_role_basic.md")
 	completeExample, _ := examples.ReadFile("examples/resources/iam_role_complete.md")
-	jsoncExample, _ := examples.ReadFile("examples/resources/iam_role_jsonc.md")
 
 	iamRoleActions := &iamRoleResourceActions{
 		iamServiceFactory:                  iamServiceFactory,
@@ -45,7 +44,6 @@ func RoleResource(
 		FormattedExamples: []string{
 			string(basicExample),
 			string(completeExample),
-			string(jsoncExample),
 		},
 		GetExternalStateFunc: iamRoleActions.GetExternalState,
 		CreateFunc:           iamRoleActions.Create,

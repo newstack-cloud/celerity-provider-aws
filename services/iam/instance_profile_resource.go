@@ -25,7 +25,6 @@ func InstanceProfileResource(
 ) provider.Resource {
 	basicExample, _ := instanceProfileExamples.ReadFile("examples/resources/iam_instance_profile_basic.md")
 	completeExample, _ := instanceProfileExamples.ReadFile("examples/resources/iam_instance_profile_complete.md")
-	jsoncExample, _ := instanceProfileExamples.ReadFile("examples/resources/iam_instance_profile_jsonc.md")
 
 	iamInstanceProfileActions := &iamInstanceProfileResourceActions{
 		iamServiceFactory:   iamServiceFactory,
@@ -45,7 +44,6 @@ func InstanceProfileResource(
 		FormattedExamples: []string{
 			string(basicExample),
 			string(completeExample),
-			string(jsoncExample),
 		},
 		GetExternalStateFunc: iamInstanceProfileActions.GetExternalState,
 		CreateFunc:           iamInstanceProfileActions.Create,
@@ -77,7 +75,7 @@ func (i *iamInstanceProfileResourceActions) getIamService(
 	return i.iamServiceFactory(awsConfig, providerContext), nil
 }
 
-// extractInstanceProfileNameFromARN extracts the instance profile name from an IAM instance profile ARN
+// Extracts the instance profile name from an IAM instance profile ARN
 // ARN format: arn:aws:iam::123456789012:instance-profile/instance-profile-name.
 func extractInstanceProfileNameFromARN(arn string) (string, error) {
 	if arn == "" {
@@ -97,7 +95,7 @@ func extractInstanceProfileNameFromARN(arn string) (string, error) {
 	return instanceProfileName, nil
 }
 
-// extractRoleNameFromRoleSpec extracts the role name from a role specification
+// Extracts the role name from a role specification
 // which can be either a role name or a role ARN.
 func extractRoleNameFromRoleSpec(roleSpec string) (string, error) {
 	if roleSpec == "" {

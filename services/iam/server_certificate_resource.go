@@ -27,7 +27,6 @@ func ServerCertificateResource(
 	)
 }
 
-// serverCertificateResourceWithNameGen allows test injection of a uniqueNameGenerator.
 func serverCertificateResourceWithNameGen(
 	iamServiceFactory pluginutils.ServiceFactory[*aws.Config, iamservice.Service],
 	resourceGroupTaggingServiceFactory pluginutils.ServiceFactory[*aws.Config, resgrouptagservice.Service],
@@ -36,7 +35,6 @@ func serverCertificateResourceWithNameGen(
 ) provider.Resource {
 	basicExample, _ := examples.ReadFile("examples/resources/iam_server_certificate_basic.md")
 	completeExample, _ := examples.ReadFile("examples/resources/iam_server_certificate_complete.md")
-	jsoncExample, _ := examples.ReadFile("examples/resources/iam_server_certificate_jsonc.md")
 
 	actions := &iamServerCertificateResourceActions{
 		iamServiceFactory:                  iamServiceFactory,
@@ -56,7 +54,7 @@ func serverCertificateResourceWithNameGen(
 		// certificates should be deleted before the replacement is created.
 		DestroyBeforeCreate:  true,
 		CommonTerminal:       false,
-		FormattedExamples:    []string{string(basicExample), string(completeExample), string(jsoncExample)},
+		FormattedExamples:    []string{string(basicExample), string(completeExample)},
 		GetExternalStateFunc: actions.GetExternalState,
 		CreateFunc:           actions.Create,
 		UpdateFunc:           actions.Update,

@@ -26,7 +26,6 @@ func ManagedPolicyResource(
 ) provider.Resource {
 	basicExample, _ := managedPolicyExamples.ReadFile("examples/resources/iam_managed_policy_basic.md")
 	completeExample, _ := managedPolicyExamples.ReadFile("examples/resources/iam_managed_policy_complete.md")
-	jsoncExample, _ := managedPolicyExamples.ReadFile("examples/resources/iam_managed_policy_jsonc.md")
 
 	iamManagedPolicyActions := &iamManagedPolicyResourceActions{
 		iamServiceFactory:                  iamServiceFactory,
@@ -48,7 +47,6 @@ func ManagedPolicyResource(
 		FormattedExamples: []string{
 			string(basicExample),
 			string(completeExample),
-			string(jsoncExample),
 		},
 		GetExternalStateFunc: iamManagedPolicyActions.GetExternalState,
 		CreateFunc:           iamManagedPolicyActions.Create,

@@ -21,7 +21,6 @@ func AccessKeyResource(
 ) provider.Resource {
 	basicExample, _ := accessKeyExamples.ReadFile("examples/resources/iam_access_key_basic.md")
 	completeExample, _ := accessKeyExamples.ReadFile("examples/resources/iam_access_key_complete.md")
-	jsoncExample, _ := accessKeyExamples.ReadFile("examples/resources/iam_access_key_jsonc.md")
 
 	iamAccessKeyActions := &iamAccessKeyResourceActions{
 		iamServiceFactory: iamServiceFactory,
@@ -40,7 +39,6 @@ func AccessKeyResource(
 		FormattedExamples: []string{
 			string(basicExample),
 			string(completeExample),
-			string(jsoncExample),
 		},
 		GetExternalStateFunc: iamAccessKeyActions.GetExternalState,
 		CreateFunc:           iamAccessKeyActions.Create,

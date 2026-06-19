@@ -25,7 +25,6 @@ func GroupResource(
 ) provider.Resource {
 	basicExample, _ := groupExamples.ReadFile("examples/resources/iam_group_basic.md")
 	completeExample, _ := groupExamples.ReadFile("examples/resources/iam_group_complete.md")
-	jsoncExample, _ := groupExamples.ReadFile("examples/resources/iam_group_jsonc.md")
 
 	iamGroupActions := &iamGroupResourceActions{
 		iamServiceFactory:   iamServiceFactory,
@@ -45,7 +44,6 @@ func GroupResource(
 		FormattedExamples: []string{
 			string(basicExample),
 			string(completeExample),
-			string(jsoncExample),
 		},
 		GetExternalStateFunc: iamGroupActions.GetExternalState,
 		CreateFunc:           iamGroupActions.Create,
@@ -77,8 +75,6 @@ func (i *iamGroupResourceActions) getIamService(
 	return i.iamServiceFactory(awsConfig, providerContext), nil
 }
 
-// extractGroupNameFromARN extracts the group name from an IAM group ARN
-// ARN format: arn:aws:iam::123456789012:group/group-name.
 func extractGroupNameFromARN(arn string) (string, error) {
 	parts := strings.Split(arn, ":")
 	if len(parts) < 6 {

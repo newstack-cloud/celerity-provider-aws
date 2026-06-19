@@ -23,7 +23,6 @@ func UserResource(
 ) provider.Resource {
 	basicExample, _ := examples.ReadFile("examples/resources/iam_user_basic.md")
 	completeExample, _ := examples.ReadFile("examples/resources/iam_user_complete.md")
-	jsoncExample, _ := examples.ReadFile("examples/resources/iam_user_jsonc.md")
 
 	iamUserActions := &iamUserResourceActions{
 		iamServiceFactory:                  iamServiceFactory,
@@ -45,7 +44,6 @@ func UserResource(
 		FormattedExamples: []string{
 			string(basicExample),
 			string(completeExample),
-			string(jsoncExample),
 		},
 		GetExternalStateFunc: iamUserActions.GetExternalState,
 		CreateFunc:           iamUserActions.Create,
@@ -78,8 +76,6 @@ func (i *iamUserResourceActions) getIamService(
 	return i.iamServiceFactory(awsConfig, providerContext), nil
 }
 
-// extractUserNameFromARN extracts the user name from an IAM user ARN
-// ARN format: arn:aws:iam::123456789012:user/user-name.
 func extractUserNameFromARN(arn string) (string, error) {
 	if arn == "" {
 		return "", fmt.Errorf("ARN cannot be empty")

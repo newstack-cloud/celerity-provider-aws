@@ -23,7 +23,6 @@ func SAMLProviderResource(
 ) provider.Resource {
 	basicExample, _ := examples.ReadFile("examples/resources/iam_saml_provider_basic.md")
 	completeExample, _ := examples.ReadFile("examples/resources/iam_saml_provider_complete.md")
-	jsoncExample, _ := examples.ReadFile("examples/resources/iam_saml_provider_jsonc.md")
 
 	iamSAMLProviderActions := &iamSAMLProviderResourceActions{
 		iamServiceFactory:                  iamServiceFactory,
@@ -46,7 +45,6 @@ func SAMLProviderResource(
 		FormattedExamples: []string{
 			string(basicExample),
 			string(completeExample),
-			string(jsoncExample),
 		},
 		GetExternalStateFunc: iamSAMLProviderActions.GetExternalState,
 		CreateFunc:           iamSAMLProviderActions.Create,
@@ -100,8 +98,6 @@ func (i *iamSAMLProviderResourceActions) getResourceGroupTaggingService(
 	return i.resourceGroupTaggingServiceFactory(awsConfig, providerContext), nil
 }
 
-// extractNameFromArn extracts the name from a SAML provider ARN
-// ARN format: arn:aws:iam::account-id:saml-provider/provider-name.
 func extractNameFromArn(arn string) (string, error) {
 	parts := strings.Split(arn, "/")
 	if len(parts) != 2 {

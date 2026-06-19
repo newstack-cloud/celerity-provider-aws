@@ -23,7 +23,6 @@ func OIDCProviderResource(
 ) provider.Resource {
 	basicExample, _ := examples.ReadFile("examples/resources/iam_oidc_provider_basic.md")
 	completeExample, _ := examples.ReadFile("examples/resources/iam_oidc_provider_complete.md")
-	jsoncExample, _ := examples.ReadFile("examples/resources/iam_oidc_provider_jsonc.md")
 
 	iamOIDCProviderActions := &iamOIDCProviderResourceActions{
 		iamServiceFactory:                  iamServiceFactory,
@@ -46,7 +45,6 @@ func OIDCProviderResource(
 		FormattedExamples: []string{
 			string(basicExample),
 			string(completeExample),
-			string(jsoncExample),
 		},
 		GetExternalStateFunc: iamOIDCProviderActions.GetExternalState,
 		CreateFunc:           iamOIDCProviderActions.Create,
