@@ -247,7 +247,7 @@ jobs:
           go build -ldflags "-X main.version=$VERSION" -o /tmp/bluelink/plugins/providers/newstack-cloud/aws/$VERSION/plugin .
       - name: Generate Plugin JSON Docs
         run: |
-          bluelink-plugin-docgen -plugin=newstack-cloud/aws
+          bluelink-plugin-docgen -plugin=newstack-cloud/aws -group-config=groups.json
         env:
           BLUELINK_PLUGIN_DOCGEN_PLUGIN_LOG_FILE_ROOT_DIR: /tmp/bluelink/plugins/logs
           BLUELINK_DEPLOY_ENGINE_PLUGIN_PATH: /tmp/bluelink/plugins
