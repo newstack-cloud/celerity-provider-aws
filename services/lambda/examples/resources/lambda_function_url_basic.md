@@ -1,10 +1,46 @@
-# Basic Lambda Function URL
+Create a basic Lambda function URL with no authentication required.
 
-This example creates a basic Lambda function URL with no authentication required.
+```blueprintlang
+version "2025-11-02"
+
+resource functionUrl: aws/lambda/functionUrl {
+    metadata {
+        displayName = "Function URL"
+    }
+    spec {
+        targetFunctionArn = "my-function"
+        authType = "NONE"
+    }
+}
+```
 
 ```yaml
-type: aws/lambda/functionUrl
-spec:
-  targetFunctionArn: my-function
-  authType: NONE
+version: 2025-11-02
+
+resources:
+  functionUrl:
+    type: aws/lambda/functionUrl
+    metadata:
+      displayName: Function URL
+    spec:
+      targetFunctionArn: my-function
+      authType: NONE
+```
+
+```javascript
+{
+  "version": "2025-11-02",
+  "resources": {
+    "functionUrl": {
+      "type": "aws/lambda/functionUrl",
+      "metadata": {
+        "displayName": "Function URL"
+      },
+      "spec": {
+        "targetFunctionArn": "my-function",
+        "authType": "NONE"
+      }
+    }
+  }
+}
 ```

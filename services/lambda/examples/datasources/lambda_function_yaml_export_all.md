@@ -1,23 +1,56 @@
-**YAML Function Data Source - Export All Fields**
+Look up an existing Lambda function by ARN and export all of its fields for use elsewhere in the blueprint.
 
-This example demonstrates how to define an AWS Lambda function data source
-and export all fields to be used in other elements of the blueprint.
+```blueprintlang
+version "2025-11-02"
+
+data orderFunction: aws/lambda/function {
+    filter "arn" == "arn:aws:lambda:us-east-1:123456789012:function:order-retrieval"
+
+    export *
+}
+
+export orderFunctionArn: string {
+    field = datasources.orderFunction.arn
+}
+```
 
 ```yaml
-variables:
-  orderFunctionArn:
-    type: string
-    description: The ARN of the order retrieval function managed externally.
+version: 2025-11-02
 
 datasources:
-  getOrderFunction:
-	type: aws/lambda/function
-	metadata:
-	  displayName: Order Retrieval Function
-	filter:
+  orderFunction:
+    type: aws/lambda/function
+    filter:
       field: arn
       operator: "="
-      search: ${variables.orderFunctionArn}
-  # Export all fields to be used in other elements of the blueprint.
-  exports: "*"
+      search: arn:aws:lambda:us-east-1:123456789012:function:order-retrieval
+    exports: "*"
+
+exports:
+  orderFunctionArn:
+    type: string
+    field: datasources.orderFunction.arn
+```
+
+```javascript
+{
+  "version": "2025-11-02",
+  "datasources": {
+    "orderFunction": {
+      "type": "aws/lambda/function",
+      "filter": {
+        "field": "arn",
+        "operator": "=",
+        "search": "arn:aws:lambda:us-east-1:123456789012:function:order-retrieval"
+      },
+      "exports": "*"
+    }
+  },
+  "exports": {
+    "orderFunctionArn": {
+      "type": "string",
+      "field": "datasources.orderFunction.arn"
+    }
+  }
+}
 ```

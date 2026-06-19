@@ -1,30 +1,64 @@
-**Basic Lambda Code Signing Config Data Source**
+Look up an existing Lambda code signing configuration by ARN and export its details.
 
-This example demonstrates how to retrieve a Lambda code signing configuration using the data source.
+```blueprintlang
+version "2025-11-02"
+
+data codeSigningConfig: aws/lambda/codeSigningConfig {
+    filter "arn" == "arn:aws:lambda:us-east-1:123456789012:code-signing-config:csc-0123456789abcdef0"
+
+    export codeSigningConfigId: string
+    export description: string
+}
+
+export codeSigningConfigId: string {
+    field = datasources.codeSigningConfig.codeSigningConfigId
+}
+```
 
 ```yaml
-variables:
-  codeSigningConfigArn:
-    type: string
-    description: The ARN of the Lambda code signing configuration.
+version: 2025-11-02
 
 datasources:
-  getCodeSigningConfig:
+  codeSigningConfig:
     type: aws/lambda/codeSigningConfig
-    metadata:
-      displayName: Code Signing Configuration
     filter:
       field: arn
       operator: "="
-      search: ${variables.codeSigningConfigArn}
+      search: arn:aws:lambda:us-east-1:123456789012:code-signing-config:csc-0123456789abcdef0
     exports:
-      arn:
-        type: string
-        aliasFor: arn
       codeSigningConfigId:
         type: string
       description:
         type: string
-      allowedPublishers.signingProfileVersionArns:
-        type: array
-``` 
+
+exports:
+  codeSigningConfigId:
+    type: string
+    field: datasources.codeSigningConfig.codeSigningConfigId
+```
+
+```javascript
+{
+  "version": "2025-11-02",
+  "datasources": {
+    "codeSigningConfig": {
+      "type": "aws/lambda/codeSigningConfig",
+      "filter": {
+        "field": "arn",
+        "operator": "=",
+        "search": "arn:aws:lambda:us-east-1:123456789012:code-signing-config:csc-0123456789abcdef0"
+      },
+      "exports": {
+        "codeSigningConfigId": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    }
+  },
+  "exports": {
+    "codeSigningConfigId": {
+      "type": "string",
+      "field": "datasources.codeSigningConfig.codeSigningConfigId"
+    }
+  }
+}
+```

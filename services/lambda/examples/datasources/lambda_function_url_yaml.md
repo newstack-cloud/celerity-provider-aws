@@ -1,28 +1,64 @@
-**YAML Function URL Data Source**
+Look up the function URL for an existing Lambda function and export its URL and auth type.
 
-This example demonstrates how to define an AWS Lambda function URL data source.
+```blueprintlang
+version "2025-11-02"
+
+data functionUrl: aws/lambda/function_url {
+    filter "functionName" == "order-processor"
+
+    export functionUrl: string
+    export authType: string
+}
+
+export orderProcessorUrl: string {
+    field = datasources.functionUrl.functionUrl
+}
+```
 
 ```yaml
-variables:
-  functionName:
-    type: string
-    description: The name of the Lambda function to retrieve the function URL for.
+version: 2025-11-02
 
 datasources:
-  getFunctionUrl:
+  functionUrl:
     type: aws/lambda/function_url
-    metadata:
-      displayName: Lambda Function URL
     filter:
       field: functionName
       operator: "="
-      search: ${variables.functionName}
+      search: order-processor
     exports:
       functionUrl:
         type: string
-        aliasFor: functionUrl
       authType:
         type: string
-      cors:
-        type: object
+
+exports:
+  orderProcessorUrl:
+    type: string
+    field: datasources.functionUrl.functionUrl
+```
+
+```javascript
+{
+  "version": "2025-11-02",
+  "datasources": {
+    "functionUrl": {
+      "type": "aws/lambda/function_url",
+      "filter": {
+        "field": "functionName",
+        "operator": "=",
+        "search": "order-processor"
+      },
+      "exports": {
+        "functionUrl": { "type": "string" },
+        "authType": { "type": "string" }
+      }
+    }
+  },
+  "exports": {
+    "orderProcessorUrl": {
+      "type": "string",
+      "field": "datasources.functionUrl.functionUrl"
+    }
+  }
+}
 ```

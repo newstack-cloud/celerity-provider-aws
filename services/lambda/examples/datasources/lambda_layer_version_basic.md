@@ -1,38 +1,67 @@
-**Basic Layer Version Data Source**
+Look up an existing Lambda layer version by layer name and version number, exporting its ARN and compatible runtimes.
 
-This example demonstrates how to define an AWS Lambda layer version data source.
+```blueprintlang
+version "2025-11-02"
+
+data pythonUtilsLayer: aws/lambda/layerVersion {
+    filter "layerName" == "my-python-utils"
+    filter "versionNumber" == "1"
+
+    export layerVersionArn: string
+    export version: integer
+}
+
+export pythonUtilsLayerArn: string {
+    field = datasources.pythonUtilsLayer.layerVersionArn
+}
+```
 
 ```yaml
-variables:
-  layerName:
-    type: string
-    description: The name of the layer to retrieve
-    default: my-python-utils
-  layerVersion:
-    type: integer  
-    description: The version number of the layer
-    default: 1
+version: 2025-11-02
 
 datasources:
   pythonUtilsLayer:
     type: aws/lambda/layerVersion
-    metadata:
-      displayName: Python Utils Layer
     filter:
       - field: layerName
         operator: "="
-        search: ${variables.layerName}
+        search: my-python-utils
       - field: versionNumber
         operator: "="
-        search: ${variables.layerVersion}
+        search: 1
     exports:
-      arn:
-        type: string
-        aliasFor: arn
       layerVersionArn:
         type: string
-      compatibleRuntimes:
-        type: array
       version:
         type: integer
+
+exports:
+  pythonUtilsLayerArn:
+    type: string
+    field: datasources.pythonUtilsLayer.layerVersionArn
+```
+
+```javascript
+{
+  "version": "2025-11-02",
+  "datasources": {
+    "pythonUtilsLayer": {
+      "type": "aws/lambda/layerVersion",
+      "filter": [
+        { "field": "layerName", "operator": "=", "search": "my-python-utils" },
+        { "field": "versionNumber", "operator": "=", "search": 1 }
+      ],
+      "exports": {
+        "layerVersionArn": { "type": "string" },
+        "version": { "type": "integer" }
+      }
+    }
+  },
+  "exports": {
+    "pythonUtilsLayerArn": {
+      "type": "string",
+      "field": "datasources.pythonUtilsLayer.layerVersionArn"
+    }
+  }
+}
 ```
