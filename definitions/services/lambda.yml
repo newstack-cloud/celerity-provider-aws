@@ -367,8 +367,9 @@ linkDefinitions:
             - PutRolePolicy
           destroy:
             - DeleteRolePolicy
-          intermediaryType: existing
-          intermediaryExternalIdSource: resourceA.spec.role
+          config:
+            intermediaryType: existing
+            intermediaryExternalIdSource: resourceA.spec.role
     docLinks:
       - https://docs.aws.amazon.com/lambda/latest/dg/API_Invoke.html
       - https://docs.aws.amazon.com/lambda/latest/dg/API_EnvironmentVariable.html

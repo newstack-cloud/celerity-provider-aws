@@ -171,7 +171,6 @@ linkDefinitions:
           config:
             intermediaryType: existing
             intermediaryExternalIdSource: resourceB.spec.role
-            notes: "Adds DynamoDB stream read permissions to the Lambda execution role."
     docLinks:
       - https://docs.aws.amazon.com/lambda/latest/dg/with-ddb.html
       - https://docs.aws.amazon.com/lambda/latest/dg/API_CreateEventSourceMapping.html
