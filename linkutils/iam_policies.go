@@ -223,7 +223,7 @@ func ExtractPolicyNameAndCurrentPermissionSID(
 	}
 
 	permission, _ := pluginutils.GetValueByPath(
-		PermissionFieldPath(executionRoleName),
+		fmt.Sprintf("$%s", PermissionFieldPath(executionRoleName)),
 		linkData,
 	)
 	if permission == nil {
@@ -231,7 +231,7 @@ func ExtractPolicyNameAndCurrentPermissionSID(
 	}
 
 	currentPermSID, _ := pluginutils.GetValueByPath(
-		fmt.Sprintf("%s.Sid", PermissionFieldPath(executionRoleName)),
+		fmt.Sprintf("$%s.Sid", PermissionFieldPath(executionRoleName)),
 		linkData,
 	)
 	if currentPermSID == nil {
