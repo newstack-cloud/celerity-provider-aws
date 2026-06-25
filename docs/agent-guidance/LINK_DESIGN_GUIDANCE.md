@@ -36,3 +36,14 @@ Links **MUST NOT** carry rich, structured user input. The data attached to a lin
 When a relationship requires rich structured user input, model it as a resource: put the configuration on the resource spec, express the connections to the two related resources as substitution references (per the direct-dependency rule above), and use links only for the derived side-effects that "activate" the relationship (permissions, resource policies, IAM role policies).
 
 This keeps the resource/link boundary crisp and reuses the resource machinery (schema validation, substitution, drift detection, state) instead of reinventing it inside links. Precedent: AWS exposes an EventBridge target only as a sub-element of `PutTargets` (no standalone ARN), yet it carries rich per-target configuration, this allows it to be modelled as an `aws/events/target` resource (CRUD via `PutTargets`/`RemoveTargets`), mirroring how `aws/lambda/eventSourceMapping` is a resource that can also serve as a managed intermediary. The links from a target to its destination (Lambda, SQS, API destination) then carry no user input at all, only the derived permission/policy side-effects.
+
+## Two link shapes and reference-implied activation
+
+Links fall into two shapes depending on whether the relationship is also expressed as a field reference:
+
+- **No-field-reference links** (e.g. `aws/lambda/function → aws/dynamodb/table` access, `aws/dynamodb/table → aws/lambda/function` stream trigger): neither resource holds a field referencing the other; the connection lives entirely in an intermediary (event source mapping) or IAM policy. The `linkSelector` is the only thing the author writes, and the link manufactures everything.
+- **Field-reference links** (e.g. EventBridge `aws/events/rule → aws/lambda/function | aws/sqs/queue | aws/events/apiDestination`): the relationship is a required join field on the source, the rule's `targets[].arn` is wired with a `${...}` reference. That field is also the link's correlation key, so it cannot be removed.
+
+For a field-reference link, the `${...}` reference and a `linkSelector` would otherwise state the same relationship twice. To avoid that, mark the source field as a **wiring slot** by setting `ActivatesLinkOnReference: true` on its schema (for Cloud Control–generated resources, do this in a `services/cloudcontrol/overlays/{type}.go` overlay, see `events_rule.go`). When a reference to another resource is placed at a wiring slot, the framework activates the registered link for that type pair **without** a `linkSelector`.
+
+Use a wiring slot only for fields that *mean* "wire a resource here". A plain reference to another resource's output value (e.g. an endpoint string) at a non-slot field must never activate a link, the activation signal comes from the source slot and not from the referenced field.

@@ -51,22 +51,21 @@ Unit tests mock AWS service clients and do not require AWS credentials. They tes
 resource operations (create, update, destroy, get external state, stabilised) and link operations
 (update resource A/B, update intermediary resources, stage changes).
 
-Run unit tests for a specific service:
+Run all unit tests with the [test runner script](#test-runner-script):
 
 ```bash
+bash scripts/run-tests.sh --unit
+```
+
+The script runs the whole module. To run a focused subset while iterating, invoke `go test`
+directly with the `unit` tag:
+
+```bash
+# A specific service
 go test -tags=unit -count=1 ./services/lambda/...
-```
 
-Run unit tests for inter-service links:
-
-```bash
+# Inter-service links
 go test -tags=unit -count=1 ./inter-service-links/lambda_dynamodb/...
-```
-
-Run all unit tests:
-
-```bash
-go test -tags=unit -count=1 ./...
 ```
 
 ### Integration Tests
@@ -85,23 +84,71 @@ and destroy actual AWS resources.
 
 2. Ensure your AWS credentials are configured (via `aws configure` or environment variables).
 
-Run integration tests:
+Run integration tests with the [test runner script](#test-runner-script), which sources `.env.test`
+automatically:
 
 ```bash
-# Source the environment file first
-set -o allexport && source .env.test && set +o allexport
+bash scripts/run-tests.sh --integration
+```
 
-go test -tags=integration -count=1 -timeout 90s ./...
+To run a focused subset while iterating, source `.env.test` yourself and invoke `go test` directly
+with the `integration` tag:
+
+```bash
+set -o allexport && source .env.test && set +o allexport
+go test -tags=integration -count=1 -timeout 90s ./services/sqs/...
 ```
 
 Integration test files follow the naming convention `*_int_test.go`.
 
+#### End-to-end (e2e) integration tests
+
+The primary integration mechanism is the **end-to-end suite** in [`tests/e2e/`](../tests/e2e). It
+deploys real **blueprintlang** blueprints (under `tests/e2e/testdata/*.blueprint`) against a real AWS
+account by driving the blueprint framework's container **in process** with the AWS provider
+registered directly (no gRPC, no CLI, no plugin install). This exercises the real
+parse → stage → deploy → destroy path, the same core mechanism that practitioners use where resources, data
+sources and links are all covered through one harness, with `testify/suite` tables.
+
+How it works (`tests/e2e/harness.go`):
+
+```go
+//go:build integration
+
+package e2e
+
+func (s *ResourceE2ESuite) Test_resources() {
+    h := Setup(s.T())                                  // builds provider + in-memory state + loader;
+                                                       // skips if AWS_REGION is unset
+    inst := h.Deploy(s.T(), "queue_resource.blueprint", nil) // stage -> deploy -> read state;
+                                                       // registers a t.Cleanup that destroys it
+    s.Require().Equal(expectedARN, core.StringValue(inst.Export(s.T(), "queueArn")))
+    s.Require().Equal(expectedARN, core.StringValue(inst.ResourceSpec(s.T(), "queue").Fields["arn"]))
+}
+```
+
+Conventions:
+
+- **Blueprints are data, not Go.** Each case is a `.blueprint` file in `testdata/`. Blueprints use a
+  `namePrefix` blueprint variable (injected per run by the harness) so resource names are unique
+  across runs while the files stay static.
+- **Guaranteed teardown.** `h.Deploy` registers a `t.Cleanup` that stages a destroy and tears the
+  instance down (the real destroy path); a failed destroy fails the test.
+- **Data sources** are tested via **change staging** (`h.Stage`), which resolves data sources against
+  real AWS without deploying. The resolved values are read from the staged exports
+  (`ResolvedExport`). A blueprint must declare at least one resource, so data source blueprints include a
+  placeholder resource that is never deployed.
+- **Links** are established with `select by label { ... }` on one resource matching `metadata.labels`
+  on the other; the framework runs the link's resource/intermediary updates during deploy. Side
+  effects (redrive/queue/function policies, role inline policies, env vars, event source mappings)
+  are asserted via the raw AWS SDK helpers in `tests/e2e/aws_assertions.go`.
+
 ### Running All Tests
 
-To run both unit and integration tests together:
+To run both unit and integration tests together, use the [test runner script](#test-runner-script):
 
 ```bash
-go test -tags=unit,integration -count=1 -timeout 90s ./...
+bash scripts/run-tests.sh
 ```
 
 ### Test Runner Script
@@ -127,41 +174,59 @@ The script will:
 
 ### Test Structure
 
-Each resource implementation includes tests for all lifecycle operations:
+Most resources and data sources are **generated** and served by a single generic Cloud Control
+engine, so their behaviour is tested once at the engine level rather than per resource. See
+[CLOUD_CONTROL_RESOURCES.md](./agent-guidance/CLOUD_CONTROL_RESOURCES.md) for how generation works.
+
+**Generic Cloud Control engine** — the shared CRUD and data-source behaviour every generated type
+inherits is unit-tested here:
 
 ```
-services/{service}/
-  {resource}_resource_create_test.go       # Unit tests for create
-  {resource}_resource_update_test.go       # Unit tests for update
-  {resource}_resource_destroy_test.go      # Unit tests for destroy
-  {resource}_resource_get_external_state_test.go  # Unit tests for state fetch
-  {resource}_resource_stabilised_test.go   # Unit tests for stabilisation
-  {resource}_resource_create_int_test.go   # Integration tests (where applicable)
-  test_helpers_test.go                     # Shared test fixtures and helpers
+services/cloudcontrol/
+  cc_resource_create_test.go               # Create
+  cc_resource_update_test.go               # Update
+  cc_resource_destroy_test.go              # Destroy
+  cc_resource_get_external_state_test.go   # State fetch (incl. tag filtering)
+  cc_resource_stabilised_test.go           # Stabilisation
+  cc_data_source_fetch_test.go             # Data source fetch (fast + filter paths)
+  cc_data_source_filter_test.go            # Client-side filter operators
+  cc_data_source_flatten_test.go           # Schema-aware export flattening
+  cc_test_helpers_test.go                  # Shared engine test fixtures
 ```
 
-Link tests follow a similar pattern:
+**Generated per-type files** - schema/spec-definition assertions for each generated type, regenerated
+by the codegen (do not hand-edit):
 
 ```
-services/{service}/links/
+services/cloudcontrol/gen/
+  {service}_{type}.go                      # Generated resource/data source (e.g. sqs_queue.go)
+  {service}_{type}_test.go                 # Type/spec-definition tests
+  {service}_{type}_validation_test.go      # Schema attribute assertions
+```
+
+**Codegen** - `tools/awsgen` is covered by golden tests (`TestGolden`, `TestGoldenDataSources`) that
+compare emitted Go against `tools/awsgen/testdata/*.golden`. After an intentional codegen change,
+refresh them with `go test ./tools/awsgen -update` and commit the updated goldens.
+
+**Hand-written resources/data sources** - the flex VPC resource (`flex/`) and the Lambda data sources
+(`services/lambda/`) are not generated and keep their own unit tests plus a `test_helpers_test.go`
+with shared fixtures.
+
+**Links** are hand-written and tested per relationship:
+
+```
+services/{service}/links/                  # Intra-service links
+inter-service-links/{serviceA}_{serviceB}/ # Inter-service links
   {resourceA}__{resourceB}_link_update_test.go         # Update operation tests
   {resourceA}__{resourceB}_link_stage_changes_test.go  # Stage changes tests
 ```
 
-### Test Mocks
 
-Service mocks are in `internal/testutils/` and provide mock implementations of AWS service
-interfaces:
+#### Integration Tests
 
-- `dynamodb_mock/` - DynamoDB service mock
-- `ec2_mock/` - EC2 service mock
-- `iam_mock/` - IAM service mock
-- `lambda_mock/` - Lambda service mock
-- `sqs_mock/` - SQS service mock
-- `aws_config_loader_mock.go` - AWS config loader mock
-
-Each service directory also has a `test_helpers_test.go` file that sets up common test fixtures
-used across that service's tests.
+Most integration tests are the blueprint-driven end-to-end suite in [`tests/e2e/`](../tests/e2e)
+(blueprintlang fixtures under `tests/e2e/testdata/`).
+There are some exceptions where integration tests are written per resource or link, e.g. for the flex VPC resource and the inter-service links.
 
 ### Linting
 

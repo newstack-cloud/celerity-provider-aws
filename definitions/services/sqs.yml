@@ -1,46 +1,6 @@
 version: "1.0.0"
-resourceDefinitions:
-  - type: aws/sqs/queue
-    label: Amazon SQS Queue
-    requiredFields: []
-    computedFields:
-      - arn
-      - queueUrl
-    operations:
-      create:
-        - CreateQueue
-      update:
-        - SetQueueAttributes
-      destroy:
-        - DeleteQueue
-      getExternalState:
-        - GetQueueAttributes
-        - GetQueueUrl
-      tags:
-        saveTags: TagQueue
-        removeTags: UntagQueue
-    docLinks:
-      - https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_CreateQueue.html
-      - https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_SetQueueAttributes.html
-      - https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_DeleteQueue.html
-      - https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_GetQueueAttributes.html
-      - https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_GetQueueUrl.html
-      - https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_TagQueue.html
-      - https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_UntagQueue.html
-      - https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-sqs-queue.html
-    propertyDocLinks:
-      tags: https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-sqs-queue-tag.html
-
-dataSourceDefinitions:
-  - type: aws/sqs/queue
-    filterableFields:
-      - queueName
-      - queueUrl
-      - arn
-    docLinks:
-      - https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_GetQueueUrl.html
-      - https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_GetQueueAttributes.html
-      - https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/sqs_queue
+resourceDefinitions: []
+dataSourceDefinitions: []
 
 linkDefinitions:
   - resourceTypeA: aws/sqs/queue

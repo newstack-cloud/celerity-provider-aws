@@ -3,49 +3,50 @@ resourceDefinitions: []
 dataSourceDefinitions: []
 
 linkDefinitions:
-  # Link 1: EventBridge target invokes a Lambda function
-  # The target (A) links to the Lambda function (B) to grant invoke permission
-  # Semantics: "This target is allowed to invoke this Lambda function"
+  # Link 1: EventBridge rule invokes a Lambda function
+  # The rule (A) links to the Lambda function (B) to grant invoke permission
+  # Semantics: "This rule is allowed to invoke this Lambda function"
   #
-  # The target -> function wiring (PutTargets) and all per-target user input
-  # (input/inputTransformer/retryPolicy/deadLetterConfig/...) live on the
-  # aws/events/target resource, referencing the function via target.arn. This link
-  # carries no user input - only the resource-based permission side-effect.
-  - resourceTypeA: aws/events/target
+  # The rule -> function wiring (the targets[] entry) and all per-target user input
+  # (input/inputTransformer/retryPolicy/deadLetterConfig/...) are modelled inline on
+  # the aws/events/rule resource, referencing the function via the target entry arn.
+  # This link carries no user input, only the resource-based permission side-effect.
+  - resourceTypeA: aws/events/rule
     resourceTypeB: aws/lambda/function
     kind: soft
     priorityResource: none
-    summary: A link that grants an EventBridge target permission to invoke a Lambda function via the function's resource-based policy.
+    summary: A link that grants an EventBridge rule permission to invoke a Lambda function via the function's resource-based policy.
     annotations:
       resourceA: []
       resourceB: []
     operations:
       updateResourceA: {}
-      updateResourceB:
-        create:
-          - AddPermission
-        update:
-          - RemovePermission
-          - AddPermission
-        destroy:
-          - RemovePermission
-      updateIntermediaryResources: {}
+      updateResourceB: {}
+      updateIntermediaryResources:
+        aws/lambda/permission:
+          create:
+            - AddPermission
+          update:
+            - RemovePermission
+            - AddPermission
+          destroy:
+            - RemovePermission
+          config:
+            intermediaryType: managed
+            config:
+              functionName: resourceB.state.arn
+              sourceArn: resourceA.state.arn
     docLinks:
       - https://docs.aws.amazon.com/lambda/latest/dg/API_AddPermission.html
       - https://docs.aws.amazon.com/lambda/latest/dg/API_RemovePermission.html
       - https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-use-resource-based.html
     notes: |
       For Lambda targets, EventBridge relies on the function's resource-based policy
-      rather than an execution role, so no roleArn is needed on the target. This
-      link carries no user input: it grants invocation permission on the function
-      via AddPermission with a deterministic StatementId, Action
-      lambda:InvokeFunction, Principal events.amazonaws.com and SourceArn set to the
-      rule ARN that the target belongs to (derived from resourceA.spec.rule), and
-      removes the statement via RemovePermission when the link is destroyed.
+      rather than an execution role, so no roleArn is needed on the target entry.
 
-      The target -> function wiring itself (PutTargets) is owned by the
-      aws/events/target resource via a substitution reference (target.arn), not by
-      this link.
+      The rule -> function wiring itself (the targets[] entry) is modelled inline on
+      the aws/events/rule resource (referencing the function via the target entry
+      arn), not by this link.
 
   # Link 2: Lambda function publishes events to an event bus (access link)
   # The Lambda function (A) links to the event bus (B) to send events to it

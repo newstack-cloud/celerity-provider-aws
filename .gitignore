@@ -71,3 +71,8 @@ misc
 # Claude workflow/plan files used by individuals to streamline
 # resource, link and data source development.
 CLAUDE.md
+
+# Ignore awsgen tool binary output.
+awsgen
+# Ensure the AWS gen tool itself is not ignored.
+!tools/awsgen
