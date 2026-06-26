@@ -8,19 +8,17 @@ import (
 	eventslambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/events_lambda"
 	eventssqs "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/events_sqs"
 	lambdadynamodb "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_dynamodb"
-	"github.com/newstack-cloud/bluelink-provider-aws/services/dynamodb"
+	cloudcontrolgen "github.com/newstack-cloud/bluelink-provider-aws/services/cloudcontrol/gen"
+	cloudcontrolservice "github.com/newstack-cloud/bluelink-provider-aws/services/cloudcontrol/service"
 	dynamodbservice "github.com/newstack-cloud/bluelink-provider-aws/services/dynamodb/service"
 	ec2service "github.com/newstack-cloud/bluelink-provider-aws/services/ec2/service"
-	"github.com/newstack-cloud/bluelink-provider-aws/services/events"
 	eventslinks "github.com/newstack-cloud/bluelink-provider-aws/services/events/links"
 	eventsservice "github.com/newstack-cloud/bluelink-provider-aws/services/events/service"
-	"github.com/newstack-cloud/bluelink-provider-aws/services/iam"
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/services/lambda"
 	lambdalinks "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/links"
 	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
 	resgrouptagservice "github.com/newstack-cloud/bluelink-provider-aws/services/resgrouptag/service"
-	"github.com/newstack-cloud/bluelink-provider-aws/services/sqs"
 	sqslinks "github.com/newstack-cloud/bluelink-provider-aws/services/sqs/links"
 	sqsservice "github.com/newstack-cloud/bluelink-provider-aws/services/sqs/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/utils"
@@ -39,141 +37,30 @@ func NewProvider(
 	sqsServiceFactory pluginutils.ServiceFactory[*aws.Config, sqsservice.Service],
 	dynamodbServiceFactory pluginutils.ServiceFactory[*aws.Config, dynamodbservice.Service],
 	eventsServiceFactory pluginutils.ServiceFactory[*aws.Config, eventsservice.Service],
+	cloudControlServiceFactory pluginutils.ServiceFactory[*aws.Config, cloudcontrolservice.Service],
 	awsConfigStore *utils.AWSConfigStore,
 ) provider.Provider {
 	return &providerv1.ProviderPluginDefinition{
 		ProviderNamespace:        "aws",
 		ProviderConfigDefinition: providerConfigDefinition(),
-		Resources: map[string]provider.Resource{
-			"aws/iam/role": iam.RoleResource(
-				iamServiceFactory,
+		Resources: mergeResources(
+			map[string]provider.Resource{
+				"aws/flex/vpc": flex.VPCResource(
+					ec2ServiceFactory,
+					resourceGroupTaggingServiceFactory,
+					awsConfigStore,
+				),
+			},
+			cloudcontrolgen.GeneratedResources(
+				cloudControlServiceFactory,
 				resourceGroupTaggingServiceFactory,
 				awsConfigStore,
 			),
-			"aws/iam/user": iam.UserResource(
-				iamServiceFactory,
-				resourceGroupTaggingServiceFactory,
-				awsConfigStore,
-			),
-			"aws/iam/group": iam.GroupResource(
-				iamServiceFactory,
-				awsConfigStore,
-			),
-			"aws/iam/accessKey": iam.AccessKeyResource(
-				iamServiceFactory,
-				awsConfigStore,
-			),
-			"aws/iam/instanceProfile": iam.InstanceProfileResource(
-				iamServiceFactory,
-				awsConfigStore,
-			),
-			"aws/iam/managedPolicy": iam.ManagedPolicyResource(
-				iamServiceFactory,
-				resourceGroupTaggingServiceFactory,
-				awsConfigStore,
-			),
-			"aws/iam/oidcProvider": iam.OIDCProviderResource(
-				iamServiceFactory,
-				resourceGroupTaggingServiceFactory,
-				awsConfigStore,
-			),
-			"aws/iam/samlProvider": iam.SAMLProviderResource(
-				iamServiceFactory,
-				resourceGroupTaggingServiceFactory,
-				awsConfigStore,
-			),
-			"aws/iam/serverCertificate": iam.ServerCertificateResource(
-				iamServiceFactory,
-				resourceGroupTaggingServiceFactory,
-				awsConfigStore,
-			),
-			"aws/lambda/function": lambda.FunctionResource(
-				lambdaServiceFactory,
-				resourceGroupTaggingServiceFactory,
-				awsConfigStore,
-			),
-			"aws/lambda/functionVersion": lambda.FunctionVersionResource(
-				lambdaServiceFactory,
-				awsConfigStore,
-			),
-			"aws/lambda/functionUrl": lambda.FunctionUrlResource(
-				lambdaServiceFactory,
-				awsConfigStore,
-			),
-			"aws/lambda/alias": lambda.AliasResource(
-				lambdaServiceFactory,
-				awsConfigStore,
-			),
-			"aws/lambda/codeSigningConfig": lambda.CodeSigningConfigResource(
-				lambdaServiceFactory,
-				resourceGroupTaggingServiceFactory,
-				awsConfigStore,
-			),
-			"aws/lambda/eventSourceMapping": lambda.EventSourceMappingResource(
-				lambdaServiceFactory,
-				resourceGroupTaggingServiceFactory,
-				awsConfigStore,
-			),
-			"aws/lambda/eventInvokeConfig": lambda.EventInvokeConfigResource(
-				lambdaServiceFactory,
-				awsConfigStore,
-			),
-			"aws/lambda/layerVersion": lambda.LayerVersionResource(
-				lambdaServiceFactory,
-				awsConfigStore,
-			),
-			"aws/lambda/layerVersionPermission": lambda.LayerVersionPermissionResource(
-				lambdaServiceFactory,
-				awsConfigStore,
-			),
-			"aws/flex/vpc": flex.VPCResource(
-				ec2ServiceFactory,
-				resourceGroupTaggingServiceFactory,
-				awsConfigStore,
-			),
-			"aws/sqs/queue": sqs.QueueResource(
-				sqsServiceFactory,
-				resourceGroupTaggingServiceFactory,
-				awsConfigStore,
-			),
-			"aws/dynamodb/table": dynamodb.TableResource(
-				dynamodbServiceFactory,
-				resourceGroupTaggingServiceFactory,
-				awsConfigStore,
-			),
-			"aws/dynamodb/globalTable": dynamodb.GlobalTableResource(
-				dynamodbServiceFactory,
-				resourceGroupTaggingServiceFactory,
-				awsConfigStore,
-			),
-			"aws/events/eventBus": events.EventBusResource(
-				eventsServiceFactory,
-				resourceGroupTaggingServiceFactory,
-				awsConfigStore,
-			),
-			"aws/events/rule": events.RuleResource(
-				eventsServiceFactory,
-				resourceGroupTaggingServiceFactory,
-				awsConfigStore,
-			),
-			"aws/events/target": events.TargetResource(
-				eventsServiceFactory,
-				awsConfigStore,
-			),
-			"aws/events/archive": events.ArchiveResource(
-				eventsServiceFactory,
-				awsConfigStore,
-			),
-			"aws/events/connection": events.ConnectionResource(
-				eventsServiceFactory,
-				awsConfigStore,
-			),
-			"aws/events/apiDestination": events.ApiDestinationResource(
-				eventsServiceFactory,
-				awsConfigStore,
-			),
-		},
-		DataSources: map[string]provider.DataSource{
+		),
+		// Lambda data sources stay hand-written (they surface deployment/runtime
+		// metadata beyond the CloudFormation model); every other data source is served
+		// by the generated Cloud Control engine (cloudcontrolgen.GeneratedDataSources).
+		DataSources: mergeDataSources(map[string]provider.DataSource{
 			"aws/lambda/function": lambda.FunctionDataSource(
 				lambdaServiceFactory,
 				awsConfigStore,
@@ -194,27 +81,10 @@ func NewProvider(
 				lambdaServiceFactory,
 				awsConfigStore,
 			),
-			"aws/dynamodb/table": dynamodb.TableDataSource(
-				dynamodbServiceFactory,
-				awsConfigStore,
-			),
-			"aws/dynamodb/globalTable": dynamodb.GlobalTableDataSource(
-				dynamodbServiceFactory,
-				awsConfigStore,
-			),
-			"aws/events/eventBus": events.EventBusDataSource(
-				eventsServiceFactory,
-				awsConfigStore,
-			),
-			"aws/events/rule": events.RuleDataSource(
-				eventsServiceFactory,
-				awsConfigStore,
-			),
-			"aws/sqs/queue": sqs.QueueDataSource(
-				sqsServiceFactory,
-				awsConfigStore,
-			),
-		},
+		}, cloudcontrolgen.GeneratedDataSources(
+			cloudControlServiceFactory,
+			awsConfigStore,
+		)),
 		Links: map[string]provider.Link{
 			"aws/lambda/function::aws/lambda/function": lambdalinks.FunctionFunctionLink(
 				iamServiceFactory,
@@ -287,35 +157,17 @@ func NewProvider(
 					},
 				},
 			),
-			"aws/events/target::aws/lambda/function": eventslambda.TargetFunctionLink(
-				eventslambda.TargetToFunctionLinkDeps{
-					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, eventsservice.Service]{
-						ServiceFactory: eventsServiceFactory,
-						ConfigStore:    awsConfigStore,
-					},
-					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
-						ServiceFactory: lambdaServiceFactory,
-						ConfigStore:    awsConfigStore,
-					},
-				},
-			),
-			"aws/events/target::aws/sqs/queue": eventssqs.TargetQueueLink(
-				eventssqs.TargetToQueueLinkDeps{
-					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, eventsservice.Service]{
-						ServiceFactory: eventsServiceFactory,
-						ConfigStore:    awsConfigStore,
-					},
-					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, sqsservice.Service]{
-						ServiceFactory: sqsServiceFactory,
-						ConfigStore:    awsConfigStore,
-					},
-				},
-			),
-			// Intra-service links: EventBridge target <-> API destination
-			"aws/events/target::aws/events/apiDestination": eventslinks.TargetApiDestinationLink(
+			// Rule -> Lambda function: the invoke permission is a self-contained
+			// managed intermediary deployed through the framework's ResourceService,
+			// so this link needs no AWS service factories.
+			"aws/events/rule::aws/lambda/function": eventslambda.RuleFunctionLink(),
+			// Rule -> SQS queue: same managed-intermediary model (queue inline policy).
+			"aws/events/rule::aws/sqs/queue": eventssqs.RuleQueueLink(),
+			// Intra-service links: EventBridge rule <-> API destination
+			"aws/events/rule::aws/events/apiDestination": eventslinks.RuleApiDestinationLink(
 				iamServiceFactory,
 			)(
-				eventslinks.TargetToApiDestinationLinkDeps{
+				eventslinks.RuleToApiDestinationLinkDeps{
 					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, eventsservice.Service]{
 						ServiceFactory: eventsServiceFactory,
 						ConfigStore:    awsConfigStore,
@@ -330,6 +182,30 @@ func NewProvider(
 		CustomVariableTypes: map[string]provider.CustomVariableType{},
 		Functions:           map[string]provider.Function{},
 	}
+}
+
+func mergeResources(
+	base map[string]provider.Resource,
+	generated map[string]provider.Resource,
+) map[string]provider.Resource {
+	for resourceType, resource := range generated {
+		if _, exists := base[resourceType]; !exists {
+			base[resourceType] = resource
+		}
+	}
+	return base
+}
+
+func mergeDataSources(
+	base map[string]provider.DataSource,
+	generated map[string]provider.DataSource,
+) map[string]provider.DataSource {
+	for dataSourceType, dataSource := range generated {
+		if _, exists := base[dataSourceType]; !exists {
+			base[dataSourceType] = dataSource
+		}
+	}
+	return base
 }
 
 func providerConfigDefinition() *core.ConfigDefinition {

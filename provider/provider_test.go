@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	cloudcontrolservice "github.com/newstack-cloud/bluelink-provider-aws/services/cloudcontrol/service"
 	dynamodbservice "github.com/newstack-cloud/bluelink-provider-aws/services/dynamodb/service"
 	ec2service "github.com/newstack-cloud/bluelink-provider-aws/services/ec2/service"
 	eventsservice "github.com/newstack-cloud/bluelink-provider-aws/services/events/service"
@@ -74,6 +75,7 @@ func (s *ProviderSuite) Test_loads_provider_and_applies_duration_validation() {
 		sqsservice.NewService,
 		dynamodbservice.NewService,
 		eventsservice.NewService,
+		cloudcontrolservice.NewService,
 		configStore,
 	)
 	configDef, err := provider.ConfigDefinition(context.Background())
@@ -162,6 +164,7 @@ func (s *ProviderSuite) Test_loads_provider_and_applies_role_arn_validation() {
 		sqsservice.NewService,
 		dynamodbservice.NewService,
 		eventsservice.NewService,
+		cloudcontrolservice.NewService,
 		configStore,
 	)
 	configDef, err := provider.ConfigDefinition(context.Background())
