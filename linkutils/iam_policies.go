@@ -1,193 +1,14 @@
 package linkutils
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
-	"slices"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/iam"
-	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
-	"github.com/newstack-cloud/bluelink-provider-aws/utils"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
-	"github.com/newstack-cloud/bluelink/libs/blueprint/linkhelpers"
-	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
-	"github.com/newstack-cloud/bluelink/libs/blueprint/state"
-	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 )
 
-// CreateNewRolePolicy creates a new role policy with the given statements.
-// This is useful for links that require permissions to be added to a specific role
-// to "activate" the link.
-func CreateNewRolePolicy(
-	ctx context.Context,
-	iamService iamservice.Service,
-	instanceName string,
-	roleName string,
-	statements []map[string]any,
-) (string, error) {
-	policyDoc := map[string]any{
-		"Version":   "2012-10-17",
-		"Statement": statements,
-	}
-
-	policyName, err := utils.IAMPolicyNameGenerator(&provider.ResourceDeployInput{
-		InstanceName: instanceName,
-		Changes: &provider.Changes{
-			AppliedResourceInfo: provider.ResourceInfo{
-				ResourceName: roleName,
-			},
-		},
-	})
-	if err != nil {
-		return "", err
-	}
-
-	policyDocJSON, err := json.Marshal(policyDoc)
-	if err != nil {
-		return "", err
-	}
-
-	_, err = iamService.PutRolePolicy(ctx, &iam.PutRolePolicyInput{
-		RoleName:       aws.String(roleName),
-		PolicyName:     aws.String(policyName),
-		PolicyDocument: aws.String(string(policyDocJSON)),
-	})
-	return policyName, err
-}
-
-// UpdateExistingRolePolicy updates an existing role policy with the given statements.
-// This is useful for links that require permissions to be added to a specific role
-// to "activate" the link.
-func UpdateExistingRolePolicy(
-	ctx context.Context,
-	iamService iamservice.Service,
-	roleName string,
-	policyName string,
-	statements []map[string]any,
-	currentPermSIDs []string,
-) error {
-	policyDocument, err := iamService.GetRolePolicy(ctx, &iam.GetRolePolicyInput{
-		RoleName:   aws.String(roleName),
-		PolicyName: aws.String(policyName),
-	})
-	if err != nil {
-		return err
-	}
-
-	policyDoc := map[string]any{}
-	err = json.Unmarshal([]byte(aws.ToString(policyDocument.PolicyDocument)), &policyDoc)
-	if err != nil {
-		return err
-	}
-
-	// Ensure that the current permission SID for this link is removed
-	// to avoid duplicate permissions and ensuring old versions of the permission
-	// are cleaned up.
-	statementList, isList := policyDoc["Statement"].([]any)
-	if !isList {
-		return fmt.Errorf("policy document \"Statement\" property is not a list")
-	}
-
-	filteredStatements := withoutStatementIDs(
-		statementList,
-		currentPermSIDs,
-	)
-	policyDoc["Statement"] = append(
-		filteredStatements,
-		statements,
-	)
-
-	policyDocJSON, err := json.Marshal(policyDoc)
-	if err != nil {
-		return err
-	}
-
-	_, err = iamService.PutRolePolicy(ctx, &iam.PutRolePolicyInput{
-		RoleName:       aws.String(roleName),
-		PolicyName:     aws.String(policyName),
-		PolicyDocument: aws.String(string(policyDocJSON)),
-	})
-	return err
-}
-
-// RemoveExistingRolePolicyPermissions removes the specified permissions from an existing role policy.
-// If the specified permissions are the only ones in the policy, the role policy will be removed.
-func RemoveExistingRolePolicyPermissions(
-	ctx context.Context,
-	iamService iamservice.Service,
-	roleName string,
-	policyName string,
-	permissionsToRemove []string,
-) error {
-	policyDocument, err := iamService.GetRolePolicy(ctx, &iam.GetRolePolicyInput{
-		RoleName:   aws.String(roleName),
-		PolicyName: aws.String(policyName),
-	})
-	if err != nil {
-		return err
-	}
-
-	policyDoc := map[string]any{}
-	err = json.Unmarshal([]byte(aws.ToString(policyDocument.PolicyDocument)), &policyDoc)
-	if err != nil {
-		return err
-	}
-
-	statementList, isList := policyDoc["Statement"].([]any)
-	if !isList {
-		return fmt.Errorf("policy document \"Statement\" property is not a list")
-	}
-
-	statements := withoutStatementIDs(
-		statementList,
-		permissionsToRemove,
-	)
-
-	if len(statements) == 0 {
-		_, err = iamService.DeleteRolePolicy(ctx, &iam.DeleteRolePolicyInput{
-			RoleName:   aws.String(roleName),
-			PolicyName: aws.String(policyName),
-		})
-		return err
-	}
-
-	policyDocJSON, err := json.Marshal(policyDoc)
-	if err != nil {
-		return err
-	}
-
-	_, err = iamService.PutRolePolicy(ctx, &iam.PutRolePolicyInput{
-		RoleName:       aws.String(roleName),
-		PolicyName:     aws.String(policyName),
-		PolicyDocument: aws.String(string(policyDocJSON)),
-	})
-	return err
-}
-
-func withoutStatementIDs(
-	statements []any,
-	excludeStatementIDs []string,
-) []any {
-	filteredStatements := []any{}
-	for _, statement := range statements {
-		statementMap, isMap := statement.(map[string]any)
-		sid, _ := statementMap["Sid"].(string)
-		if isMap && !slices.Contains(excludeStatementIDs, sid) {
-			filteredStatements = append(filteredStatements, statement)
-		}
-	}
-	return filteredStatements
-}
-
-// PermissionFieldPath returns the field path for a permission (statement)
-// object in the link data.
-// This should be used across all link implementations that store permissions
-// in the link data.
-func PermissionFieldPath(executionRoleName string) string {
-	return fmt.Sprintf("[%q].%s", executionRoleName, PermissionFieldName)
-}
+// This file holds the small link-data field conventions shared by links that grant
+// IAM permissions. The role-policy read-modify-write itself is handled by the
+// permission allocator in role_access_policy.go (see ReconcileRoleAccessPolicy).
 
 const (
 	// PermissionFieldName is the name of the field in the link data that
@@ -195,48 +16,64 @@ const (
 	// This should be used across all link implementations that store permissions
 	// in the link data.
 	PermissionFieldName = "permission"
-	// PolicyNameFieldName is the name of the field in the link data that
-	// contains the policy name.
-	// This should be used across all link implementations that store policy names
-	// in the link data.
-	PolicyNameFieldName = "policyName"
+	// ManagedPolicyArnFieldName is the name of the field in the link data that holds
+	// the ARN of the allocator's managed policy when a grant overflows from the
+	// role's inline policy into an attached managed policy.
+	ManagedPolicyArnFieldName = "managedPolicyArn"
 )
 
-// ExtractPolicyNameAndCurrentPermissionSID extracts the policy name and current
-// permission SID from the link data.
-func ExtractPolicyNameAndCurrentPermissionSID(
-	currentLinkState *state.LinkState,
-	executionRoleName string,
-	rolePolicies *iam.ListRolePoliciesOutput,
-) (string, string) {
-	if currentLinkState == nil {
-		return rolePolicies.PolicyNames[0], ""
-	}
+// PermissionFieldPath returns the field path for a permission (statement)
+// object in the link data, keyed by the execution role's link-data name.
+// This should be used across all link implementations that store permissions
+// in the link data.
+func PermissionFieldPath(executionRoleName string) string {
+	return fmt.Sprintf("[%q].%s", executionRoleName, PermissionFieldName)
+}
 
-	linkData := linkhelpers.GetLinkDataFromState(currentLinkState)
-	policyName, _ := pluginutils.GetValueByPath(
-		fmt.Sprintf("$[%q].%s", executionRoleName, PolicyNameFieldName),
-		linkData,
+// ManagedPolicyArnFieldPath returns the field path for the managed policy ARN in the
+// link data, keyed by the execution role's link-data name.
+func ManagedPolicyArnFieldPath(executionRoleName string) string {
+	return fmt.Sprintf("[%q].%s", executionRoleName, ManagedPolicyArnFieldName)
+}
+
+// InlineAccessStatementPath returns the ResourceDataMappings key that targets this
+// link's statement (by Sid) within the role's shared inline allocator policy, so the
+// role's drift/deploy attributes the statement to the link instead of stripping it.
+func InlineAccessStatementPath(roleResourceName, sid string) string {
+	return fmt.Sprintf(
+		"%s::spec.policies[@.policyName=%q].policyDocument.statement[@.sid=%q]",
+		roleResourceName,
+		inlineAccessPolicyName,
+		sid,
 	)
-	if policyName == nil {
-		return rolePolicies.PolicyNames[0], ""
-	}
+}
 
-	permission, _ := pluginutils.GetValueByPath(
-		fmt.Sprintf("$%s", PermissionFieldPath(executionRoleName)),
-		linkData,
-	)
-	if permission == nil {
-		return core.StringValue(policyName), ""
-	}
+// ManagedAccessArnPath returns the ResourceDataMappings key that targets the
+// allocator's attached managed policy ARN within the role's managedPolicyArns, so
+// the role's drift/deploy attributes the attachment to the link instead of
+// detaching it. Used for managed (overflow) placements.
+func ManagedAccessArnPath(roleResourceName, arn string) string {
+	return fmt.Sprintf("%s::spec.managedPolicyArns[@=%q]", roleResourceName, arn)
+}
 
-	currentPermSID, _ := pluginutils.GetValueByPath(
-		fmt.Sprintf("$%s.Sid", PermissionFieldPath(executionRoleName)),
-		linkData,
-	)
-	if currentPermSID == nil {
-		return core.StringValue(policyName), ""
+// AppendRoleAccessMapping records, into mappings and the role's link-data node, the
+// attribution for an allocator placement so the role does not treat the grant as
+// drift. Inline placements map the statement (by Sid); managed (overflow)
+// placements map the attached managed policy ARN (and add it to the link data).
+// roleLinkData is the per-role link-data object (the value stored under the role's
+// link-data key) and may be mutated to carry the managed policy ARN.
+func AppendRoleAccessMapping(
+	mappings map[string]string,
+	roleLinkData *core.MappingNode,
+	roleResourceName, linkDataKey, sid string,
+	result RoleAccessResult,
+) {
+	if result.PlacedSlotInline {
+		mappings[InlineAccessStatementPath(roleResourceName, sid)] = PermissionFieldPath(linkDataKey)
+		return
 	}
-
-	return core.StringValue(policyName), core.StringValue(currentPermSID)
+	if result.PlacedSlotARN != "" {
+		roleLinkData.Fields[ManagedPolicyArnFieldName] = core.MappingNodeFromString(result.PlacedSlotARN)
+		mappings[ManagedAccessArnPath(roleResourceName, result.PlacedSlotARN)] = ManagedPolicyArnFieldPath(linkDataKey)
+	}
 }

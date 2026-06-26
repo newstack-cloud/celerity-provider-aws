@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -66,12 +67,15 @@ func SetupLinkFromLambdaFunction(
 
 	if setupData.LoadRoleInfo {
 		roleARN := aws.ToString(lambdaOutput.Configuration.Role)
+		// The function stores its execution role as an ARN, but an aws/iam/role's
+		// external ID in state is its role name (the Cloud Control primary identifier),
+		// so the lookup must match on the name derived from the ARN.
 		roleResourceState, err := resourceService.LookupResourceInState(
 			ctx,
 			&provider.ResourceLookupInput{
 				InstanceID:      pluginutils.GetInstanceID(setupData.LambdaFuncResourceInfo),
 				ResourceType:    "aws/iam/role",
-				ExternalID:      roleARN,
+				ExternalID:      RoleNameFromARN(roleARN),
 				ProviderContext: providerCtx,
 			},
 		)
@@ -89,7 +93,7 @@ func SetupLinkFromLambdaFunction(
 		}
 
 		roleName, hasRoleName := pluginutils.GetValueByPath(
-			"$.name",
+			"$.roleName",
 			roleResourceState.SpecData,
 		)
 		if !hasRoleName {
@@ -107,6 +111,17 @@ func SetupLinkFromLambdaFunction(
 	return setupCtx, nil
 }
 
+// RoleNameFromARN extracts the IAM role name from a role ARN of the form
+// arn:aws:iam::<account>:role/<roleName> (the role name is the final path segment,
+// so this also handles ARNs that include a path).
+func RoleNameFromARN(roleARN string) string {
+	idx := strings.LastIndex(roleARN, "/")
+	if idx == -1 {
+		return roleARN
+	}
+	return roleARN[idx+1:]
+}
+
 // UpdateLambdaEnvironmentVariables updates the environment variables for a Lambda function
 // by merging the current environment variables with the new ones.
 // This is mostly useful for links that connect lambda functions to other resources.
@@ -118,7 +133,10 @@ func UpdateLambdaEnvironmentVariables(
 	envVarsToSet map[string]string,
 ) error {
 	finalEnvVars := map[string]string{}
-	maps.Copy(finalEnvVars, currentConfig.Environment.Variables)
+	// A freshly created function has no environment configured, so Environment is nil.
+	if currentConfig != nil && currentConfig.Environment != nil {
+		maps.Copy(finalEnvVars, currentConfig.Environment.Variables)
+	}
 	maps.Copy(finalEnvVars, envVarsToSet)
 
 	_, err := lambdaService.UpdateFunctionConfiguration(
@@ -144,7 +162,9 @@ func RemoveLambdaEnvironmentVariables(
 	envVarsToRemove []string,
 ) error {
 	finalEnvVars := map[string]string{}
-	maps.Copy(finalEnvVars, currentConfig.Environment.Variables)
+	if currentConfig != nil && currentConfig.Environment != nil {
+		maps.Copy(finalEnvVars, currentConfig.Environment.Variables)
+	}
 
 	for _, envVarName := range envVarsToRemove {
 		delete(finalEnvVars, envVarName)
