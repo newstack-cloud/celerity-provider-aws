@@ -186,6 +186,8 @@ type iamServiceMock struct {
 	deletePolicyVersionError  error
 	listPolicyVersionsOutput  *iam.ListPolicyVersionsOutput
 	listPolicyVersionsError   error
+	getPolicyVersionOutput    *iam.GetPolicyVersionOutput
+	getPolicyVersionError     error
 
 	// Policy tag-related mock fields
 	tagPolicyOutput      *iam.TagPolicyOutput
@@ -1098,6 +1100,18 @@ func WithListPolicyVersionsOutput(output *iam.ListPolicyVersionsOutput) iamServi
 func WithListPolicyVersionsError(err error) iamServiceMockOption {
 	return func(m *iamServiceMock) {
 		m.listPolicyVersionsError = err
+	}
+}
+
+func WithGetPolicyVersionOutput(output *iam.GetPolicyVersionOutput) iamServiceMockOption {
+	return func(m *iamServiceMock) {
+		m.getPolicyVersionOutput = output
+	}
+}
+
+func WithGetPolicyVersionError(err error) iamServiceMockOption {
+	return func(m *iamServiceMock) {
+		m.getPolicyVersionError = err
 	}
 }
 
@@ -2034,6 +2048,15 @@ func (m *iamServiceMock) ListPolicyVersions(
 ) (*iam.ListPolicyVersionsOutput, error) {
 	m.RegisterCall(ctx, params)
 	return m.listPolicyVersionsOutput, m.listPolicyVersionsError
+}
+
+func (m *iamServiceMock) GetPolicyVersion(
+	ctx context.Context,
+	params *iam.GetPolicyVersionInput,
+	optFns ...func(*iam.Options),
+) (*iam.GetPolicyVersionOutput, error) {
+	m.RegisterCall(ctx, params)
+	return m.getPolicyVersionOutput, m.getPolicyVersionError
 }
 
 func (m *iamServiceMock) TagPolicy(
