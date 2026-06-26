@@ -515,7 +515,7 @@ func rdsDBInstanceSchema() *provider.ResourceDefinitionsSchema {
 					},
 					"secretArn": &provider.ResourceDefinitionsSchema{
 						Type:        provider.ResourceDefinitionsSchemaTypeString,
-						Description: "The Amazon Resource Name (ARN) of the secret. This parameter is a return value that you can retrieve using the `Fn::GetAtt` intrinsic function. For more information, see Return values.",
+						Description: "The Amazon Resource Name (ARN) of the secret.",
 						Nullable:    true,
 						Computed:    true,
 					},

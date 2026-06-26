@@ -241,7 +241,7 @@ func lambdaFunctionSchema() *provider.ResourceDefinitionsSchema {
 			"fileSystemConfigs": &provider.ResourceDefinitionsSchema{
 				Type:        provider.ResourceDefinitionsSchemaTypeArray,
 				Label:       "File System Configs",
-				Description: "Connection settings for an Amazon EFS or Amazon S3 Files file system. To connect a function to a file system, a mount target must be available in every Availability Zone that your function connects to. If your blueprint contains an EFS mount target or S3Files mount target resource, you must also specify a `DependsOn` attribute to ensure that the mount target is created or updated before the function.\n For more information about using the `DependsOn` attribute, see DependsOn Attribute.",
+				Description: "Connection settings for an Amazon EFS or Amazon S3 Files file system. To connect a function to a file system, a mount target must be available in every Availability Zone that your function connects to.",
 				Nullable:    true,
 				Items: &provider.ResourceDefinitionsSchema{
 					Type:        provider.ResourceDefinitionsSchemaTypeObject,

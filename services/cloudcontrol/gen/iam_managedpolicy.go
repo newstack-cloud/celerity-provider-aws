@@ -82,7 +82,7 @@ func iamManagedPolicySchema() *provider.ResourceDefinitionsSchema {
 			},
 			"managedPolicyName": &provider.ResourceDefinitionsSchema{
 				Type:         provider.ResourceDefinitionsSchemaTypeString,
-				Description:  "The friendly name of the policy.\n If you specify a name, you cannot perform updates that require replacement of this resource. You can perform updates that require no or some interruption. If you must replace the resource, specify a new name.\n If you specify a name, you must specify the `CAPABILITY_NAMED_IAM` value to acknowledge your blueprint's capabilities. For more information, see Acknowledging Resources in Blueprints.\n Naming an IAM resource can cause an unrecoverable error if you reuse the same blueprint in multiple Regions. To prevent this, we recommend using `Fn::Join` and `the region` to create a Region-specific name, as in the following example: `{\"Fn::Join\": [\"\", [{\"Ref\": \"the region\"}, {\"Ref\": \"MyResourceName\"}]]}`.",
+				Description:  "The friendly name of the policy.\n If you specify a name, you cannot perform updates that require replacement of this resource. You can perform updates that require no or some interruption. If you must replace the resource, specify a new name.\n If you specify a name, you must specify the `CAPABILITY_NAMED_IAM` value to acknowledge your blueprint's capabilities. For more information, see Acknowledging Resources in Blueprints.\n Naming an IAM resource can cause an unrecoverable error if you reuse the same blueprint in multiple Regions.",
 				Nullable:     true,
 				MustRecreate: true,
 			},
@@ -115,7 +115,7 @@ func iamManagedPolicySchema() *provider.ResourceDefinitionsSchema {
 			"roles": &provider.ResourceDefinitionsSchema{
 				Type:        provider.ResourceDefinitionsSchemaTypeArray,
 				Label:       "Roles",
-				Description: "The name (friendly name, not ARN) of the role to attach the policy to.\n This parameter allows (per its [regex pattern](https://docs.aws.amazon.com/http://wikipedia.org/wiki/regex)) a string of characters consisting of upper and lowercase alphanumeric characters with no spaces. You can also include any of the following characters: _+=,.@-\n If an external policy (such as IAM policy or IAM managed policy) has a `Ref` to a role and if a resource (such as ECS service) also has a `Ref` to the same role, add a `DependsOn` attribute to the resource to make the resource depend on the external policy. This dependency ensures that the role's policy is available throughout the resource's lifecycle. For example, when you delete a deployment with an ECS service resource, the `DependsOn` attribute ensures that Bluelink deletes the ECS service resource before deleting its role's policy.",
+				Description: "The name (friendly name, not ARN) of the role to attach the policy to.\n This parameter allows (per its [regex pattern](https://docs.aws.amazon.com/http://wikipedia.org/wiki/regex)) a string of characters consisting of upper and lowercase alphanumeric characters with no spaces. You can also include any of the following characters: _+=,.@-",
 				Nullable:    true,
 				Items: &provider.ResourceDefinitionsSchema{
 					Type: provider.ResourceDefinitionsSchemaTypeString,
