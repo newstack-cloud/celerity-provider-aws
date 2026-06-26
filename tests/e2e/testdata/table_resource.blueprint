@@ -1,0 +1,33 @@
+version "2025-11-02"
+
+variable namePrefix: string {}
+
+resource table: aws/dynamodb/table {
+    spec {
+        tableName = "${variables.namePrefix}-table"
+        billingMode = "PAY_PER_REQUEST"
+        attributeDefinitions = [
+            {
+                attributeName = "id",
+                attributeType = "S"
+            }
+        ]
+        keySchema = [
+            {
+                attributeName = "id",
+                keyType = "HASH"
+            }
+        ]
+        streamSpecification = {
+            streamViewType = "NEW_AND_OLD_IMAGES"
+        }
+    }
+}
+
+export tableArn: string {
+    field = resources.table.spec.arn
+}
+
+export streamArn: string {
+    field = resources.table.spec.streamArn
+}

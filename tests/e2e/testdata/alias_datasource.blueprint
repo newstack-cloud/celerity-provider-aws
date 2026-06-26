@@ -1,0 +1,25 @@
+version "2025-11-02"
+
+variable namePrefix: string {}
+
+resource placeholder: aws/sqs/queue {
+    spec {
+        queueName = "${variables.namePrefix}-alias-ds-placeholder"
+    }
+}
+
+data existingAlias: aws/lambda/alias {
+    filter "functionName" == "${variables.namePrefix}-fn"
+    filter "name" == "live"
+
+    export arn: string
+    export functionVersion: string
+}
+
+export aliasArn: string {
+    field = datasources.existingAlias.arn
+}
+
+export aliasFunctionVersion: string {
+    field = datasources.existingAlias.functionVersion
+}

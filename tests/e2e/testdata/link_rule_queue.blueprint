@@ -1,0 +1,27 @@
+version "2025-11-02"
+
+variable namePrefix: string {}
+
+resource rqRule: aws/events/rule {
+    select by label {
+        delivery = "queueTarget"
+    }
+    spec {
+        name = "${variables.namePrefix}-rq-rule"
+        eventPattern = {
+            source = ["bluelink.integration.test"]
+        }
+        state = "DISABLED"
+    }
+}
+
+resource rqQueue: aws/sqs/queue {
+    metadata {
+        labels = {
+            delivery = "queueTarget"
+        }
+    }
+    spec {
+        queueName = "${variables.namePrefix}-rq-queue"
+    }
+}

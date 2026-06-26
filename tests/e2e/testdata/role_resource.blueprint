@@ -1,0 +1,25 @@
+version "2025-11-02"
+
+variable namePrefix: string {}
+
+resource execRole: aws/iam/role {
+    spec {
+        roleName = "${variables.namePrefix}-role"
+        assumeRolePolicyDocument = {
+            version = "2012-10-17",
+            statement = [
+                {
+                    effect = "Allow",
+                    principal = {
+                        service = "lambda.amazonaws.com"
+                    },
+                    action = "sts:AssumeRole"
+                }
+            ]
+        }
+    }
+}
+
+export roleArn: string {
+    field = resources.execRole.spec.arn
+}

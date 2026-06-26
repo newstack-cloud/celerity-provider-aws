@@ -1,0 +1,51 @@
+version "2025-11-02"
+
+variable namePrefix: string {}
+
+resource ffRole: aws/iam/role {
+    spec {
+        roleName = "${variables.namePrefix}-ff-role"
+        assumeRolePolicyDocument = {
+            version = "2012-10-17",
+            statement = [
+                {
+                    effect = "Allow",
+                    principal = { service = "lambda.amazonaws.com" },
+                    action = "sts:AssumeRole"
+                }
+            ]
+        }
+    }
+}
+
+resource caller: aws/lambda/function {
+    select by label {
+        target = "invokee"
+    }
+    spec {
+        functionName = "${variables.namePrefix}-ff-caller"
+        runtime = "nodejs20.x"
+        handler = "index.handler"
+        role = "${resources.ffRole.spec.arn}"
+        code = {
+            zipFile = "exports.handler = async () => ({});"
+        }
+    }
+}
+
+resource callee: aws/lambda/function {
+    metadata {
+        labels = {
+            target = "invokee"
+        }
+    }
+    spec {
+        functionName = "${variables.namePrefix}-ff-callee"
+        runtime = "nodejs20.x"
+        handler = "index.handler"
+        role = "${resources.ffRole.spec.arn}"
+        code = {
+            zipFile = "exports.handler = async () => ({});"
+        }
+    }
+}

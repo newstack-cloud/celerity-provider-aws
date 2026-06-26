@@ -1,0 +1,52 @@
+version "2025-11-02"
+
+variable namePrefix: string {}
+variable signingProfileVersionArn: string {}
+
+resource cscRole: aws/iam/role {
+    spec {
+        roleName = "${variables.namePrefix}-csc-role"
+        assumeRolePolicyDocument = {
+            version = "2012-10-17",
+            statement = [
+                {
+                    effect = "Allow",
+                    principal = { service = "lambda.amazonaws.com" },
+                    action = "sts:AssumeRole"
+                }
+            ]
+        }
+    }
+}
+
+resource csc: aws/lambda/codeSigningConfig {
+    metadata {
+        labels = {
+            signing = "function"
+        }
+    }
+    spec {
+        allowedPublishers = {
+            signingProfileVersionArns = ["${variables.signingProfileVersionArn}"]
+        }
+    }
+}
+
+resource cscFunction: aws/lambda/function {
+    select by label {
+        signing = "function"
+    }
+    spec {
+        functionName = "${variables.namePrefix}-csc-fn"
+        runtime = "nodejs20.x"
+        handler = "index.handler"
+        role = "${resources.cscRole.spec.arn}"
+        code = {
+            zipFile = "exports.handler = async () => ({});"
+        }
+    }
+}
+
+export cscArn: string {
+    field = resources.csc.spec.codeSigningConfigArn
+}

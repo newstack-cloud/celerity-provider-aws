@@ -1,0 +1,28 @@
+version "2025-11-02"
+
+variable namePrefix: string {}
+
+resource sourceQueue: aws/sqs/queue {
+    metadata {
+        annotations = {
+            "aws.sqs.redrive.maxReceiveCount" = 5
+        }
+    }
+    select by label {
+        role = "deadLetter"
+    }
+    spec {
+        queueName = "${variables.namePrefix}-dlq-src"
+    }
+}
+
+resource dlq: aws/sqs/queue {
+    metadata {
+        labels = {
+            role = "deadLetter"
+        }
+    }
+    spec {
+        queueName = "${variables.namePrefix}-dlq-target"
+    }
+}

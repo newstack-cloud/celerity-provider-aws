@@ -1,0 +1,45 @@
+version "2025-11-02"
+
+variable namePrefix: string {}
+
+resource febRole: aws/iam/role {
+    spec {
+        roleName = "${variables.namePrefix}-feb-role"
+        assumeRolePolicyDocument = {
+            version = "2012-10-17",
+            statement = [
+                {
+                    effect = "Allow",
+                    principal = { service = "lambda.amazonaws.com" },
+                    action = "sts:AssumeRole"
+                }
+            ]
+        }
+    }
+}
+
+resource febFunction: aws/lambda/function {
+    select by label {
+        publish = "eventBus"
+    }
+    spec {
+        functionName = "${variables.namePrefix}-feb-fn"
+        runtime = "nodejs20.x"
+        handler = "index.handler"
+        role = "${resources.febRole.spec.arn}"
+        code = {
+            zipFile = "exports.handler = async () => ({});"
+        }
+    }
+}
+
+resource febBus: aws/events/eventBus {
+    metadata {
+        labels = {
+            publish = "eventBus"
+        }
+    }
+    spec {
+        name = "${variables.namePrefix}-feb-bus"
+    }
+}

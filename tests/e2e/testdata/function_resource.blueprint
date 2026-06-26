@@ -1,0 +1,37 @@
+version "2025-11-02"
+
+variable namePrefix: string {}
+
+resource execRole: aws/iam/role {
+    spec {
+        roleName = "${variables.namePrefix}-fn-role"
+        assumeRolePolicyDocument = {
+            version = "2012-10-17",
+            statement = [
+                {
+                    effect = "Allow",
+                    principal = {
+                        service = "lambda.amazonaws.com"
+                    },
+                    action = "sts:AssumeRole"
+                }
+            ]
+        }
+    }
+}
+
+resource function: aws/lambda/function {
+    spec {
+        functionName = "${variables.namePrefix}-fn"
+        runtime = "nodejs20.x"
+        handler = "index.handler"
+        role = "${resources.execRole.spec.arn}"
+        code = {
+            zipFile = "exports.handler = async () => ({ statusCode: 200 });"
+        }
+    }
+}
+
+export functionArn: string {
+    field = resources.function.spec.arn
+}

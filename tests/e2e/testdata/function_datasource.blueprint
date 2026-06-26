@@ -1,0 +1,22 @@
+version "2025-11-02"
+
+variable namePrefix: string {}
+
+# Placeholder to satisfy the "at least one resource" rule; never deployed (the
+# test only stages changes, which resolves the data source).
+resource placeholder: aws/sqs/queue {
+    spec {
+        queueName = "${variables.namePrefix}-fn-ds-placeholder"
+    }
+}
+
+data existingFunction: aws/lambda/function {
+    filter "name" == "${variables.namePrefix}-fn"
+
+    export arn: string
+    export name: string
+}
+
+export functionArn: string {
+    field = datasources.existingFunction.arn
+}

@@ -1,0 +1,21 @@
+version "2025-11-02"
+
+variable namePrefix: string {}
+
+# Placeholder to satisfy the "at least one resource" rule; never deployed (the
+# data source test only stages changes).
+resource placeholder: aws/sqs/queue {
+    spec {
+        queueName = "${variables.namePrefix}-ds-table-placeholder"
+    }
+}
+
+data existingTable: aws/dynamodb/table {
+    filter "tableName" == "${variables.namePrefix}-table"
+
+    export arn: string
+}
+
+export tableArn: string {
+    field = datasources.existingTable.arn
+}

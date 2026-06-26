@@ -1,0 +1,49 @@
+version "2025-11-02"
+
+variable namePrefix: string {}
+
+resource rfRole: aws/iam/role {
+    spec {
+        roleName = "${variables.namePrefix}-rf-role"
+        assumeRolePolicyDocument = {
+            version = "2012-10-17",
+            statement = [
+                {
+                    effect = "Allow",
+                    principal = { service = "lambda.amazonaws.com" },
+                    action = "sts:AssumeRole"
+                }
+            ]
+        }
+    }
+}
+
+resource rfFunction: aws/lambda/function {
+    metadata {
+        labels = {
+            trigger = "ruleInvoke"
+        }
+    }
+    spec {
+        functionName = "${variables.namePrefix}-rf-fn"
+        runtime = "nodejs20.x"
+        handler = "index.handler"
+        role = "${resources.rfRole.spec.arn}"
+        code = {
+            zipFile = "exports.handler = async () => ({});"
+        }
+    }
+}
+
+resource rfRule: aws/events/rule {
+    select by label {
+        trigger = "ruleInvoke"
+    }
+    spec {
+        name = "${variables.namePrefix}-rf-rule"
+        eventPattern = {
+            source = ["bluelink.integration.test"]
+        }
+        state = "DISABLED"
+    }
+}

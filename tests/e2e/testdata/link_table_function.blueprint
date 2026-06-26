@@ -1,0 +1,68 @@
+version "2025-11-02"
+
+variable namePrefix: string {}
+
+resource tfRole: aws/iam/role {
+    spec {
+        roleName = "${variables.namePrefix}-tf-role"
+        assumeRolePolicyDocument = {
+            version = "2012-10-17",
+            statement = [
+                {
+                    effect = "Allow",
+                    principal = { service = "lambda.amazonaws.com" },
+                    action = "sts:AssumeRole"
+                }
+            ]
+        }
+    }
+}
+
+resource tfFunction: aws/lambda/function {
+    metadata {
+        labels = {
+            stream = "ordersStream"
+        }
+        annotations = {
+            "aws.dynamodb.lambda.stream.startingPosition" = "TRIM_HORIZON"
+        }
+    }
+    spec {
+        functionName = "${variables.namePrefix}-tf-fn"
+        runtime = "nodejs20.x"
+        handler = "index.handler"
+        role = "${resources.tfRole.spec.arn}"
+        code = {
+            zipFile = "exports.handler = async () => ({});"
+        }
+    }
+}
+
+resource tfTable: aws/dynamodb/table {
+    select by label {
+        stream = "ordersStream"
+    }
+    spec {
+        tableName = "${variables.namePrefix}-tf-table"
+        billingMode = "PAY_PER_REQUEST"
+        attributeDefinitions = [
+            {
+                attributeName = "id",
+                attributeType = "S"
+            }
+        ]
+        keySchema = [
+            {
+                attributeName = "id",
+                keyType = "HASH"
+            }
+        ]
+        streamSpecification = {
+            streamViewType = "NEW_AND_OLD_IMAGES"
+        }
+    }
+}
+
+export streamArn: string {
+    field = resources.tfTable.spec.streamArn
+}

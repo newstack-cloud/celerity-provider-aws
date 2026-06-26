@@ -1,0 +1,27 @@
+version "2025-11-02"
+
+variable namePrefix: string {}
+
+# A blueprint must declare at least one resource. This placeholder is never
+# deployed: the data source test only stages changes (which resolves the data
+# source against real AWS), so no infrastructure is created from this file.
+resource placeholder: aws/sqs/queue {
+    spec {
+        queueName = "${variables.namePrefix}-ds-placeholder"
+    }
+}
+
+data existingQueue: aws/sqs/queue {
+    filter "queueName" == "${variables.namePrefix}-queue"
+
+    export arn: string
+    export queueUrl: string
+}
+
+export queueArn: string {
+    field = datasources.existingQueue.arn
+}
+
+export queueUrl: string {
+    field = datasources.existingQueue.queueUrl
+}

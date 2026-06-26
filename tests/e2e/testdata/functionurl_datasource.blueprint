@@ -1,0 +1,24 @@
+version "2025-11-02"
+
+variable namePrefix: string {}
+
+resource placeholder: aws/sqs/queue {
+    spec {
+        queueName = "${variables.namePrefix}-url-ds-placeholder"
+    }
+}
+
+data existingUrl: aws/lambda/functionUrl {
+    filter "functionName" == "${variables.namePrefix}-fn"
+
+    export functionArn: string
+    export authType: string
+}
+
+export functionArn: string {
+    field = datasources.existingUrl.functionArn
+}
+
+export authType: string {
+    field = datasources.existingUrl.authType
+}

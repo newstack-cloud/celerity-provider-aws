@@ -1,0 +1,24 @@
+version "2025-11-02"
+
+variable namePrefix: string {}
+
+resource queue: aws/sqs/queue {
+    spec {
+        queueName = "${variables.namePrefix}-queue"
+        visibilityTimeout = 45
+        tags = [
+            {
+                key = "Environment",
+                value = "integration-test"
+            }
+        ]
+    }
+}
+
+export queueArn: string {
+    field = resources.queue.spec.arn
+}
+
+export queueUrl: string {
+    field = resources.queue.spec.queueUrl
+}

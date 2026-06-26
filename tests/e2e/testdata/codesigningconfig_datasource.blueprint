@@ -1,0 +1,20 @@
+version "2025-11-02"
+
+variable namePrefix: string {}
+variable cscArn: string {}
+
+resource placeholder: aws/sqs/queue {
+    spec {
+        queueName = "${variables.namePrefix}-csc-ds-placeholder"
+    }
+}
+
+data existingCsc: aws/lambda/codeSigningConfig {
+    filter "arn" == "${variables.cscArn}"
+
+    export arn: string
+}
+
+export cscArn: string {
+    field = datasources.existingCsc.arn
+}

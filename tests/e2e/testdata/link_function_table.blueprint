@@ -1,0 +1,58 @@
+version "2025-11-02"
+
+variable namePrefix: string {}
+
+resource ftRole: aws/iam/role {
+    spec {
+        roleName = "${variables.namePrefix}-ft-role"
+        assumeRolePolicyDocument = {
+            version = "2012-10-17",
+            statement = [
+                {
+                    effect = "Allow",
+                    principal = { service = "lambda.amazonaws.com" },
+                    action = "sts:AssumeRole"
+                }
+            ]
+        }
+    }
+}
+
+resource ftFunction: aws/lambda/function {
+    select by label {
+        access = "ordersTable"
+    }
+    spec {
+        functionName = "${variables.namePrefix}-ft-fn"
+        runtime = "nodejs20.x"
+        handler = "index.handler"
+        role = "${resources.ftRole.spec.arn}"
+        code = {
+            zipFile = "exports.handler = async () => ({});"
+        }
+    }
+}
+
+resource ftTable: aws/dynamodb/table {
+    metadata {
+        labels = {
+            access = "ordersTable"
+        }
+    }
+    spec {
+        tableName = "${variables.namePrefix}-ft-table"
+        billingMode = "PAY_PER_REQUEST"
+        attributeDefinitions = [
+            {
+                attributeName = "id",
+                attributeType = "S"
+            }
+        ]
+        keySchema = [
+            {
+                attributeName = "id",
+                keyType = "HASH"
+            }
+        ]
+    }
+}

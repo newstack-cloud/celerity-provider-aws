@@ -1,0 +1,70 @@
+version "2025-11-02"
+
+variable namePrefix: string {}
+
+resource conn: aws/events/connection {
+    spec {
+        name = "${variables.namePrefix}-conn"
+        authorizationType = "API_KEY"
+        authParameters = {
+            ApiKeyAuthParameters = {
+                ApiKeyName = "x-api-key"
+                ApiKeyValue = "bluelink-integration-test"
+            }
+        }
+    }
+}
+
+resource apiDest: aws/events/apiDestination {
+    metadata {
+        labels = {
+            invoke = "ruleDestination"
+        }
+    }
+    spec {
+        name = "${variables.namePrefix}-dest"
+        connectionArn = "${resources.conn.spec.arn}"
+        invocationEndpoint = "https://example.com/webhook"
+        httpMethod = "POST"
+    }
+}
+
+resource invokeRole: aws/iam/role {
+    spec {
+        roleName = "${variables.namePrefix}-apidest-role"
+        assumeRolePolicyDocument = {
+            version = "2012-10-17",
+            statement = [
+                {
+                    effect = "Allow",
+                    principal = { service = "events.amazonaws.com" },
+                    action = "sts:AssumeRole"
+                }
+            ]
+        }
+    }
+}
+
+resource apiDestRule: aws/events/rule {
+    select by label {
+        invoke = "ruleDestination"
+    }
+    spec {
+        name = "${variables.namePrefix}-apidest-rule"
+        eventPattern = {
+            source = ["bluelink.integration.test"]
+        }
+        state = "DISABLED"
+        targets = [
+            {
+                id = "destTarget",
+                arn = "${resources.apiDest.spec.arn}",
+                roleArn = "${resources.invokeRole.spec.arn}"
+            }
+        ]
+    }
+}
+
+export destArn: string {
+    field = resources.apiDest.spec.arn
+}
