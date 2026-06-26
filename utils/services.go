@@ -24,12 +24,13 @@ func AWSServiceList() string {
 
 // Services is a map of AWS services and their aliases.
 var Services = map[string][]string{
-	"account":  {},
-	"lambda":   {},
-	"iam":      {},
-	"dynamodb": {},
-	"sqs":      {},
-	"events":   {"eventbridge"},
+	"account":         {},
+	"lambda":          {},
+	"iam":             {},
+	"dynamodb":        {},
+	"sqs":             {},
+	"events":          {"eventbridge"},
+	"cloudcontrolapi": {"cloudcontrol"},
 }
 
 // GetEndpointFromProviderConfig returns the endpoint for a given service or one of its aliases.
