@@ -489,6 +489,14 @@ type Service interface {
 		optFns ...func(*iam.Options),
 	) (*iam.ListPolicyVersionsOutput, error)
 
+	// GetPolicyVersion retrieves information about the specified version of the
+	// specified managed policy, including the policy document.
+	GetPolicyVersion(
+		ctx context.Context,
+		params *iam.GetPolicyVersionInput,
+		optFns ...func(*iam.Options),
+	) (*iam.GetPolicyVersionOutput, error)
+
 	// TagPolicy adds one or more tags to an IAM managed policy.
 	TagPolicy(
 		ctx context.Context,
