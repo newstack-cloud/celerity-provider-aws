@@ -128,12 +128,18 @@ func (l *lambdaFunctionDataSourceFetcher) Fetch(
 
 	qualifier := extractQualifierFromFilters(input.DataSourceWithResolvedSubs.Filter)
 
+	getFunctionInput := &lambda.GetFunctionInput{
+		FunctionName: aws.String(core.StringValue(functionNameOrARN)),
+	}
+	// Only set the qualifier when one was supplied; AWS rejects an empty qualifier
+	// (it must satisfy the version/alias pattern and be at least one character).
+	if qualifier != nil {
+		getFunctionInput.Qualifier = aws.String(core.StringValue(qualifier))
+	}
+
 	functionOutput, err := lambdaService.GetFunction(
 		ctx,
-		&lambda.GetFunctionInput{
-			FunctionName: aws.String(core.StringValue(functionNameOrARN)),
-			Qualifier:    aws.String(core.StringValue(qualifier)),
-		},
+		getFunctionInput,
 	)
 	if err != nil {
 		return nil, err
