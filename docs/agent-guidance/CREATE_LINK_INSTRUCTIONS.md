@@ -18,7 +18,7 @@ The links needs to be implemented following existing patterns and conventions in
 6. Implement an extensive test suite for the `UpdateResourceB` method, carefully following existing test suites for the `UpdateResourceB` method such as `services/lambda/links/function__function_link_update_test.go`. Study and reuse test utils and patterns from existing tests.
 7. Create the functionality for the `UpdateIntermediaryResources` method for the link, carefully following existing links, studying and reusing existing patterns and utils. See `services/lambda/links/function__function_link_update.go` for a guide. You must use the `pluginutils` package helpers to extract values from the spec data.
 8. Implement an extensive test suite for the `UpdateIntermediaryResources` method, carefully following existing test suites for the `UpdateIntermediaryResources` method such as `services/lambda/links/function__function_link_update_test.go`. Study and reuse test utils and patterns from existing tests.
-9. Create the functionality for the `StageChanges` method for the resource, carefully following existing links, studying and reusing existing patterns and utils. See `services/lambda/links/function__code_signing_config_link_stage_changes.go` for a guide. You must use the `linkhelpers` and `pluginutils` package helpers to extract values from the spec data and collect derived changes for the link data projection as a link is a projection of a subset of the state in resource A and resource B along with the full state of any intermediary resources required for the link.
+9. Create the functionality for the `StageChanges` method for the resource, carefully following existing links, studying and reusing existing patterns and utils. See `services/lambda/links/function__code_signing_config_link_stage_changes.go` for a field-projection guide, and `inter-service-links/events_lambda/rule__function_link_stage_changes.go` for a link that surfaces an owned **intermediary resource**. You must use the `linkhelpers` and `pluginutils` package helpers to extract values from the spec data and collect derived changes for the link data projection as a link is a projection of a subset of the state in resource A and resource B along with the full state of any intermediary resources required for the link. If the link owns an intermediary resource, you MUST surface its changes — see **Surfacing Intermediary Changes at Stage Time** below; never return an empty `LinkChanges{}` for an intermediary-only link.
 10. Implement an extensive test suite for the `StageChanges` method, carefully following existing test suites for the `StageChanges` method such as `services/lambda/links/function__code_signing_config_link_stage_changes_test.go`. Study and reuse test utils and patterns from existing tests.
 11. Validate the implementations and tests are complete and correct. Ensure that the tests are covering failures and edge cases as well as basic and complex use cases.
 12. Check for any deviation from the patterns used in existing link implementations, study multiple existing link implementations.
@@ -222,6 +222,85 @@ To determine whether or not an existing intermediary resource is present in the 
 For `managed` resources, the `ResourceDeployService` in the input struct should be used to manage creation, updates and the deletion of the resource.
 
 _The "input struct" refers to the second argument of the `UpdateIntermediaryResources` method of a link._
+
+### Surfacing Intermediary Changes at Stage Time
+
+A link that owns an intermediary resource (a `managed` Cloud Control resource deployed via
+`linkutils.DeployManagedIntermediary`, or a resource created directly through an SDK such as a
+Lambda event source mapping) **must surface that intermediary's create/update/destroy in
+`StageChanges`**. The intermediary is not a spec field of either linked resource, so if
+`StageChanges` returns an empty `&provider.LinkChanges{}` the plan/preview shows no changes even
+though the link will deploy, modify, or destroy a real resource. This is a silent-change bug.
+
+Surface it by projecting the intermediary into the link's **linkData** under an `intermediaries`
+map keyed by the intermediary's deterministic `ResourceID`, with each entry carrying
+`resourceType` plus the identifying/mutable spec leaves. Diffing this projection produces ordinary
+`NewFields` (create), `ModifiedFields` (an existing intermediary's spec changed), `RemovedFields`
+(intermediary dropped while the link persists) and `FieldChangesKnownOnDeploy` (a value not yet
+resolvable). Use the shared `linkutils` helpers so the staged projection and the persisted
+linkData cannot drift:
+
+1. Define **one** identity function per intermediary returning a `linkutils.IntermediaryIdentity`
+   (`ResourceType` + deterministic `ResourceID` + `ResourceName`). Call it from **both**
+   `UpdateIntermediaryResources` (to build the `ManagedIntermediary`/deploy call) and
+   `StageChanges` — this is the single source of truth for the identity.
+2. In `UpdateIntermediaryResources`, return the persisted projection via
+   `linkutils.IntermediaryLinkData(...)` with the resolved leaf values.
+3. In `StageChanges`, read the prior linkData with `linkhelpers.GetLinkDataFromState(input.CurrentLinkState)`
+   and collect the projection with `linkutils.CollectIntermediaryChanges(...)`. Resource-derived
+   leaves are declared as `linkutils.DerivedLeaf` entries (`{Leaf, ResourceChanges, ResourceSpecPath}`)
+   so the helper routes unresolved/computed values (e.g. an ARN on a not-yet-created resource) to
+   `FieldChangesKnownOnDeploy` automatically.
+
+```go
+// Shared identity (used by both UpdateIntermediaryResources and StageChanges):
+func ruleFunctionIntermediaryIdentity(ruleInfo, functionInfo *provider.ResourceInfo) linkutils.IntermediaryIdentity {
+    return linkutils.IntermediaryIdentity{
+        ResourceType: "aws/lambda/permission",
+        ResourceID:   rulePermissionResourceID(ruleInfo, functionInfo),   // deterministic, instance-stable
+        ResourceName: rulePermissionResourceName(ruleInfo, functionInfo),
+    }
+}
+
+// StageChanges:
+changes := &provider.LinkChanges{}
+currentLinkData := linkhelpers.GetLinkDataFromState(input.CurrentLinkState)
+identity := ruleFunctionIntermediaryIdentity(
+    &input.ResourceAChanges.AppliedResourceInfo,
+    &input.ResourceBChanges.AppliedResourceInfo,
+)
+err := linkutils.CollectIntermediaryChanges(currentLinkData, changes, linkutils.StageIntermediary{
+    Identity: identity,
+    DerivedLeaves: []linkutils.DerivedLeaf{
+        {Leaf: "sourceArn", ResourceChanges: input.ResourceAChanges, ResourceSpecPath: "$.spec.arn"},
+        {Leaf: "functionName", ResourceChanges: input.ResourceBChanges, ResourceSpecPath: "$.spec.arn"},
+    },
+})
+
+// UpdateIntermediaryResources (non-destroy path):
+LinkData: linkutils.IntermediaryLinkData(linkutils.DeployedIntermediary{
+    Identity: identity,
+    Leaves: map[string]*core.MappingNode{
+        "sourceArn":    core.MappingNodeFromString(ruleARN),
+        "functionName": core.MappingNodeFromString(functionARN),
+    },
+}),
+```
+
+Canonical examples to follow:
+
+- `inter-service-links/events_lambda/rule__function_link_*.go` — `aws/lambda/permission`.
+- `inter-service-links/events_sqs/rule__queue_link_*.go` — `aws/sqs/queueInlinePolicy`.
+- `inter-service-links/lambda_dynamodb/table__function_link_*.go` — event source mapping (an
+  SDK-created intermediary; its runtime `uuid`/`arn` are carried as extra leaves on the same
+  projection, read back via `linkutils.IntermediaryLeafPath`).
+
+**Do NOT project an intermediary** for links that pack an IAM statement into a *shared*,
+allocator-managed role policy via `linkutils.ReconcileRoleAccessPolicy` (e.g.
+`function__function`, `function__event_bus`, `function__table`). Those do not own a discrete
+resource — the role is co-owned by many links — so surface their effect with
+`FieldChangesKnownOnDeploy` on the role's link-data field instead, and add a short comment noting
+the decision.
 
 ### Link to Resource Data Mappings
 

@@ -37,6 +37,8 @@ This checklist is for use by background agents (or human contributors) to track 
 - [ ] `UpdateIntermediaryResources` correctly handles both `managed` and `existing` intermediary resource types.
 - [ ] For `existing` resources, implementation uses `ResourceLookupService` to fetch resources by blueprint instance ID, type, and external ID.
 - [ ] For `managed` resources, implementation uses `ResourceDeployService` to manage creation, updates, and deletion.
+- [ ] Link-owned intermediary changes are surfaced at stage time: the intermediary is projected into link data under the `intermediaries` map (keyed by deterministic `ResourceID`, with `resourceType` + identifying leaves) using `linkutils.CollectIntermediaryChanges` in `StageChanges` and `linkutils.IntermediaryLinkData` in `UpdateIntermediaryResources`, sharing a single `linkutils.IntermediaryIdentity` function. An intermediary-owning link NEVER returns an empty `LinkChanges{}`.
+- [ ] Links that pack statements into a shared allocator-managed role policy do NOT project an intermediary; they surface effect via `FieldChangesKnownOnDeploy` (commented).
 - [ ] Proper error message format when existing intermediary resource is not in the same blueprint:
   ```
   "intermediary resource of type '${intermediaryResourceType}' is not present in the same blueprint as this link (${linkTypeIdentifier}). Links can only update intermediary resources that are defined in the same blueprint. Please define the resource in this blueprint or remove the link and manually configure the relationship."

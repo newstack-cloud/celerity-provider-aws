@@ -164,10 +164,10 @@ func NewProvider(
 			// Rule -> SQS queue: same managed-intermediary model (queue inline policy).
 			"aws/events/rule::aws/sqs/queue": eventssqs.RuleQueueLink(),
 			// Intra-service links: EventBridge rule <-> API destination
-			"aws/events/rule::aws/events/apiDestination": eventslinks.RuleApiDestinationLink(
+			"aws/events/rule::aws/events/apiDestination": eventslinks.RuleAPIDestinationLink(
 				iamServiceFactory,
 			)(
-				eventslinks.RuleToApiDestinationLinkDeps{
+				eventslinks.RuleToAPIDestinationLinkDeps{
 					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, eventsservice.Service]{
 						ServiceFactory: eventsServiceFactory,
 						ConfigStore:    awsConfigStore,
