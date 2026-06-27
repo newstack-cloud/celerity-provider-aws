@@ -3,14 +3,16 @@ package lambdadynamodb
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
+	"github.com/aws/smithy-go"
 	"github.com/newstack-cloud/bluelink-provider-aws/linkutils"
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
 	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
@@ -94,14 +96,15 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) UpdateResourceA(
 }
 
 func isStreamEnabled(resourceInfo *provider.ResourceInfo) bool {
-	streamEnabled, hasStreamEnabled := pluginutils.GetValueByPath(
-		"$.streamSpecification.streamEnabled",
+	// The CFN-canonical DynamoDB table has no streamEnabled flag (CFN models
+	// stream enablement by the presence of the streamSpecification block). The
+	// computed streamArn is populated only once a stream is active, so its
+	// presence is the reliable signal that streams are already enabled.
+	streamARN, hasStreamARN := pluginutils.GetValueByPath(
+		"$.streamArn",
 		resourceInfo.CurrentResourceState.SpecData,
 	)
-	if !hasStreamEnabled || streamEnabled == nil {
-		return false
-	}
-	return core.BoolValue(streamEnabled)
+	return hasStreamARN && core.StringValue(streamARN) != ""
 }
 
 func getStreamViewTypeAnnotation(resourceInfo *provider.ResourceInfo) string {
@@ -181,13 +184,15 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) UpdateIntermediaryResources(
 		return nil, err
 	}
 
-	// Acquire a lock on the role resource to prevent concurrent updates
+	// The execution role is shared by every link that grants it access, so lock it
+	// for the read-modify-write of its policy set.
 	err = input.ResourceService.AcquireResourceLock(
 		ctx,
 		&provider.AcquireResourceLockInput{
 			InstanceID:      pluginutils.GetInstanceID(input.ResourceBInfo),
 			ResourceName:    setupCtx.RoleResourceName,
 			ProviderContext: providerCtx,
+			AcquiredBy:      input.LinkID,
 		},
 	)
 	if err != nil {
@@ -199,26 +204,19 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) UpdateIntermediaryResources(
 		return nil, err
 	}
 
-	rolePolicies, err := iamService.ListRolePolicies(ctx, &iam.ListRolePoliciesInput{
-		RoleName: aws.String(setupCtx.RoleName),
-	})
-	if err != nil {
-		return nil, err
-	}
-
 	if input.LinkUpdateType == provider.LinkUpdateTypeDestroy {
 		return l.destroyIntermediaryResources(
 			ctx,
 			input,
 			setupCtx,
-			rolePolicies,
 			lambdaService,
 			iamService,
 		)
 	}
 
 	// Check if we have an existing event source mapping UUID in the link state
-	existingUUID := getExistingEventSourceMappingUUID(input.CurrentLinkState)
+	esmResourceID := tableFunctionESMResourceID(input.ResourceAInfo, input.ResourceBInfo)
+	existingUUID := getExistingEventSourceMappingUUID(input.CurrentLinkState, esmResourceID)
 
 	if existingUUID != "" {
 		return l.updateIntermediaryResources(
@@ -229,7 +227,6 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) UpdateIntermediaryResources(
 			functionARN,
 			annotations,
 			setupCtx,
-			rolePolicies,
 			lambdaService,
 			iamService,
 		)
@@ -242,7 +239,6 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) UpdateIntermediaryResources(
 		functionARN,
 		annotations,
 		setupCtx,
-		rolePolicies,
 		lambdaService,
 		iamService,
 	)
@@ -255,30 +251,31 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) createIntermediaryResources(
 	functionARN string,
 	annotations *streamTriggerAnnotations,
 	setupCtx *linkutils.LambdaLinkSetupContext,
-	rolePolicies *iam.ListRolePoliciesOutput,
 	lambdaService lambdaservice.Service,
 	iamService iamservice.Service,
 ) (*provider.LinkUpdateIntermediaryResourcesOutput, error) {
-	// Create the Event Source Mapping
-	esmOutput, err := l.createEventSourceMapping(ctx, streamARN, functionARN, annotations, lambdaService)
-	if err != nil {
-		return nil, err
-	}
-
-	// Add stream read permissions to the Lambda execution role
-	permOutput, err := l.addStreamPermissions(
+	// Grant stream read permissions to the Lambda execution role before creating the
+	// event source mapping: CreateEventSourceMapping validates that the role can read
+	// the stream, so the grant must be in place first.
+	permOutput, err := l.grantStreamPermissions(
 		ctx,
 		input,
 		streamARN,
 		setupCtx,
-		rolePolicies,
 		iamService,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	return mergeIntermediaryOutputs(esmOutput, permOutput), nil
+	// Create the Event Source Mapping.
+	esmOutput, err := l.createEventSourceMapping(ctx, streamARN, functionARN, annotations, lambdaService)
+	if err != nil {
+		return nil, err
+	}
+
+	esmIdentity := tableFunctionESMIdentity(input.ResourceAInfo, input.ResourceBInfo)
+	return mergeIntermediaryOutputs(esmIdentity, esmOutput, permOutput), nil
 }
 
 func (l *dynamoDBTableLambdaFunctionLinkActions) updateIntermediaryResources(
@@ -289,7 +286,6 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) updateIntermediaryResources(
 	functionARN string,
 	annotations *streamTriggerAnnotations,
 	setupCtx *linkutils.LambdaLinkSetupContext,
-	rolePolicies *iam.ListRolePoliciesOutput,
 	lambdaService lambdaservice.Service,
 	iamService iamservice.Service,
 ) (*provider.LinkUpdateIntermediaryResourcesOutput, error) {
@@ -306,32 +302,33 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) updateIntermediaryResources(
 		return nil, err
 	}
 
-	// Update stream read permissions on the Lambda execution role
-	permOutput, err := l.updateStreamPermissions(
+	// Grant stream read permissions to the Lambda execution role
+	// (the allocator replaces the statement in place on update).
+	permOutput, err := l.grantStreamPermissions(
 		ctx,
 		input,
 		streamARN,
 		setupCtx,
-		rolePolicies,
 		iamService,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	return mergeIntermediaryOutputs(esmOutput, permOutput), nil
+	esmIdentity := tableFunctionESMIdentity(input.ResourceAInfo, input.ResourceBInfo)
+	return mergeIntermediaryOutputs(esmIdentity, esmOutput, permOutput), nil
 }
 
 func (l *dynamoDBTableLambdaFunctionLinkActions) destroyIntermediaryResources(
 	ctx context.Context,
 	input *provider.LinkUpdateIntermediaryResourcesInput,
 	setupCtx *linkutils.LambdaLinkSetupContext,
-	rolePolicies *iam.ListRolePoliciesOutput,
 	lambdaService lambdaservice.Service,
 	iamService iamservice.Service,
 ) (*provider.LinkUpdateIntermediaryResourcesOutput, error) {
 	// Delete the Event Source Mapping
-	uuid := getExistingEventSourceMappingUUID(input.CurrentLinkState)
+	esmResourceID := tableFunctionESMResourceID(input.ResourceAInfo, input.ResourceBInfo)
+	uuid := getExistingEventSourceMappingUUID(input.CurrentLinkState, esmResourceID)
 	if uuid != "" {
 		_, err := lambdaService.DeleteEventSourceMapping(ctx, &lambda.DeleteEventSourceMappingInput{
 			UUID: aws.String(uuid),
@@ -341,14 +338,12 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) destroyIntermediaryResources(
 		}
 	}
 
-	// Remove stream read permissions from the Lambda execution role
-	err := l.removeStreamPermissions(
-		ctx,
-		input,
-		setupCtx,
-		rolePolicies,
-		iamService,
-	)
+	// Remove the stream-read grant from the role's allocator-managed policy set.
+	sid := createDynamoDBStreamSID(input.ResourceAInfo)
+	_, err := linkutils.ReconcileRoleAccessPolicy(ctx, iamService, linkutils.RoleAccessGrant{
+		RoleName: setupCtx.RoleName,
+		SID:      sid,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -399,7 +394,18 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) createEventSourceMapping(
 		createInput.FilterCriteria = filterCriteria
 	}
 
-	output, err := lambdaService.CreateEventSourceMapping(ctx, createInput)
+	// The execution role's stream-read grant is applied immediately before this call,
+	// but IAM is eventually consistent: CreateEventSourceMapping can transiently fail
+	// validation ("Cannot access stream ... ensure the role can perform ...") until the
+	// policy propagates. Treat that as retryable so the link deploy retries it.
+	createESM := pluginutils.RetryableReturnValue(
+		func(ctx context.Context, in *lambda.CreateEventSourceMappingInput) (*lambda.CreateEventSourceMappingOutput, error) {
+			return lambdaService.CreateEventSourceMapping(ctx, in)
+		},
+		isRoleNotYetPropagatedError,
+	)
+
+	output, err := createESM(ctx, createInput)
 	if err != nil {
 		return nil, err
 	}
@@ -410,6 +416,22 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) createEventSourceMapping(
 		eventSourceArn: streamARN,
 		functionArn:    functionARN,
 	}, nil
+}
+
+// isRoleNotYetPropagatedError reports whether an error is the transient
+// InvalidParameterValueException AWS returns when an execution role's freshly-granted
+// stream permissions have not yet propagated (IAM eventual consistency).
+func isRoleNotYetPropagatedError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) && apiErr.ErrorCode() == "InvalidParameterValueException" {
+		msg := apiErr.ErrorMessage()
+		return strings.Contains(msg, "Cannot access stream") ||
+			strings.Contains(msg, "ensure the role can perform")
+	}
+	return false
 }
 
 func (l *dynamoDBTableLambdaFunctionLinkActions) updateEventSourceMapping(
@@ -471,194 +493,121 @@ type esmLinkData struct {
 	functionArn    string
 }
 
-func (l *dynamoDBTableLambdaFunctionLinkActions) addStreamPermissions(
+// grantStreamPermissions packs the DynamoDB stream-read statement into the Lambda
+// execution role's allocator-managed policy set (a single shared inline policy,
+// with managed-policy overflow), replacing any prior statement with the same Sid.
+func (l *dynamoDBTableLambdaFunctionLinkActions) grantStreamPermissions(
 	ctx context.Context,
 	input *provider.LinkUpdateIntermediaryResourcesInput,
 	streamARN string,
 	setupCtx *linkutils.LambdaLinkSetupContext,
-	rolePolicies *iam.ListRolePoliciesOutput,
 	iamService iamservice.Service,
 ) (*permissionLinkData, error) {
 	sid := createDynamoDBStreamSID(input.ResourceAInfo)
-	permission := map[string]any{
-		"Sid":      sid,
-		"Effect":   "Allow",
-		"Action":   dynamoDBStreamActions(),
-		"Resource": streamARN,
-	}
 
-	if len(rolePolicies.PolicyNames) > 0 {
-		return l.updateExistingRolePolicyWithStreamPerms(
-			ctx,
-			input,
-			setupCtx,
-			rolePolicies,
-			permission,
-			sid,
-			iamService,
-		)
-	}
-
-	return l.addNewRolePolicyWithStreamPerms(
-		ctx,
-		input,
-		setupCtx,
-		permission,
-		sid,
-		iamService,
-	)
-}
-
-func (l *dynamoDBTableLambdaFunctionLinkActions) updateStreamPermissions(
-	ctx context.Context,
-	input *provider.LinkUpdateIntermediaryResourcesInput,
-	streamARN string,
-	setupCtx *linkutils.LambdaLinkSetupContext,
-	rolePolicies *iam.ListRolePoliciesOutput,
-	iamService iamservice.Service,
-) (*permissionLinkData, error) {
-	// For updates, we use the same logic as add - it will update or create as needed
-	return l.addStreamPermissions(ctx, input, streamARN, setupCtx, rolePolicies, iamService)
-}
-
-func (l *dynamoDBTableLambdaFunctionLinkActions) removeStreamPermissions(
-	ctx context.Context,
-	input *provider.LinkUpdateIntermediaryResourcesInput,
-	setupCtx *linkutils.LambdaLinkSetupContext,
-	rolePolicies *iam.ListRolePoliciesOutput,
-	iamService iamservice.Service,
-) error {
-	executionRoleName := createStreamLinkDataExecutionRoleName(input.ResourceBInfo)
-
-	policyName, existingPermSID := linkutils.ExtractPolicyNameAndCurrentPermissionSID(
-		input.CurrentLinkState,
-		executionRoleName,
-		rolePolicies,
-	)
-
-	return linkutils.RemoveExistingRolePolicyPermissions(
-		ctx,
-		iamService,
-		setupCtx.RoleName,
-		policyName,
-		[]string{existingPermSID},
-	)
-}
-
-func (l *dynamoDBTableLambdaFunctionLinkActions) addNewRolePolicyWithStreamPerms(
-	ctx context.Context,
-	input *provider.LinkUpdateIntermediaryResourcesInput,
-	setupCtx *linkutils.LambdaLinkSetupContext,
-	permission map[string]any,
-	sid string,
-	iamService iamservice.Service,
-) (*permissionLinkData, error) {
-	policyName, err := linkutils.CreateNewRolePolicy(
-		ctx,
-		iamService,
-		input.InstanceName,
-		setupCtx.RoleName,
-		[]map[string]any{permission},
-	)
+	result, err := linkutils.ReconcileRoleAccessPolicy(ctx, iamService, linkutils.RoleAccessGrant{
+		RoleName:  setupCtx.RoleName,
+		SID:       sid,
+		Statement: dynamoDBStreamStatement(sid, streamARN),
+	})
 	if err != nil {
+		if errors.Is(err, linkutils.ErrAccessPolicyBudgetExhausted) {
+			return nil, fmt.Errorf(
+				"cannot grant Lambda %q read access to the DynamoDB stream of table %q: %w",
+				pluginutils.GetResourceName(input.ResourceBInfo),
+				pluginutils.GetResourceName(input.ResourceAInfo),
+				err,
+			)
+		}
 		return nil, err
 	}
 
 	return &permissionLinkData{
 		executionRoleName: createStreamLinkDataExecutionRoleName(input.ResourceBInfo),
-		roleResourceState: setupCtx.RoleResourceState,
-		policyName:        policyName,
-		permission:        permission,
+		roleResourceName:  setupCtx.RoleResourceName,
 		sid:               sid,
+		streamARN:         streamARN,
+		result:            result,
 	}, nil
 }
 
-func (l *dynamoDBTableLambdaFunctionLinkActions) updateExistingRolePolicyWithStreamPerms(
-	ctx context.Context,
-	input *provider.LinkUpdateIntermediaryResourcesInput,
-	setupCtx *linkutils.LambdaLinkSetupContext,
-	rolePolicies *iam.ListRolePoliciesOutput,
-	permission map[string]any,
-	sid string,
-	iamService iamservice.Service,
-) (*permissionLinkData, error) {
-	executionRoleName := createStreamLinkDataExecutionRoleName(input.ResourceBInfo)
-
-	policyName, existingPermSID := linkutils.ExtractPolicyNameAndCurrentPermissionSID(
-		input.CurrentLinkState,
-		executionRoleName,
-		rolePolicies,
-	)
-
-	err := linkutils.UpdateExistingRolePolicy(
-		ctx,
-		iamService,
-		setupCtx.RoleName,
-		policyName,
-		[]map[string]any{permission},
-		[]string{existingPermSID},
-	)
-	if err != nil {
-		return nil, err
+// dynamoDBStreamStatement builds the IAM policy statement (canonical PascalCase, as
+// the IAM API expects) granting read access to the table's stream.
+func dynamoDBStreamStatement(sid, streamARN string) map[string]any {
+	return map[string]any{
+		"Sid":      sid,
+		"Effect":   "Allow",
+		"Action":   dynamoDBStreamActions(),
+		"Resource": streamARN,
 	}
-
-	return &permissionLinkData{
-		executionRoleName: executionRoleName,
-		roleResourceState: setupCtx.RoleResourceState,
-		policyName:        policyName,
-		permission:        permission,
-		sid:               sid,
-	}, nil
 }
 
 type permissionLinkData struct {
 	executionRoleName string
-	roleResourceState *state.ResourceState
-	policyName        string
-	permission        map[string]any
+	roleResourceName  string
 	sid               string
+	streamARN         string
+	result            linkutils.RoleAccessResult
 }
 
+// mergeIntermediaryOutputs combines the event source mapping link data with the
+// stream-read grant's link data and (for inline placements) drift mappings, so the
+// ESM outputs and the role-policy outputs are both preserved.
 func mergeIntermediaryOutputs(
+	esmIdentity linkutils.IntermediaryIdentity,
 	esmData *esmLinkData,
 	permData *permissionLinkData,
 ) *provider.LinkUpdateIntermediaryResourcesOutput {
-	permissionNode, _ := pluginutils.AnyToMappingNode(permData.permission)
-
-	roleResourcePath := fmt.Sprintf(
-		"%s::spec.policies[@.name=\"%q\"].Statement[@.Sid=\"%q\"]",
-		permData.roleResourceState.Name,
-		permData.policyName,
-		permData.sid,
+	roleLinkData := core.MappingNodeFields(
+		linkutils.PermissionFieldName,
+		camelStreamStatementNode(permData.sid, permData.streamARN),
 	)
-	linkDataFieldPath := linkutils.PermissionFieldPath(permData.executionRoleName)
+
+	// Attribute the grant to this link so the role's drift/deploy does not strip it:
+	// inline placements map the statement by Sid; managed (overflow) placements map
+	// the attached managed policy ARN.
+	mappings := map[string]string{}
+	linkutils.AppendRoleAccessMapping(
+		mappings, roleLinkData, permData.roleResourceName, permData.executionRoleName, permData.sid, permData.result,
+	)
+
+	// Project the event source mapping into the "intermediaries" link-data map (alongside
+	// the role-policy outputs) so its create/update/destroy is surfaced as link changes
+	// the same way as other link-owned intermediaries. The runtime uuid/arn are carried as
+	// extra leaves used for reconciliation.
+	linkData := linkutils.IntermediaryLinkData(linkutils.DeployedIntermediary{
+		Identity: esmIdentity,
+		Leaves: map[string]*core.MappingNode{
+			"uuid":           core.MappingNodeFromString(esmData.uuid),
+			"arn":            core.MappingNodeFromString(esmData.arn),
+			"eventSourceArn": core.MappingNodeFromString(esmData.eventSourceArn),
+			"functionArn":    core.MappingNodeFromString(esmData.functionArn),
+		},
+	})
+	linkData.Fields[permData.executionRoleName] = roleLinkData
 
 	return &provider.LinkUpdateIntermediaryResourcesOutput{
 		IntermediaryResourceStates: []*state.LinkIntermediaryResourceState{},
-		LinkData: core.MappingNodeFields(
-			"eventSourceMapping",
-			core.MappingNodeFields(
-				"uuid",
-				core.MappingNodeFromString(esmData.uuid),
-				"arn",
-				core.MappingNodeFromString(esmData.arn),
-				"eventSourceArn",
-				core.MappingNodeFromString(esmData.eventSourceArn),
-				"functionArn",
-				core.MappingNodeFromString(esmData.functionArn),
-			),
-			permData.executionRoleName,
-			core.MappingNodeFields(
-				linkutils.PermissionFieldName,
-				permissionNode,
-				linkutils.PolicyNameFieldName,
-				core.MappingNodeFromString(permData.policyName),
-			),
-		),
-		ResourceDataMappings: map[string]string{
-			roleResourcePath: linkDataFieldPath,
-		},
+		LinkData:                   linkData,
+		ResourceDataMappings:       mappings,
 	}
+}
+
+// camelStreamStatementNode builds the statement in the camelCase spec form the
+// role's external state uses (after Cloud Control name translation), so the drift
+// comparison against link data matches.
+func camelStreamStatementNode(sid, streamARN string) *core.MappingNode {
+	actions := dynamoDBStreamActions()
+	actionItems := make([]*core.MappingNode, len(actions))
+	for i, action := range actions {
+		actionItems[i] = core.MappingNodeFromString(action)
+	}
+	return core.MappingNodeFields(
+		"sid", core.MappingNodeFromString(sid),
+		"effect", core.MappingNodeFromString("Allow"),
+		"action", &core.MappingNode{Items: actionItems},
+		"resource", core.MappingNodeFromString(streamARN),
+	)
 }
 
 func createDynamoDBStreamSID(resourceInfo *provider.ResourceInfo) string {
@@ -675,8 +624,8 @@ func createStreamLinkDataExecutionRoleName(resourceInfo *provider.ResourceInfo) 
 	)
 }
 
-func dynamoDBStreamActions() []any {
-	return []any{
+func dynamoDBStreamActions() []string {
+	return []string{
 		"dynamodb:DescribeStream",
 		"dynamodb:GetRecords",
 		"dynamodb:GetShardIterator",
@@ -786,9 +735,10 @@ func getStreamTriggerAnnotations(
 }
 
 func extractStreamARNFromResourceInfo(resourceInfo *provider.ResourceInfo) (string, bool) {
-	// Look for latestStreamArn in the resource state (stored in SpecData)
+	// The CFN-canonical DynamoDB table exposes the stream ARN as the computed
+	// streamArn field (the native resource called it latestStreamArn).
 	streamARN, hasStreamARN := pluginutils.GetValueByPath(
-		"$.latestStreamArn",
+		"$.streamArn",
 		resourceInfo.CurrentResourceState.SpecData,
 	)
 	if hasStreamARN && streamARN != nil {
@@ -798,7 +748,36 @@ func extractStreamARNFromResourceInfo(resourceInfo *provider.ResourceInfo) (stri
 	return "", false
 }
 
-func getExistingEventSourceMappingUUID(linkState *state.LinkState) string {
+// tableFunctionESMIdentity is the single source of truth for the link-owned event source
+// mapping's identity, used by UpdateIntermediaryResources (to persist it), StageChanges (to
+// project it into link changes) and the UUID lookup. The event source mapping is created via
+// the Lambda SDK rather than as a managed Cloud Control resource, but it is projected into
+// link data the same way as other link-owned intermediaries.
+func tableFunctionESMIdentity(tableInfo, functionInfo *provider.ResourceInfo) linkutils.IntermediaryIdentity {
+	return linkutils.IntermediaryIdentity{
+		ResourceType: "aws/lambda/eventSourceMapping",
+		ResourceID:   tableFunctionESMResourceID(tableInfo, functionInfo),
+		ResourceName: tableFunctionESMResourceName(tableInfo, functionInfo),
+	}
+}
+
+func tableFunctionESMResourceID(tableInfo, functionInfo *provider.ResourceInfo) string {
+	return fmt.Sprintf(
+		"%s__%s__event-source-mapping",
+		pluginutils.GetResourceName(tableInfo),
+		pluginutils.GetResourceName(functionInfo),
+	)
+}
+
+func tableFunctionESMResourceName(tableInfo, functionInfo *provider.ResourceInfo) string {
+	return fmt.Sprintf(
+		"%sStream%s",
+		pluginutils.StripNonAlphaNumericChars(pluginutils.GetResourceName(tableInfo)),
+		pluginutils.StripNonAlphaNumericChars(pluginutils.GetResourceName(functionInfo)),
+	)
+}
+
+func getExistingEventSourceMappingUUID(linkState *state.LinkState, resourceID string) string {
 	if linkState == nil || linkState.Data == nil {
 		return ""
 	}
@@ -807,7 +786,7 @@ func getExistingEventSourceMappingUUID(linkState *state.LinkState) string {
 		Fields: linkState.Data,
 	}
 	uuid, hasUUID := pluginutils.GetValueByPath(
-		"$.eventSourceMapping.uuid",
+		linkutils.IntermediaryLeafPath(resourceID, "uuid"),
 		linkData,
 	)
 	if !hasUUID || uuid == nil {

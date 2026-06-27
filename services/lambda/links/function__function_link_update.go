@@ -8,11 +8,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/newstack-cloud/bluelink-provider-aws/linkutils"
 	ec2service "github.com/newstack-cloud/bluelink-provider-aws/services/ec2/service"
-	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
 	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/utils"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
@@ -199,6 +197,11 @@ func (l *lambdaFunctionFunctionLinkActions) UpdateResourceB(
 	}, nil
 }
 
+// UpdateIntermediaryResources grants (or revokes) the caller function's
+// execution role permission to invoke the target function by packing a single IAM
+// statement into the role's allocator-managed policies. The role is an existing
+// intermediary in the blueprint, so the role lock is held while its shared policy
+// set is read-modified.
 func (l *lambdaFunctionFunctionLinkActions) UpdateIntermediaryResources(
 	ctx context.Context,
 	input *provider.LinkUpdateIntermediaryResourcesInput,
@@ -229,14 +232,15 @@ func (l *lambdaFunctionFunctionLinkActions) UpdateIntermediaryResources(
 		return nil, err
 	}
 
-	// Acquire a lock on the role resource to prevent concurrent updates
-	// to the same role from multiple links.
+	// The execution role is shared by every link that grants it access, so lock it
+	// for the read-modify-write of its policy set.
 	err = input.ResourceService.AcquireResourceLock(
 		ctx,
 		&provider.AcquireResourceLockInput{
 			InstanceID:      pluginutils.GetInstanceID(input.ResourceAInfo),
 			ResourceName:    setupCtx.RoleResourceName,
 			ProviderContext: providerCtx,
+			AcquiredBy:      input.LinkID,
 		},
 	)
 	if err != nil {
@@ -251,11 +255,19 @@ func (l *lambdaFunctionFunctionLinkActions) UpdateIntermediaryResources(
 		return nil, err
 	}
 
-	rolePolicies, err := iamService.ListRolePolicies(ctx, &iam.ListRolePoliciesInput{
-		RoleName: aws.String(setupCtx.RoleName),
-	})
-	if err != nil {
-		return nil, err
+	sid := createLambdaFunctionInvokeSID(input.ResourceBInfo)
+
+	if input.LinkUpdateType == provider.LinkUpdateTypeDestroy {
+		_, err := linkutils.ReconcileRoleAccessPolicy(ctx, iamService, linkutils.RoleAccessGrant{
+			RoleName: setupCtx.RoleName,
+			SID:      sid,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &provider.LinkUpdateIntermediaryResourcesOutput{
+			LinkData: core.MappingNodeFields(),
+		}, nil
 	}
 
 	otherFunctionARN, hasOtherFunctionARN := utils.ExtractARNFromResourceInfo(
@@ -268,29 +280,24 @@ func (l *lambdaFunctionFunctionLinkActions) UpdateIntermediaryResources(
 		)
 	}
 
-	sid := createLambdaFunctionInvokeSID(input.ResourceBInfo)
-	if input.LinkUpdateType == provider.LinkUpdateTypeDestroy {
-		return l.removeRolePolicyPermissions(
-			ctx,
-			input,
-			setupCtx,
-			rolePolicies,
-			iamService,
-		)
-	}
-
-	output, err := l.setRolePolicyPermissions(
-		ctx,
-		input,
-		otherFunctionARN,
-		sid,
-		setupCtx,
-		rolePolicies,
-		iamService,
-	)
+	result, err := linkutils.ReconcileRoleAccessPolicy(ctx, iamService, linkutils.RoleAccessGrant{
+		RoleName:  setupCtx.RoleName,
+		SID:       sid,
+		Statement: lambdaInvokeAccessStatement(sid, otherFunctionARN),
+	})
 	if err != nil {
+		if errors.Is(err, linkutils.ErrAccessPolicyBudgetExhausted) {
+			return nil, fmt.Errorf(
+				"cannot grant Lambda %q permission to invoke Lambda %q: %w",
+				pluginutils.GetResourceName(input.ResourceAInfo),
+				pluginutils.GetResourceName(input.ResourceBInfo),
+				err,
+			)
+		}
 		return nil, err
 	}
+
+	output := invokeAccessLinkOutput(input, setupCtx.RoleResourceName, sid, otherFunctionARN, result)
 
 	return l.updateNetworkingElements(
 		ctx,
@@ -301,202 +308,54 @@ func (l *lambdaFunctionFunctionLinkActions) UpdateIntermediaryResources(
 	)
 }
 
-func (l *lambdaFunctionFunctionLinkActions) setRolePolicyPermissions(
-	ctx context.Context,
-	input *provider.LinkUpdateIntermediaryResourcesInput,
-	otherFunctionARN string,
-	sid string,
-	setupCtx *linkutils.LambdaLinkSetupContext,
-	rolePolicies *iam.ListRolePoliciesOutput,
-	iamService iamservice.Service,
-) (*provider.LinkUpdateIntermediaryResourcesOutput, error) {
-	invokePermission := map[string]any{
+// lambdaInvokeAccessStatement builds the IAM policy statement (canonical
+// PascalCase, as the IAM API expects) granting permission to invoke the target
+// function.
+func lambdaInvokeAccessStatement(sid, otherFunctionARN string) map[string]any {
+	return map[string]any{
 		"Sid":      sid,
 		"Effect":   "Allow",
 		"Action":   "lambda:InvokeFunction",
 		"Resource": otherFunctionARN,
 	}
-
-	if len(rolePolicies.PolicyNames) > 0 {
-		return l.updateExistingRolePolicy(
-			ctx,
-			input,
-			&roleInfo{
-				roleName:          setupCtx.RoleName,
-				roleResourceState: setupCtx.RoleResourceState,
-				rolePolicies:      rolePolicies,
-				invokePermission:  invokePermission,
-				sid:               sid,
-			},
-			iamService,
-		)
-	}
-
-	return l.addNewRolePolicy(
-		ctx,
-		input,
-		&roleInfo{
-			roleName:          setupCtx.RoleName,
-			roleResourceState: setupCtx.RoleResourceState,
-			rolePolicies:      rolePolicies,
-			invokePermission:  invokePermission,
-			sid:               sid,
-		},
-		iamService,
-	)
 }
 
-func (l *lambdaFunctionFunctionLinkActions) addNewRolePolicy(
-	ctx context.Context,
+// invokeAccessLinkOutput records the granted statement in link data and, for
+// inline placements, maps it onto the role's spec so the framework attributes the
+// statement to this link and does not treat it as drift / strip it on redeploy.
+func invokeAccessLinkOutput(
 	input *provider.LinkUpdateIntermediaryResourcesInput,
-	roleData *roleInfo,
-	iamService iamservice.Service,
-) (*provider.LinkUpdateIntermediaryResourcesOutput, error) {
-	policyName, err := linkutils.CreateNewRolePolicy(
-		ctx,
-		iamService,
-		input.InstanceName,
-		roleData.roleName,
-		[]map[string]any{roleData.invokePermission},
+	roleResourceName, sid, otherFunctionARN string,
+	result linkutils.RoleAccessResult,
+) *provider.LinkUpdateIntermediaryResourcesOutput {
+	linkDataKey := createLinkDataExecutionRoleName(input.ResourceAInfo)
+	roleLinkData := core.MappingNodeFields(
+		linkutils.PermissionFieldName,
+		camelInvokeStatementNode(sid, otherFunctionARN),
 	)
-	if err != nil {
-		return nil, err
-	}
 
-	roleResourcePath := fmt.Sprintf(
-		"%s::spec.policies[@.name=\"%q\"].Statement[@.Sid=\"%q\"]",
-		roleData.roleResourceState.Name,
-		policyName,
-		roleData.sid,
-	)
-	linkDataExecRoleName := createLinkDataExecutionRoleName(input.ResourceAInfo)
-	linkDataFieldPath := linkutils.PermissionFieldPath(linkDataExecRoleName)
-
-	invokePermissionNode, err := pluginutils.AnyToMappingNode(roleData.invokePermission)
-	if err != nil {
-		return nil, err
-	}
+	// Attribute the grant to this link so the role's drift/deploy does not strip it:
+	// inline placements map the statement by Sid; managed (overflow) placements map
+	// the attached managed policy ARN.
+	mappings := map[string]string{}
+	linkutils.AppendRoleAccessMapping(mappings, roleLinkData, roleResourceName, linkDataKey, sid, result)
 
 	return &provider.LinkUpdateIntermediaryResourcesOutput{
-		IntermediaryResourceStates: []*state.LinkIntermediaryResourceState{},
-		LinkData: core.MappingNodeFields(
-			linkDataExecRoleName,
-			core.MappingNodeFields(
-				linkutils.PermissionFieldName,
-				invokePermissionNode,
-				linkutils.PolicyNameFieldName,
-				core.MappingNodeFromString(policyName),
-			),
-		),
-		ResourceDataMappings: map[string]string{
-			roleResourcePath: linkDataFieldPath,
-		},
-	}, nil
+		LinkData:             core.MappingNodeFields(linkDataKey, roleLinkData),
+		ResourceDataMappings: mappings,
+	}
 }
 
-type roleInfo struct {
-	roleName          string
-	roleResourceState *state.ResourceState
-	rolePolicies      *iam.ListRolePoliciesOutput
-	invokePermission  map[string]any
-	sid               string
-}
-
-func (l *lambdaFunctionFunctionLinkActions) updateExistingRolePolicy(
-	ctx context.Context,
-	input *provider.LinkUpdateIntermediaryResourcesInput,
-	roleData *roleInfo,
-	iamService iamservice.Service,
-) (*provider.LinkUpdateIntermediaryResourcesOutput, error) {
-	executionRoleName := fmt.Sprintf(
-		"%sExecutionRole",
-		input.ResourceAInfo.ResourceName,
+// camelInvokeStatementNode builds the statement in the camelCase spec form the
+// role's external state uses (after Cloud Control name translation), so the drift
+// comparison against link data matches.
+func camelInvokeStatementNode(sid, otherFunctionARN string) *core.MappingNode {
+	return core.MappingNodeFields(
+		"sid", core.MappingNodeFromString(sid),
+		"effect", core.MappingNodeFromString("Allow"),
+		"action", core.MappingNodeFromString("lambda:InvokeFunction"),
+		"resource", core.MappingNodeFromString(otherFunctionARN),
 	)
-	linkDataFieldPath := linkutils.PermissionFieldPath(executionRoleName)
-
-	policyName, existingPermSID := linkutils.ExtractPolicyNameAndCurrentPermissionSID(
-		input.CurrentLinkState,
-		executionRoleName,
-		roleData.rolePolicies,
-	)
-
-	err := linkutils.UpdateExistingRolePolicy(
-		ctx,
-		iamService,
-		roleData.roleName,
-		policyName,
-		[]map[string]any{roleData.invokePermission},
-		[]string{existingPermSID},
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	roleResourcePath := fmt.Sprintf(
-		"%s::spec.policies[@.name=\"%q\"].Statement[@.Sid=\"%q\"]",
-		roleData.roleResourceState.Name,
-		policyName,
-		roleData.sid,
-	)
-
-	invokePermissionNode, err := pluginutils.AnyToMappingNode(roleData.invokePermission)
-	if err != nil {
-		return nil, err
-	}
-
-	return &provider.LinkUpdateIntermediaryResourcesOutput{
-		IntermediaryResourceStates: []*state.LinkIntermediaryResourceState{},
-		LinkData: core.MappingNodeFields(
-			executionRoleName,
-			core.MappingNodeFields(
-				linkutils.PermissionFieldName,
-				invokePermissionNode,
-				linkutils.PolicyNameFieldName,
-				core.MappingNodeFromString(policyName),
-			),
-		),
-		ResourceDataMappings: map[string]string{
-			roleResourcePath: linkDataFieldPath,
-		},
-	}, nil
-}
-
-func (l *lambdaFunctionFunctionLinkActions) removeRolePolicyPermissions(
-	ctx context.Context,
-	input *provider.LinkUpdateIntermediaryResourcesInput,
-	setupCtx *linkutils.LambdaLinkSetupContext,
-	rolePolicies *iam.ListRolePoliciesOutput,
-	iamService iamservice.Service,
-) (*provider.LinkUpdateIntermediaryResourcesOutput, error) {
-	executionRoleName := fmt.Sprintf(
-		"%sExecutionRole",
-		input.ResourceAInfo.ResourceName,
-	)
-
-	policyName, existingPermSID := linkutils.ExtractPolicyNameAndCurrentPermissionSID(
-		input.CurrentLinkState,
-		executionRoleName,
-		rolePolicies,
-	)
-
-	err := linkutils.RemoveExistingRolePolicyPermissions(
-		ctx,
-		iamService,
-		setupCtx.RoleName,
-		policyName,
-		[]string{existingPermSID},
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return &provider.LinkUpdateIntermediaryResourcesOutput{
-		IntermediaryResourceStates: []*state.LinkIntermediaryResourceState{},
-		LinkData: core.MappingNodeFields(
-			executionRoleName,
-			core.MappingNodeFields(),
-		),
-	}, nil
 }
 
 func (l *lambdaFunctionFunctionLinkActions) updateNetworkingElements(

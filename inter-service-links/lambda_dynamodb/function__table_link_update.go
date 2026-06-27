@@ -2,18 +2,15 @@ package lambdadynamodb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/newstack-cloud/bluelink-provider-aws/linkutils"
-	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
 	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/utils"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
-	"github.com/newstack-cloud/bluelink/libs/blueprint/state"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 )
 
@@ -191,6 +188,10 @@ func (l *lambdaFunctionDynamoDBTableLinkActions) UpdateResourceB(
 	}, nil
 }
 
+// UpdateIntermediaryResources grants (or revokes) the Lambda execution role access
+// to the DynamoDB table by packing a single IAM statement into the role's
+// allocator-managed policies. The role is an existing intermediary in the
+// blueprint, so the role lock is held while its shared policy set is read-modified.
 func (l *lambdaFunctionDynamoDBTableLinkActions) UpdateIntermediaryResources(
 	ctx context.Context,
 	input *provider.LinkUpdateIntermediaryResourcesInput,
@@ -218,14 +219,15 @@ func (l *lambdaFunctionDynamoDBTableLinkActions) UpdateIntermediaryResources(
 		return nil, err
 	}
 
-	// Acquire a lock on the role resource to prevent concurrent updates
-	// to the same role from multiple links.
+	// The execution role is shared by every link that grants it access, so lock it
+	// for the read-modify-write of its policy set.
 	err = input.ResourceService.AcquireResourceLock(
 		ctx,
 		&provider.AcquireResourceLockInput{
 			InstanceID:      pluginutils.GetInstanceID(input.ResourceAInfo),
 			ResourceName:    setupCtx.RoleResourceName,
 			ProviderContext: providerCtx,
+			AcquiredBy:      input.LinkID,
 		},
 	)
 	if err != nil {
@@ -237,11 +239,19 @@ func (l *lambdaFunctionDynamoDBTableLinkActions) UpdateIntermediaryResources(
 		return nil, err
 	}
 
-	rolePolicies, err := iamService.ListRolePolicies(ctx, &iam.ListRolePoliciesInput{
-		RoleName: aws.String(setupCtx.RoleName),
-	})
-	if err != nil {
-		return nil, err
+	sid := createDynamoDBAccessSID(input.ResourceBInfo)
+
+	if input.LinkUpdateType == provider.LinkUpdateTypeDestroy {
+		_, err := linkutils.ReconcileRoleAccessPolicy(ctx, iamService, linkutils.RoleAccessGrant{
+			RoleName: setupCtx.RoleName,
+			SID:      sid,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &provider.LinkUpdateIntermediaryResourcesOutput{
+			LinkData: core.MappingNodeFields(),
+		}, nil
 	}
 
 	tableARN, hasTableARN := utils.ExtractARNFromResourceInfo(input.ResourceBInfo)
@@ -252,226 +262,79 @@ func (l *lambdaFunctionDynamoDBTableLinkActions) UpdateIntermediaryResources(
 		)
 	}
 
-	annotations := getDynamoDBTableLinkAnnotations(
-		input.ResourceAInfo,
-		input.ResourceBInfo,
-	)
-	sid := createDynamoDBAccessSID(input.ResourceBInfo)
-
-	if input.LinkUpdateType == provider.LinkUpdateTypeDestroy {
-		return l.removeRolePolicyPermissions(
-			ctx,
-			input,
-			setupCtx,
-			rolePolicies,
-			iamService,
-		)
+	annotations := getDynamoDBTableLinkAnnotations(input.ResourceAInfo, input.ResourceBInfo)
+	result, err := linkutils.ReconcileRoleAccessPolicy(ctx, iamService, linkutils.RoleAccessGrant{
+		RoleName:  setupCtx.RoleName,
+		SID:       sid,
+		Statement: dynamoDBAccessStatement(sid, tableARN, annotations.accessLevel),
+	})
+	if err != nil {
+		if errors.Is(err, linkutils.ErrAccessPolicyBudgetExhausted) {
+			return nil, fmt.Errorf(
+				"cannot grant Lambda %q access to DynamoDB table %q: %w",
+				pluginutils.GetResourceName(input.ResourceAInfo),
+				pluginutils.GetResourceName(input.ResourceBInfo),
+				err,
+			)
+		}
+		return nil, err
 	}
 
-	return l.setRolePolicyPermissions(
-		ctx,
-		input,
-		tableARN,
-		sid,
-		annotations.accessLevel,
-		setupCtx,
-		rolePolicies,
-		iamService,
-	)
+	return accessLinkOutput(input, setupCtx.RoleResourceName, sid, tableARN, annotations.accessLevel, result), nil
 }
 
-func (l *lambdaFunctionDynamoDBTableLinkActions) setRolePolicyPermissions(
-	ctx context.Context,
-	input *provider.LinkUpdateIntermediaryResourcesInput,
-	tableARN string,
-	sid string,
-	accessLevel string,
-	setupCtx *linkutils.LambdaLinkSetupContext,
-	rolePolicies *iam.ListRolePoliciesOutput,
-	iamService iamservice.Service,
-) (*provider.LinkUpdateIntermediaryResourcesOutput, error) {
-	actions := dynamoDBActionsForAccessLevel(accessLevel)
-	permission := map[string]any{
+// dynamoDBAccessStatement builds the IAM policy statement (canonical PascalCase, as
+// the IAM API expects) granting the access level to the table.
+func dynamoDBAccessStatement(sid, tableARN, accessLevel string) map[string]any {
+	return map[string]any{
 		"Sid":      sid,
 		"Effect":   "Allow",
-		"Action":   actions,
+		"Action":   dynamoDBActionsForAccessLevel(accessLevel),
 		"Resource": tableARN,
 	}
-
-	if len(rolePolicies.PolicyNames) > 0 {
-		return l.updateExistingRolePolicy(
-			ctx,
-			input,
-			&dynamoDBRoleInfo{
-				roleName:          setupCtx.RoleName,
-				roleResourceState: setupCtx.RoleResourceState,
-				rolePolicies:      rolePolicies,
-				permission:        permission,
-				sid:               sid,
-			},
-			iamService,
-		)
-	}
-
-	return l.addNewRolePolicy(
-		ctx,
-		input,
-		&dynamoDBRoleInfo{
-			roleName:          setupCtx.RoleName,
-			roleResourceState: setupCtx.RoleResourceState,
-			rolePolicies:      rolePolicies,
-			permission:        permission,
-			sid:               sid,
-		},
-		iamService,
-	)
 }
 
-func (l *lambdaFunctionDynamoDBTableLinkActions) addNewRolePolicy(
-	ctx context.Context,
+// accessLinkOutput records the granted statement in link data and, for inline
+// placements, maps it onto the role's spec so the framework attributes the
+// statement to this link and does not treat it as drift / strip it on redeploy.
+func accessLinkOutput(
 	input *provider.LinkUpdateIntermediaryResourcesInput,
-	roleData *dynamoDBRoleInfo,
-	iamService iamservice.Service,
-) (*provider.LinkUpdateIntermediaryResourcesOutput, error) {
-	policyName, err := linkutils.CreateNewRolePolicy(
-		ctx,
-		iamService,
-		input.InstanceName,
-		roleData.roleName,
-		[]map[string]any{roleData.permission},
+	roleResourceName, sid, tableARN, accessLevel string,
+	result linkutils.RoleAccessResult,
+) *provider.LinkUpdateIntermediaryResourcesOutput {
+	linkDataKey := createLinkDataExecutionRoleName(input.ResourceAInfo)
+	roleLinkData := core.MappingNodeFields(
+		linkutils.PermissionFieldName,
+		camelAccessStatementNode(sid, tableARN, accessLevel),
 	)
-	if err != nil {
-		return nil, err
-	}
 
-	roleResourcePath := fmt.Sprintf(
-		"%s::spec.policies[@.name=\"%q\"].Statement[@.Sid=\"%q\"]",
-		roleData.roleResourceState.Name,
-		policyName,
-		roleData.sid,
-	)
-	linkDataExecRoleName := createLinkDataExecutionRoleName(input.ResourceAInfo)
-	linkDataFieldPath := linkutils.PermissionFieldPath(linkDataExecRoleName)
-
-	permissionNode, err := pluginutils.AnyToMappingNode(roleData.permission)
-	if err != nil {
-		return nil, err
-	}
+	// Attribute the grant to this link so the role's drift/deploy does not strip it:
+	// inline placements map the statement by Sid; managed (overflow) placements map
+	// the attached managed policy ARN.
+	mappings := map[string]string{}
+	linkutils.AppendRoleAccessMapping(mappings, roleLinkData, roleResourceName, linkDataKey, sid, result)
 
 	return &provider.LinkUpdateIntermediaryResourcesOutput{
-		IntermediaryResourceStates: []*state.LinkIntermediaryResourceState{},
-		LinkData: core.MappingNodeFields(
-			linkDataExecRoleName,
-			core.MappingNodeFields(
-				linkutils.PermissionFieldName,
-				permissionNode,
-				linkutils.PolicyNameFieldName,
-				core.MappingNodeFromString(policyName),
-			),
-		),
-		ResourceDataMappings: map[string]string{
-			roleResourcePath: linkDataFieldPath,
-		},
-	}, nil
+		LinkData:             core.MappingNodeFields(linkDataKey, roleLinkData),
+		ResourceDataMappings: mappings,
+	}
 }
 
-type dynamoDBRoleInfo struct {
-	roleName          string
-	roleResourceState *state.ResourceState
-	rolePolicies      *iam.ListRolePoliciesOutput
-	permission        map[string]any
-	sid               string
-}
-
-func (l *lambdaFunctionDynamoDBTableLinkActions) updateExistingRolePolicy(
-	ctx context.Context,
-	input *provider.LinkUpdateIntermediaryResourcesInput,
-	roleData *dynamoDBRoleInfo,
-	iamService iamservice.Service,
-) (*provider.LinkUpdateIntermediaryResourcesOutput, error) {
-	executionRoleName := createLinkDataExecutionRoleName(input.ResourceAInfo)
-	linkDataFieldPath := linkutils.PermissionFieldPath(executionRoleName)
-
-	policyName, existingPermSID := linkutils.ExtractPolicyNameAndCurrentPermissionSID(
-		input.CurrentLinkState,
-		executionRoleName,
-		roleData.rolePolicies,
-	)
-
-	err := linkutils.UpdateExistingRolePolicy(
-		ctx,
-		iamService,
-		roleData.roleName,
-		policyName,
-		[]map[string]any{roleData.permission},
-		[]string{existingPermSID},
-	)
-	if err != nil {
-		return nil, err
+// camelAccessStatementNode builds the statement in the camelCase spec form the
+// role's external state uses (after Cloud Control name translation), so the drift
+// comparison against link data matches.
+func camelAccessStatementNode(sid, tableARN, accessLevel string) *core.MappingNode {
+	actions := dynamoDBActionsForAccessLevel(accessLevel)
+	actionItems := make([]*core.MappingNode, len(actions))
+	for i, action := range actions {
+		actionItems[i] = core.MappingNodeFromString(action)
 	}
-
-	roleResourcePath := fmt.Sprintf(
-		"%s::spec.policies[@.name=\"%q\"].Statement[@.Sid=\"%q\"]",
-		roleData.roleResourceState.Name,
-		policyName,
-		roleData.sid,
+	return core.MappingNodeFields(
+		"sid", core.MappingNodeFromString(sid),
+		"effect", core.MappingNodeFromString("Allow"),
+		"action", &core.MappingNode{Items: actionItems},
+		"resource", core.MappingNodeFromString(tableARN),
 	)
-
-	permissionNode, err := pluginutils.AnyToMappingNode(roleData.permission)
-	if err != nil {
-		return nil, err
-	}
-
-	return &provider.LinkUpdateIntermediaryResourcesOutput{
-		IntermediaryResourceStates: []*state.LinkIntermediaryResourceState{},
-		LinkData: core.MappingNodeFields(
-			executionRoleName,
-			core.MappingNodeFields(
-				linkutils.PermissionFieldName,
-				permissionNode,
-				linkutils.PolicyNameFieldName,
-				core.MappingNodeFromString(policyName),
-			),
-		),
-		ResourceDataMappings: map[string]string{
-			roleResourcePath: linkDataFieldPath,
-		},
-	}, nil
-}
-
-func (l *lambdaFunctionDynamoDBTableLinkActions) removeRolePolicyPermissions(
-	ctx context.Context,
-	input *provider.LinkUpdateIntermediaryResourcesInput,
-	setupCtx *linkutils.LambdaLinkSetupContext,
-	rolePolicies *iam.ListRolePoliciesOutput,
-	iamService iamservice.Service,
-) (*provider.LinkUpdateIntermediaryResourcesOutput, error) {
-	executionRoleName := createLinkDataExecutionRoleName(input.ResourceAInfo)
-
-	policyName, existingPermSID := linkutils.ExtractPolicyNameAndCurrentPermissionSID(
-		input.CurrentLinkState,
-		executionRoleName,
-		rolePolicies,
-	)
-
-	err := linkutils.RemoveExistingRolePolicyPermissions(
-		ctx,
-		iamService,
-		setupCtx.RoleName,
-		policyName,
-		[]string{existingPermSID},
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return &provider.LinkUpdateIntermediaryResourcesOutput{
-		IntermediaryResourceStates: []*state.LinkIntermediaryResourceState{},
-		LinkData: core.MappingNodeFields(
-			executionRoleName,
-			core.MappingNodeFields(),
-		),
-	}, nil
 }
 
 func dynamoDBTableEnvVarName(
@@ -563,17 +426,17 @@ func extractTableNameFromResourceInfo(resourceInfo *provider.ResourceInfo) (stri
 	return core.StringValue(tableName), true
 }
 
-func dynamoDBActionsForAccessLevel(accessLevel string) []any {
+func dynamoDBActionsForAccessLevel(accessLevel string) []string {
 	switch accessLevel {
 	case "read":
-		return []any{
+		return []string{
 			"dynamodb:GetItem",
 			"dynamodb:Query",
 			"dynamodb:Scan",
 			"dynamodb:BatchGetItem",
 		}
 	case "write":
-		return []any{
+		return []string{
 			"dynamodb:PutItem",
 			"dynamodb:UpdateItem",
 			"dynamodb:DeleteItem",
@@ -582,7 +445,7 @@ func dynamoDBActionsForAccessLevel(accessLevel string) []any {
 	case "readwrite":
 		fallthrough
 	default:
-		return []any{
+		return []string{
 			"dynamodb:GetItem",
 			"dynamodb:Query",
 			"dynamodb:Scan",
