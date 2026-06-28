@@ -82,10 +82,11 @@ func createVPCStateTestCase(
 			"region":             core.MappingNodeFromString("us-west-2"),
 			"tags":               nil,
 			"vpcId":              core.MappingNodeFromString("vpc-12345678"),
-			"subnets": core.MappingNodeItems(
-				core.MappingNodeFields(
+			"subnets": core.MappingNodeFields(
+				"private-subnet-1", core.MappingNodeFields(
 					"id", core.MappingNodeFromString("subnet-12345678"),
 					"availabilityZone", core.MappingNodeFromString("us-west-2a"),
+					"subnetType", core.MappingNodeFromString("private"),
 				),
 			),
 			"routeTables": core.MappingNodeItems(
@@ -154,6 +155,14 @@ func createVPCStateTestCase(
 							{
 								Key:   aws.String("flex-vpc-name"),
 								Value: aws.String("test-vpc"),
+							},
+							{
+								Key:   aws.String(TagFlexVPCSubnetName),
+								Value: aws.String("private-subnet-1"),
+							},
+							{
+								Key:   aws.String(TagFlexVPCSubnetType),
+								Value: aws.String("private"),
 							},
 						},
 					},
@@ -883,10 +892,10 @@ func createVPCWithPresetTestCase(
 			"region":             core.MappingNodeFromString("us-west-2"),
 			"tags":               nil,
 			"vpcId":              core.MappingNodeFromString("vpc-12345678"),
-			"subnets":            &core.MappingNode{},
-			"routeTables":        &core.MappingNode{},
-			"securityGroups":     &core.MappingNode{},
-			"networkAcls":        &core.MappingNode{},
+			"subnets":            core.MappingNodeFields(),
+			"routeTables":        {},
+			"securityGroups":     {},
+			"networkAcls":        {},
 			"gateways": core.MappingNodeFields(
 				"internetGatewayId", core.MappingNodeFromString("igw-12345678"),
 				"natGateways", &core.MappingNode{},

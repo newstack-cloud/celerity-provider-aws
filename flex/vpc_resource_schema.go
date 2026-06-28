@@ -184,6 +184,14 @@ func vpcResourceSchema() *provider.ResourceDefinitionsSchema {
 							Type:        provider.ResourceDefinitionsSchemaTypeString,
 							Description: "The availability zone of the subnet.",
 						},
+						"subnetType": {
+							Type:        provider.ResourceDefinitionsSchemaTypeString,
+							Description: "The tier of the subnet, either \"public\" or \"private\". Links that place resources in the VPC use this to select subnets by tier.",
+							AllowedValues: []*core.MappingNode{
+								core.MappingNodeFromString("public"),
+								core.MappingNodeFromString("private"),
+							},
+						},
 					},
 				},
 			},

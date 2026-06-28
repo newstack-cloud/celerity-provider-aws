@@ -726,6 +726,8 @@ func standardPresetExpectedOutput() *provider.ResourceDeployOutput {
 					core.MappingNodeFromString("subnet-1"),
 					"availabilityZone",
 					core.MappingNodeFromString("us-east-1a"),
+					"subnetType",
+					core.MappingNodeFromString("private"),
 				),
 				"private-az-2",
 				core.MappingNodeFields(
@@ -733,6 +735,8 @@ func standardPresetExpectedOutput() *provider.ResourceDeployOutput {
 					core.MappingNodeFromString("subnet-2"),
 					"availabilityZone",
 					core.MappingNodeFromString("us-east-1b"),
+					"subnetType",
+					core.MappingNodeFromString("private"),
 				),
 				"private-az-3",
 				core.MappingNodeFields(
@@ -740,6 +744,8 @@ func standardPresetExpectedOutput() *provider.ResourceDeployOutput {
 					core.MappingNodeFromString("subnet-3"),
 					"availabilityZone",
 					core.MappingNodeFromString("us-east-1c"),
+					"subnetType",
+					core.MappingNodeFromString("private"),
 				),
 				"public-az-1",
 				core.MappingNodeFields(
@@ -747,6 +753,8 @@ func standardPresetExpectedOutput() *provider.ResourceDeployOutput {
 					core.MappingNodeFromString("subnet-4"),
 					"availabilityZone",
 					core.MappingNodeFromString("us-east-1a"),
+					"subnetType",
+					core.MappingNodeFromString("public"),
 				),
 				"public-az-2",
 				core.MappingNodeFields(
@@ -754,6 +762,8 @@ func standardPresetExpectedOutput() *provider.ResourceDeployOutput {
 					core.MappingNodeFromString("subnet-5"),
 					"availabilityZone",
 					core.MappingNodeFromString("us-east-1b"),
+					"subnetType",
+					core.MappingNodeFromString("public"),
 				),
 				"public-az-3",
 				core.MappingNodeFields(
@@ -761,6 +771,8 @@ func standardPresetExpectedOutput() *provider.ResourceDeployOutput {
 					core.MappingNodeFromString("subnet-6"),
 					"availabilityZone",
 					core.MappingNodeFromString("us-east-1c"),
+					"subnetType",
+					core.MappingNodeFromString("public"),
 				),
 			),
 			"spec.routeTables": core.MappingNodeItems(

@@ -55,6 +55,26 @@ func emitResourceFile(res *irResource) ([]byte, error) {
 	return format.Source([]byte(source))
 }
 
+// Renders just the schema builder for a data-source-only type. Its
+// resource constructor and registry entry are intentionally omitted (no managed resource
+// is emitted), but the generated data source still references the `<type>Schema()` builder.
+func emitSchemaOnlyFile(res *irResource) ([]byte, error) {
+	ident := goIdentifier(res.CFNType)
+	var b strings.Builder
+
+	fmt.Fprintf(&b, "func %sSchema() *provider.ResourceDefinitionsSchema {\n", ident)
+	b.WriteString("\treturn ")
+	b.WriteString(renderSchema(res.Schema, 1))
+	b.WriteString("\n}\n")
+
+	body := b.String()
+	imports := []string{`"github.com/newstack-cloud/bluelink/libs/blueprint/provider"`}
+	if strings.Contains(body, "core.") {
+		imports = append(imports, `"github.com/newstack-cloud/bluelink/libs/blueprint/core"`)
+	}
+	return format.Source([]byte(fileHeader(imports) + body))
+}
+
 // Renders the cloudcontrol.CCResourceMeta literal shared by the resource
 // and data source constructors (gofmt normalises the indentation).
 func metaLiteral(res *irResource) string {

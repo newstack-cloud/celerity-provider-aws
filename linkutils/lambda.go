@@ -34,6 +34,43 @@ type LambdaLinkSetupContext struct {
 	LambdaService     lambdaservice.Service
 }
 
+// CallerNetworkingFromLambdaVPCConfig adapts a Lambda function's VpcConfig into the
+// platform-agnostic CallerNetworking that ActivateLinkNetworking consumes. A nil or
+// unattached config yields a zero CallerNetworking, which the helper treats as a no-op.
+func CallerNetworkingFromLambdaVPCConfig(vpcConfig *types.VpcConfigResponse) CallerNetworking {
+	if vpcConfig == nil {
+		return CallerNetworking{}
+	}
+	return CallerNetworking{
+		VPCID:            aws.ToString(vpcConfig.VpcId),
+		SubnetIDs:        vpcConfig.SubnetIds,
+		SecurityGroupIDs: vpcConfig.SecurityGroupIds,
+	}
+}
+
+// UpdateLambdaVPCConfig sets a Lambda function's VPC configuration (subnets and
+// security groups) via UpdateFunctionConfiguration. Passing empty slices detaches the
+// function from its VPC, which AWS treats as clearing the configuration.
+func UpdateLambdaVPCConfig(
+	ctx context.Context,
+	lambdaService lambdaservice.Service,
+	functionARN string,
+	subnetIDs []string,
+	securityGroupIDs []string,
+) error {
+	_, err := lambdaService.UpdateFunctionConfiguration(
+		ctx,
+		&lambda.UpdateFunctionConfigurationInput{
+			FunctionName: aws.String(functionARN),
+			VpcConfig: &types.VpcConfig{
+				SubnetIds:        subnetIDs,
+				SecurityGroupIds: securityGroupIDs,
+			},
+		},
+	)
+	return err
+}
+
 // SetupLinkFromLambdaFunction sets up a link from a Lambda function to another resource.
 func SetupLinkFromLambdaFunction(
 	ctx context.Context,

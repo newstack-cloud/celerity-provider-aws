@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -30,22 +31,28 @@ type cfnRegistry interface {
 // Discovers every provisionable public CloudFormation resource type
 // for each configured service and vendors its schema into the schemas directory,
 // validating each one before writing. Requires AWS credentials.
-func syncSchemas(schemasDir, region string) error {
+func syncSchemas(schemasDir, region, serviceFilter string) error {
 	ctx := context.Background()
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
 	if err != nil {
 		return fmt.Errorf("loading AWS config: %w", err)
 	}
-	return syncSchemasWith(ctx, cloudformation.NewFromConfig(cfg), schemasDir, region)
+	return syncSchemasWith(ctx, cloudformation.NewFromConfig(cfg), schemasDir, region, serviceFilter)
 }
 
-func syncSchemasWith(ctx context.Context, client cfnRegistry, schemasDir, region string) error {
+// Vendors the onboarded services' schemas. When serviceFilter is non-empty,
+// only the matching service is synced, so a single slice can vendor its new service without
+// re-pulling (and potentially churning) the rest of the committed baseline.
+func syncSchemasWith(ctx context.Context, client cfnRegistry, schemasDir, region, serviceFilter string) error {
 	if err := os.MkdirAll(schemasDir, 0o755); err != nil {
 		return err
 	}
 
 	total := 0
 	for _, svc := range services {
+		if serviceFilter != "" && !strings.EqualFold(svc.Name, serviceFilter) {
+			continue
+		}
 		typeNames, err := discoverServiceTypes(ctx, client, svc)
 		if err != nil {
 			return fmt.Errorf("discovering %s types: %w", svc.Name, err)

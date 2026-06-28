@@ -1702,20 +1702,22 @@ func awsConfigMetaWithRegionGetExternalState(
 func toSpecComputedSubnets(subnets *subnets) *core.MappingNode {
 	outputSubnets := core.MappingNodeFields()
 	for subnetName, subnet := range subnets.public {
-		outputSubnets.Fields[subnetName] = toSpecComputedSubnet(subnet)
+		outputSubnets.Fields[subnetName] = toSpecComputedSubnet(subnet, "public")
 	}
 	for subnetName, subnet := range subnets.private {
-		outputSubnets.Fields[subnetName] = toSpecComputedSubnet(subnet)
+		outputSubnets.Fields[subnetName] = toSpecComputedSubnet(subnet, "private")
 	}
 	return outputSubnets
 }
 
-func toSpecComputedSubnet(subnet *types.Subnet) *core.MappingNode {
+func toSpecComputedSubnet(subnet *types.Subnet, subnetType string) *core.MappingNode {
 	return core.MappingNodeFields(
 		"id",
 		core.MappingNodeFromString(aws.ToString(subnet.SubnetId)),
 		"availabilityZone",
 		core.MappingNodeFromString(aws.ToString(subnet.AvailabilityZone)),
+		"subnetType",
+		core.MappingNodeFromString(subnetType),
 	)
 }
 

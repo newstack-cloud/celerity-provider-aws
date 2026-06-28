@@ -1,0 +1,73 @@
+version: "1.0.0"
+resourceDefinitions: []
+dataSourceDefinitions: []
+
+linkDefinitions:
+  # Places a Lambda function into a flex VPC.
+  # The flex VPC (A) links to the Lambda function (B) to attach it to the VPC.
+  # Semantics: "This VPC places this Lambda function in its subnets."
+  - resourceTypeA: aws/flex/vpc
+    resourceTypeB: aws/lambda/function
+    kind: soft
+    priorityResource: A
+    summary: A link that places a Lambda function within a flex VPC's subnets.
+    annotations:
+      resourceA: []
+      # Placement config is per-function, so it lives on resourceB (the function
+      # being placed). A VPC can place many functions, each in a different tier.
+      resourceB:
+        - name: aws.flexvpc.lambda.subnetType
+          valueType: enum
+          description: >-
+            Which subnet tier to place the function in. "private" (default) lets the
+            function reach private in-VPC resources (a linked database or cache) and,
+            where the VPC provides a NAT gateway, the public internet. "public" lets
+            the function reach in-VPC resources but gives it no outbound internet
+            access (a VPC-attached Lambda has no public IP), which avoids NAT gateway
+            cost for VPCs provisioned without one.
+          default: private
+          allowedValues:
+            - private
+            - public
+    operations:
+      # The VPC itself is not modified by placement; security-group egress/ingress
+      # rules are activated later by the access links between the function and the
+      # specific resources it talks to.
+      updateResourceA: {}
+      updateResourceB:
+        create:
+          - UpdateFunctionConfiguration
+        update:
+          - UpdateFunctionConfiguration
+        destroy:
+          - UpdateFunctionConfiguration
+        notes: >-
+          Sets the function's VpcConfig from the flex VPC's computed subnets
+          (filtered to the tier selected by aws.flexvpc.lambda.subnetType) and the
+          VPC's Bluelink-managed security group. On destroy the VpcConfig is cleared
+          so the function detaches from the VPC.
+      updateIntermediaryResources: {}
+    docLinks:
+      - https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_UpdateFunctionConfiguration.html
+    notes: |
+      This link attaches a Lambda function to a flex VPC by setting the function's
+      VpcConfig:
+
+      1. Reads the flex VPC's computed outputs (subnets, securityGroups) from its
+         resource state. Works identically for a flex VPC in "create" mode and one in
+         "reference" mode (an existing VPC brought into the blueprint), since both
+         populate the same computed outputs.
+
+      2. Selects subnet IDs by the aws.flexvpc.lambda.subnetType annotation
+         (private by default) and assigns the VPC's deny-all-egress security group,
+         then calls UpdateFunctionConfiguration to set the function's VpcConfig.
+
+      3. Records the applied VpcConfig in link data and maps
+         "{functionName}::spec.vpcConfig.*" to the link so the framework attributes
+         the configuration to this link and does not treat it as drift.
+
+      This placement is a prerequisite for VPC networking activation: once the
+      function is VPC-attached, the access links between it and its targets
+      (e.g. lambda->rds, lambda->sns) open the specific security-group rules or
+      provision the VPC endpoints needed for the function to reach those targets.

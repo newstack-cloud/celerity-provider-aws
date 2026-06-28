@@ -24,11 +24,27 @@ func GeneratedDataSources(
 			cloudControlServiceFactory,
 			awsConfigStore,
 		),
+		"aws/ec2/securityGroup": ec2SecurityGroupDataSource(
+			cloudControlServiceFactory,
+			awsConfigStore,
+		),
+		"aws/ec2/subnet": ec2SubnetDataSource(
+			cloudControlServiceFactory,
+			awsConfigStore,
+		),
+		"aws/ec2/vpc": ec2VPCDataSource(
+			cloudControlServiceFactory,
+			awsConfigStore,
+		),
 		"aws/events/eventBus": eventsEventBusDataSource(
 			cloudControlServiceFactory,
 			awsConfigStore,
 		),
 		"aws/events/rule": eventsRuleDataSource(
+			cloudControlServiceFactory,
+			awsConfigStore,
+		),
+		"aws/logs/logGroup": logsLogGroupDataSource(
 			cloudControlServiceFactory,
 			awsConfigStore,
 		),

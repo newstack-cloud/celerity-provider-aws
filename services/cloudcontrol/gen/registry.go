@@ -198,6 +198,11 @@ func GeneratedResources(
 			resourceGroupTaggingServiceFactory,
 			awsConfigStore,
 		),
+		"aws/logs/logGroup": logsLogGroupResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
 		"aws/rds/dbInstance": rdsDBInstanceResource(
 			cloudControlServiceFactory,
 			resourceGroupTaggingServiceFactory,

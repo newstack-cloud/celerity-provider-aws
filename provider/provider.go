@@ -7,6 +7,7 @@ import (
 	"github.com/newstack-cloud/bluelink-provider-aws/flex"
 	eventslambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/events_lambda"
 	eventssqs "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/events_sqs"
+	flexlambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/flex_lambda"
 	lambdadynamodb "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_dynamodb"
 	cloudcontrolgen "github.com/newstack-cloud/bluelink-provider-aws/services/cloudcontrol/gen"
 	cloudcontrolservice "github.com/newstack-cloud/bluelink-provider-aws/services/cloudcontrol/service"
@@ -134,6 +135,19 @@ func NewProvider(
 				lambdadynamodb.DynamoDBTableToLambdaFunctionLinkDeps{
 					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, dynamodbservice.Service]{
 						ServiceFactory: dynamodbServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
+						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
+			// Flex VPC placement: the VPC places the Lambda function in its subnets.
+			"aws/flex/vpc::aws/lambda/function": flexlambda.VPCFunctionLink()(
+				flexlambda.VPCToFunctionLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, ec2service.Service]{
+						ServiceFactory: ec2ServiceFactory,
 						ConfigStore:    awsConfigStore,
 					},
 					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{

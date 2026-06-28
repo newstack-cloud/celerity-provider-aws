@@ -67,6 +67,22 @@ var services = []serviceEntry{
 		},
 	},
 	{
+		// CloudWatch Logs: handler log groups.
+		Name: "Logs",
+		Include: []string{
+			"AWS::Logs::LogGroup",
+		},
+	},
+	{
+		// SNS: pub/sub topics (celerity/topic), their subscriptions and topic policy.
+		Name: "SNS",
+		Include: []string{
+			"AWS::SNS::Topic",
+			"AWS::SNS::Subscription",
+			"AWS::SNS::TopicPolicy",
+		},
+	},
+	{
 		// EC2 is onboarded for data-source lookups only, the flex/vpc abstraction owns
 		// the networking fabric, so no managed EC2 resources are emitted. Only the
 		// types needed for existing-infrastructure lookups are synced.
@@ -76,6 +92,10 @@ var services = []serviceEntry{
 			"AWS::EC2::VPC",
 			"AWS::EC2::Subnet",
 			"AWS::EC2::SecurityGroup",
+		},
+		// Preserve readable casing for the acronym type (the derived name would be "vPC").
+		TypeOverrides: map[string]string{
+			"AWS::EC2::VPC": "aws/ec2/vpc",
 		},
 	},
 }
@@ -111,6 +131,29 @@ var dataSourceConfigs = map[string]dataSourceConfig{
 	"AWS::DynamoDB::GlobalTable": {
 		FilterFields:            []string{"tableName", "arn", "region"},
 		DeriveIdentifierFromARN: true,
+	},
+	"AWS::Logs::LogGroup": {
+		FilterFields:            []string{"logGroupName", "arn", "region"},
+		DeriveIdentifierFromARN: false,
+	},
+	"AWS::SNS::Topic": {
+		FilterFields:            []string{"topicArn", "topicName", "region"},
+		DeriveIdentifierFromARN: false,
+	},
+	// EC2 lookups (data-source-only service) for referencing existing networking
+	// infrastructure from blueprints. Primary identifiers (vpcId/subnetId/id) take the
+	// GetResource fast path; the friendlier fields resolve via ListResources + filter.
+	"AWS::EC2::VPC": {
+		FilterFields:            []string{"vpcId", "cidrBlock", "region"},
+		DeriveIdentifierFromARN: false,
+	},
+	"AWS::EC2::Subnet": {
+		FilterFields:            []string{"subnetId", "vpcId", "availabilityZone", "region"},
+		DeriveIdentifierFromARN: false,
+	},
+	"AWS::EC2::SecurityGroup": {
+		FilterFields:            []string{"id", "groupId", "groupName", "vpcId", "region"},
+		DeriveIdentifierFromARN: false,
 	},
 }
 

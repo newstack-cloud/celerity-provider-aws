@@ -16,10 +16,11 @@ func main() {
 	curatedDir := flag.String("curated", "tools/awsgen/curated_examples", "directory of curated example overrides")
 	sync := flag.Bool("sync", false, "download and vendor the allowlisted CFN schemas instead of generating")
 	region := flag.String("region", "us-east-1", "AWS region for the CloudFormation schema registry (with -sync)")
+	service := flag.String("service", "", "restrict -sync to a single service segment, e.g. \"Logs\" (default: all onboarded services)")
 	flag.Parse()
 
 	if *sync {
-		if err := syncSchemas(*schemasDir, *region); err != nil {
+		if err := syncSchemas(*schemasDir, *region, *service); err != nil {
 			log.Fatal(err)
 		}
 		return
@@ -170,9 +171,17 @@ func generateOne(schemasDir, outDir, curatedDir, schemaFile string) (*irResource
 		return nil, err
 	}
 
-	// Data-source-only services emit no resource file or resource examples; the IR is
-	// still returned so a lookup data source can be derived from it.
+	// Data-source-only services emit no resource constructor, registry entry or examples,
+	// but the generated data source references the `<type>Schema()` builder, so a
+	// schema-only file is written. The IR is returned for data source derivation.
 	if dataSourceOnlyType(schema.TypeName) {
+		source, err := emitSchemaOnlyFile(resource)
+		if err != nil {
+			return nil, fmt.Errorf("emitting %s schema: %w", schema.TypeName, err)
+		}
+		if err := os.WriteFile(filepath.Join(outDir, schemaFileName(schema.TypeName)), source, 0o644); err != nil {
+			return nil, err
+		}
 		return resource, nil
 	}
 

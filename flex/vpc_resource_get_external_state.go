@@ -211,21 +211,32 @@ func (v *vpcResourceActions) getSubnets(
 		return nil, err
 	}
 
-	if len(subnetsOutput.Subnets) == 0 {
-		return &core.MappingNode{}, nil
-	}
-
-	items := []*core.MappingNode{}
+	subnets := core.MappingNodeFields()
 	for _, subnet := range subnetsOutput.Subnets {
-		items = append(items, core.MappingNodeFields(
+		subnetName := ec2TagValue(subnet.Tags, TagFlexVPCSubnetName)
+		if subnetName == "" {
+			subnetName = aws.ToString(subnet.SubnetId)
+		}
+		subnets.Fields[subnetName] = core.MappingNodeFields(
 			"id",
 			core.MappingNodeFromString(aws.ToString(subnet.SubnetId)),
 			"availabilityZone",
 			core.MappingNodeFromString(aws.ToString(subnet.AvailabilityZone)),
-		))
+			"subnetType",
+			core.MappingNodeFromString(ec2TagValue(subnet.Tags, TagFlexVPCSubnetType)),
+		)
 	}
 
-	return core.MappingNodeItems(items...), nil
+	return subnets, nil
+}
+
+func ec2TagValue(tags []types.Tag, key string) string {
+	for _, tag := range tags {
+		if aws.ToString(tag.Key) == key {
+			return aws.ToString(tag.Value)
+		}
+	}
+	return ""
 }
 
 func (v *vpcResourceActions) getRouteTablesAndSubnetNATGatewayMappings(
