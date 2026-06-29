@@ -97,12 +97,14 @@ func dynamoDBTableLambdaFunctionLinkAnnotations() map[string]*provider.LinkAnnot
 			DefaultValue: core.ScalarFromBool(false),
 			Required:     false,
 		},
-		"aws/lambda/function::aws.dynamodb.lambda.stream.filterCriteria": {
-			Name:  "aws.dynamodb.lambda.stream.filterCriteria",
-			Label: "Filter Criteria",
+		"aws/lambda/function::aws.dynamodb.lambda.stream.filter.<index>": {
+			Name:  "aws.dynamodb.lambda.stream.filter.<index>",
+			Label: "Filter Pattern",
 			Type:  core.ScalarTypeString,
-			Description: "JSON-encoded filter criteria to specify which events to send to the Lambda function. " +
-				"Use event filtering to process only the records you need.",
+			Description: "An event filter pattern controlling which stream records are sent to the function. " +
+				"`<index>` is the zero-based position in the event source mapping's filter array; add multiple " +
+				"filters with successive indices (0, 1, ...). The value is the AWS event-filtering pattern string " +
+				"(e.g. `{\"eventName\":[\"INSERT\"]}`).",
 			Required: false,
 		},
 		"aws/lambda/function::aws.dynamodb.lambda.stream.enabled": {

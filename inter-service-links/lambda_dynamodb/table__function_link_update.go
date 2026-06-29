@@ -2,7 +2,6 @@ package lambdadynamodb
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -386,12 +385,8 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) createEventSourceMapping(
 	if annotations.bisectBatchOnFunctionError {
 		createInput.BisectBatchOnFunctionError = aws.Bool(true)
 	}
-	if annotations.filterCriteria != "" {
-		filterCriteria, err := parseFilterCriteria(annotations.filterCriteria)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse filterCriteria: %w", err)
-		}
-		createInput.FilterCriteria = filterCriteria
+	if len(annotations.filterPatterns) > 0 {
+		createInput.FilterCriteria = buildFilterCriteria(annotations.filterPatterns)
 	}
 
 	// The execution role's stream-read grant is applied immediately before this call,
@@ -465,12 +460,8 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) updateEventSourceMapping(
 	}
 	updateInput.BisectBatchOnFunctionError = aws.Bool(annotations.bisectBatchOnFunctionError)
 
-	if annotations.filterCriteria != "" {
-		filterCriteria, err := parseFilterCriteria(annotations.filterCriteria)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse filterCriteria: %w", err)
-		}
-		updateInput.FilterCriteria = filterCriteria
+	if len(annotations.filterPatterns) > 0 {
+		updateInput.FilterCriteria = buildFilterCriteria(annotations.filterPatterns)
 	}
 
 	output, err := lambdaService.UpdateEventSourceMapping(ctx, updateInput)
@@ -641,7 +632,7 @@ type streamTriggerAnnotations struct {
 	maximumRetryAttempts       int
 	maximumRecordAgeInSeconds  int
 	bisectBatchOnFunctionError bool
-	filterCriteria             string
+	filterPatterns             []string
 	enabled                    bool
 }
 
@@ -706,12 +697,7 @@ func getStreamTriggerAnnotations(
 		},
 	)
 
-	filterCriteria, _ := pluginutils.GetStringAnnotation(
-		resourceInfo,
-		&pluginutils.AnnotationQuery[string]{
-			Key: "aws.dynamodb.lambda.stream.filterCriteria",
-		},
-	)
+	filterPatterns := getStreamFilterPatterns(resourceInfo)
 
 	enabled, _ := pluginutils.GetBoolAnnotation(
 		resourceInfo,
@@ -729,7 +715,7 @@ func getStreamTriggerAnnotations(
 		maximumRetryAttempts:       maximumRetryAttempts,
 		maximumRecordAgeInSeconds:  maximumRecordAgeInSeconds,
 		bisectBatchOnFunctionError: bisectBatchOnFunctionError,
-		filterCriteria:             filterCriteria,
+		filterPatterns:             filterPatterns,
 		enabled:                    enabled,
 	}
 }
@@ -748,7 +734,7 @@ func extractStreamARNFromResourceInfo(resourceInfo *provider.ResourceInfo) (stri
 	return "", false
 }
 
-// tableFunctionESMIdentity is the single source of truth for the link-owned event source
+// The single source of truth for the link-owned event source
 // mapping's identity, used by UpdateIntermediaryResources (to persist it), StageChanges (to
 // project it into link changes) and the UUID lookup. The event source mapping is created via
 // the Lambda SDK rather than as a managed Cloud Control resource, but it is projected into
@@ -796,29 +782,40 @@ func getExistingEventSourceMappingUUID(linkState *state.LinkState, resourceID st
 	return core.StringValue(uuid)
 }
 
-func parseFilterCriteria(filterCriteriaJSON string) (*types.FilterCriteria, error) {
-	if filterCriteriaJSON == "" {
-		return nil, nil
+// Reads the indexed filter-pattern annotations
+// (aws.dynamodb.lambda.stream.filter.<index>) in order, stopping at the first
+// absent index. Each value is a single AWS event-filtering pattern string; the set
+// forms the event source mapping's filter criteria.
+func getStreamFilterPatterns(resourceInfo *provider.ResourceInfo) []string {
+	var patterns []string
+	for i := 0; ; i++ {
+		pattern, found := pluginutils.GetStringAnnotation(
+			resourceInfo,
+			&pluginutils.AnnotationQuery[string]{
+				Key: fmt.Sprintf("aws.dynamodb.lambda.stream.filter.%d", i),
+			},
+		)
+		if !found || pattern == "" {
+			break
+		}
+		patterns = append(patterns, pattern)
+	}
+	return patterns
+}
+
+func buildFilterCriteria(patterns []string) *types.FilterCriteria {
+	if len(patterns) == 0 {
+		return nil
 	}
 
-	var filterCriteria struct {
-		Filters []struct {
-			Pattern string `json:"pattern"`
-		} `json:"filters"`
-	}
-
-	if err := json.Unmarshal([]byte(filterCriteriaJSON), &filterCriteria); err != nil {
-		return nil, err
-	}
-
-	var filters []types.Filter
-	for _, f := range filterCriteria.Filters {
+	filters := make([]types.Filter, 0, len(patterns))
+	for _, pattern := range patterns {
 		filters = append(filters, types.Filter{
-			Pattern: aws.String(f.Pattern),
+			Pattern: aws.String(pattern),
 		})
 	}
 
 	return &types.FilterCriteria{
 		Filters: filters,
-	}, nil
+	}
 }

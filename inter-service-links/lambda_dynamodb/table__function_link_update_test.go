@@ -106,6 +106,102 @@ func streamFunctionResourceInfo() *provider.ResourceInfo {
 	}
 }
 
+// Carries two indexed filter-pattern
+// annotations (filter.0 and filter.1) so the link builds a two-entry filter
+// criteria on the event source mapping.
+func streamFunctionResourceInfoWithFilters() *provider.ResourceInfo {
+	info := streamFunctionResourceInfo()
+	info.ResourceWithResolvedSubs = &provider.ResolvedResource{
+		Metadata: &provider.ResolvedResourceMetadata{
+			Annotations: core.MappingNodeFields(
+				"aws.dynamodb.lambda.stream.filter.0",
+				core.MappingNodeFromString(`{"eventName":["INSERT"]}`),
+				"aws.dynamodb.lambda.stream.filter.1",
+				core.MappingNodeFromString(`{"eventName":["MODIFY"]}`),
+			),
+		},
+	}
+	return info
+}
+
+func (s *TableFunctionLinkUpdateSuite) Test_indexed_filter_annotations_build_esm_filter_criteria() {
+	loader := &testutils.MockAWSConfigLoader{}
+
+	iamSvc := iammock.CreateIamServiceMock(
+		iammock.WithListRolePoliciesOutput(&iam.ListRolePoliciesOutput{PolicyNames: []string{}}),
+		iammock.WithListAttachedRolePoliciesOutput(&iam.ListAttachedRolePoliciesOutput{}),
+		iammock.WithPutRolePolicyOutput(&iam.PutRolePolicyOutput{}),
+	)
+	lambdaSvc := lambdamock.CreateLambdaServiceMock(
+		lambdamock.WithGetFunctionOutput(&lambda.GetFunctionOutput{
+			Configuration: &lambdatypes.FunctionConfiguration{
+				FunctionArn: aws.String(tflFuncARN),
+				Role:        aws.String(tflRoleARN),
+				Environment: &lambdatypes.EnvironmentResponse{Variables: map[string]string{}},
+			},
+		}),
+		lambdamock.WithCreateEventSourceMappingOutput(&lambda.CreateEventSourceMappingOutput{
+			UUID:                  aws.String(tflESMUUID),
+			EventSourceMappingArn: aws.String("arn:aws:lambda:us-west-2:123456789012:event-source-mapping:" + tflESMUUID),
+		}),
+	)
+
+	testCase := plugintestutils.LinkUpdateIntermediaryResourcesTestCase[
+		*aws.Config,
+		dynamodbservice.Service,
+		*aws.Config,
+		lambdaservice.Service,
+	]{
+		Name:                           "indexed filter annotations populate the event source mapping filter criteria",
+		ServiceFactoryA:                dynamodbmock.CreateDynamoDBServiceMockFactory(),
+		ConfigStoreA:                   testConfigStore(loader),
+		ServiceFactoryB:                func(c *aws.Config, pc provider.Context) lambdaservice.Service { return lambdaSvc },
+		ConfigStoreB:                   testConfigStore(loader),
+		IntermediariesServiceMockCalls: &iamSvc.MockCalls,
+		Input: &provider.LinkUpdateIntermediaryResourcesInput{
+			LinkUpdateType:   provider.LinkUpdateTypeCreate,
+			InstanceName:     "test-instance",
+			ResourceAInfo:    tableResourceInfoStreamsEnabled(),
+			ResourceBInfo:    streamFunctionResourceInfoWithFilters(),
+			LinkContext:      testLinkContext(),
+			ResourceService:  resourceservicemock.Create(resourceservicemock.WithLookupResourceInState(tflRoleState())),
+			CurrentLinkState: &state.LinkState{},
+		},
+		ExpectedOutputMatcher: matchStreamGrantOutput,
+	}
+
+	plugintestutils.RunLinkUpdateIntermediaryResourcesTestCases(
+		[]plugintestutils.LinkUpdateIntermediaryResourcesTestCase[
+			*aws.Config,
+			dynamodbservice.Service,
+			*aws.Config,
+			lambdaservice.Service,
+		]{testCase},
+		tableFunctionLinkFactory(iamSvc),
+		&s.Suite,
+	)
+
+	lambdaSvc.AssertCalledWith(
+		&s.Suite,
+		"CreateEventSourceMapping",
+		0,
+		plugintestutils.Any,
+		func(arg any) bool {
+			input, ok := arg.(*lambda.CreateEventSourceMappingInput)
+			if !ok || input.FilterCriteria == nil {
+				return false
+			}
+			patterns := make([]string, 0, len(input.FilterCriteria.Filters))
+			for _, f := range input.FilterCriteria.Filters {
+				patterns = append(patterns, aws.ToString(f.Pattern))
+			}
+			return len(patterns) == 2 &&
+				patterns[0] == `{"eventName":["INSERT"]}` &&
+				patterns[1] == `{"eventName":["MODIFY"]}`
+		},
+	)
+}
+
 func (s *TableFunctionLinkUpdateSuite) Test_link_update_resources() {
 	loader := &testutils.MockAWSConfigLoader{}
 

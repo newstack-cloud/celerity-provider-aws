@@ -133,9 +133,9 @@ linkDefinitions:
           valueType: boolean
           description: "When true, splits the batch and retries on a smaller batch when a function returns an error."
           default: false
-        - name: aws.dynamodb.lambda.stream.filterCriteria
+        - name: aws.dynamodb.lambda.stream.filter.<index>
           valueType: string
-          description: "JSON-encoded filter criteria to specify which events to send to the Lambda function."
+          description: "An event filter pattern controlling which stream records are sent to the function. <index> is the zero-based position in the event source mapping's filter array; add multiple filters with successive indices (0, 1, ...). The value is the AWS event-filtering pattern string (e.g. {\"eventName\":[\"INSERT\"]})."
         - name: aws.dynamodb.lambda.stream.enabled
           valueType: boolean
           description: "When true, the event source mapping is active."
