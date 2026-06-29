@@ -1,8 +1,10 @@
-## EventBridge Rule to Lambda Function Link
+## EventBridge Rule to Lambda Function
 
-This link grants an EventBridge rule permission to invoke a Lambda function. Lambda targets are invoked by EventBridge using the function's resource-based policy (no IAM role is required), so this link deploys a single, link-owned `aws/lambda/permission` resource allowing the principal `events.amazonaws.com` to call `lambda:InvokeFunction`, scoped by `SourceArn` to the rule's ARN.
+Lets an EventBridge rule invoke a Lambda function.
 
-The rule-to-function wiring itself (the target entry, plus any input transformation or retry configuration) is modelled inline in the rule's `targets[]` array and owned by the `aws/events/rule` resource, which references the function via the target entry's `arn` field. That reference is what activates this link, `targets[].arn` is a link wiring slot, so no `linkSelector` is required. This link carries no user input.
+When a rule targets a function, the function is configured to allow the rule to invoke it, so events matched by the rule trigger the function. No IAM role is required.
+
+Add the function as a target on the rule by referencing the function's `arn` in the rule's `targets`; the connection takes effect automatically, with no link selector required. Per-target options such as the target id, input transformation and retry configuration are set on the rule's target entry.
 
 ### Example
 

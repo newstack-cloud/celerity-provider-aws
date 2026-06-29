@@ -1,0 +1,54 @@
+version: "1.0.0"
+resourceDefinitions: []
+dataSourceDefinitions: []
+
+linkDefinitions:
+  # An SNS subscription (sqs protocol) delivering to an SQS queue.
+  # The subscription (A) references the queue through its endpoint field; this link
+  # grants the queue's resource policy so SNS can deliver to it.
+  # Semantics: "This SNS subscription delivers to this SQS queue."
+  #
+  # The subscription wiring and all of its configuration (topicArn, endpoint, protocol,
+  # filterPolicy, rawMessageDelivery, ...) live on the aws/sns/subscription resource.
+  # This link carries no user input - only the derived queue-policy side-effect - and is
+  # reference-implied: it activates when the subscription's endpoint references the queue
+  # (no linkSelector required; see the endpoint ActivatesLinkOnReference overlay).
+  - resourceTypeA: aws/sns/subscription
+    resourceTypeB: aws/sqs/queue
+    kind: soft
+    priorityResource: none
+    summary: A link that grants SNS permission to deliver a subscription's messages to an SQS queue via the queue's resource-based policy.
+    annotations:
+      resourceA: []
+      resourceB: []
+    operations:
+      updateResourceA: {}
+      updateResourceB: {}
+      updateIntermediaryResources:
+        # The queue policy allowing SNS to send messages to the queue. The source topic
+        # (sns.amazonaws.com, SourceArn = resourceA.state.topicArn) is read from the
+        # subscription by the link implementation.
+        aws/sqs/queueInlinePolicy:
+          create:
+            - SetQueueAttributes
+          update:
+            - SetQueueAttributes
+          destroy:
+            - SetQueueAttributes
+          config:
+            intermediaryType: managed
+            config:
+              queue: resourceB.state.queueUrl
+    docLinks:
+      - https://docs.aws.amazon.com/sns/latest/dg/sns-sqs-as-subscriber.html
+      - https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_SetQueueAttributes.html
+    notes: |
+      This link adds a managed resource-based policy on the queue granting
+      `sqs:SendMessage` to `sns.amazonaws.com`, scoped to the subscription's topic ARN as
+      the source. It carries no user input: the subscription itself (the topic->queue
+      wiring, filterPolicy, rawMessageDelivery and all other configuration) is modelled on
+      the aws/sns/subscription resource.
+
+      Queues encrypted with a customer managed KMS key require the key policy to allow
+      sns.amazonaws.com (kms:GenerateDataKey, kms:Decrypt); that is outside this link's
+      control and is surfaced in the link's rich description.

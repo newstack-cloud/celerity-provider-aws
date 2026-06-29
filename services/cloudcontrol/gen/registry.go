@@ -208,6 +208,16 @@ func GeneratedResources(
 			resourceGroupTaggingServiceFactory,
 			awsConfigStore,
 		),
+		"aws/sns/subscription": snsSubscriptionResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
+		"aws/sns/topic": snsTopicResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
 		"aws/sqs/queue": sqsQueueResource(
 			cloudControlServiceFactory,
 			resourceGroupTaggingServiceFactory,

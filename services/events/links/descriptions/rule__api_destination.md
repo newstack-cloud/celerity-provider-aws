@@ -1,10 +1,10 @@
-## EventBridge Rule to API Destination Link
+## EventBridge Rule to API Destination
 
-This link grants an EventBridge rule permission to invoke an EventBridge API destination. API destination targets are invoked by EventBridge assuming the IAM role referenced by the rule's matching target entry (`targets[].roleArn`), so this link "activates" that role by attaching an inline policy statement granting `events:InvokeApiDestination` on the API destination's ARN.
+Lets an EventBridge rule send matched events to an EventBridge API destination.
 
-The practitioner must define the IAM role as a top-level blueprint resource (an `aws/iam/role`) and reference it from the rule's target entry via its `roleArn` field.
+EventBridge invokes an API destination using an IAM role you provide. Define that role as an `aws/iam/role` resource in the blueprint and reference it from the rule's target entry via its `roleArn` field; the role is granted permission to invoke the destination, so events matched by the rule are sent to it.
 
-The rule-to-destination wiring (the target entry, input transformation, retry configuration) is modelled inline in the rule's `targets[]` array and owned by the `aws/events/rule` resource, which references the API destination via the target entry's `arn` field. That reference is what activates this link, `targets[].arn` is a link wiring slot, so no `linkSelector` is required. This link carries no user input.
+Add the destination as a target on the rule by referencing the destination's `arn` in the rule's `targets`; the connection takes effect automatically, with no link selector required. Per-target options including the target id, input transformation and retry configuration are set on the rule's target entry.
 
 ### Example
 

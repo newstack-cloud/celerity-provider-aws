@@ -139,6 +139,17 @@ See existing test implementations such as `services/lambda/links/function__code_
 You should include a rich description that includes examples in the main link definition file.
 Examples are defined in the `services/${service}/links/descriptions` directory and should be markdown files. You can use existing link examples as a guide.
 
+**Audience — write for blueprint authors, not plugin developers.** The rich description is
+surfaced in the resource/link registry to the people writing blueprints. Describe what the
+link does for them and how to use it (what to declare, which annotations to set, relevant
+caveats such as KMS key policies). Keep plugin **implementation detail out of it**: do not
+mention managed intermediary resource types (e.g. `aws/sqs/queueInlinePolicy`,
+`aws/lambda/permission`), link wiring slots / "reference-implied", `ResourceService`, link
+data projection, intermediary lifecycle, or phrases like "carries no user input" / "derived
+side-effect". That detail belongs in the link definition's YAML `notes` field and in code
+comments. Naming the concrete AWS resources/fields the author declares (e.g.
+`aws/sns/subscription`, its `endpoint`) is fine; naming the link's internal machinery is not.
+
 Be sure to use the "```javascript ... ```" code block syntax for JSONC examples.
 
 There is no need to add an explanation section at the bottom of the examples, only a description above the example code block(s).

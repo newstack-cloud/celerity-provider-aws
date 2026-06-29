@@ -9,6 +9,9 @@ import (
 	eventssqs "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/events_sqs"
 	flexlambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/flex_lambda"
 	lambdadynamodb "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_dynamodb"
+	lambdasns "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_sns"
+	snslambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/sns_lambda"
+	snssqs "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/sns_sqs"
 	cloudcontrolgen "github.com/newstack-cloud/bluelink-provider-aws/services/cloudcontrol/gen"
 	cloudcontrolservice "github.com/newstack-cloud/bluelink-provider-aws/services/cloudcontrol/service"
 	dynamodbservice "github.com/newstack-cloud/bluelink-provider-aws/services/dynamodb/service"
@@ -177,6 +180,29 @@ func NewProvider(
 			"aws/events/rule::aws/lambda/function": eventslambda.RuleFunctionLink(),
 			// Rule -> SQS queue: same managed-intermediary model (queue inline policy).
 			"aws/events/rule::aws/sqs/queue": eventssqs.RuleQueueLink(),
+			// SNS subscription -> SQS queue: reference-implied (subscription endpoint),
+			// grants the queue policy allowing SNS to deliver.
+			"aws/sns/subscription::aws/sqs/queue": snssqs.SubscriptionQueueLink(),
+			// SNS subscription -> Lambda function: reference-implied (subscription
+			// endpoint), grants SNS permission to invoke the function.
+			"aws/sns/subscription::aws/lambda/function": snslambda.SubscriptionFunctionLink(),
+			// Lambda function -> SNS topic: grants sns:Publish on the topic and populates
+			// topic env vars; activates the SNS VPC endpoint for VPC-isolated functions.
+			"aws/lambda/function::aws/sns/topic": lambdasns.FunctionTopicLink(
+				iamServiceFactory,
+				ec2ServiceFactory,
+			)(
+				lambdasns.FunctionToTopicLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
+						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, cloudcontrolservice.Service]{
+						ServiceFactory: cloudControlServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
 			// Intra-service links: EventBridge rule <-> API destination
 			"aws/events/rule::aws/events/apiDestination": eventslinks.RuleAPIDestinationLink(
 				iamServiceFactory,

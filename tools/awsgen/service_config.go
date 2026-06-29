@@ -74,12 +74,13 @@ var services = []serviceEntry{
 		},
 	},
 	{
-		// SNS: pub/sub topics (celerity/topic), their subscriptions and topic policy.
+		// SNS: pub/sub topics (celerity/topic) and their subscriptions. TopicPolicy is
+		// not Cloud Control–provisionable, so topic access policies are handled via the
+		// topic's own Policy attribute / link intermediaries where needed.
 		Name: "SNS",
 		Include: []string{
 			"AWS::SNS::Topic",
 			"AWS::SNS::Subscription",
-			"AWS::SNS::TopicPolicy",
 		},
 	},
 	{

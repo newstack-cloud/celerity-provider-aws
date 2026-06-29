@@ -1,0 +1,61 @@
+version: "1.0.0"
+resourceDefinitions: []
+dataSourceDefinitions: []
+
+linkDefinitions:
+  # Lambda function with publish access to an SNS topic.
+  # The Lambda function (A) links to the SNS topic (B) to publish messages to it.
+  # Semantics: "My Lambda function needs to publish to this SNS topic."
+  - resourceTypeA: aws/lambda/function
+    resourceTypeB: aws/sns/topic
+    kind: soft
+    priorityResource: none
+    summary: A link that grants a Lambda function permission to publish to an SNS topic.
+    annotations:
+      resourceA:
+        - name: aws.lambda.sns.populateEnvVars
+          valueType: boolean
+          description: "When true, populates environment variables for all linked SNS topics."
+          default: true
+        - name: aws.lambda.sns.<targetTopic>.populateEnvVars
+          valueType: boolean
+          description: "When true, populates environment variables for the specific target topic. Overrides the global setting."
+        - name: aws.lambda.sns.<targetTopic>.envVarName
+          valueType: string
+          description: "Custom environment variable name for the target topic ARN. Defaults to an auto-generated name based on the topic name."
+      resourceB: []
+    operations:
+      updateResourceA:
+        create:
+          - UpdateFunctionConfiguration
+        update:
+          - UpdateFunctionConfiguration
+        destroy:
+          - UpdateFunctionConfiguration
+      updateResourceB: {}
+      updateIntermediaryResources:
+        aws/iam/role:
+          create:
+            - PutRolePolicy
+          update:
+            - PutRolePolicy
+          destroy:
+            - DeleteRolePolicy
+          config:
+            intermediaryType: existing
+            intermediaryExternalIdSource: resourceA.spec.role
+    docLinks:
+      - https://docs.aws.amazon.com/sns/latest/dg/sns-access-policy-use-cases.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_UpdateFunctionConfiguration.html
+    notes: |
+      This link configures the Lambda function to publish to the SNS topic by:
+      1. Optionally populating an environment variable with the topic ARN (controlled by annotations).
+      2. Adding an inline IAM policy to the function's execution role granting `sns:Publish`
+         on the topic ARN.
+
+      The IAM role is an intermediary resource that must be defined in the same blueprint.
+      The implementation sources the role from resourceA.spec.role.
+
+      Networking activation: when the Lambda function is VPC-attached (placed in a flex VPC
+      without NAT egress), this link also provisions/activates the SNS interface VPC
+      endpoint so the function can reach SNS from within the VPC.

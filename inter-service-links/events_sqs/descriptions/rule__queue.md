@@ -1,10 +1,14 @@
-## EventBridge Rule to SQS Queue Link
+## EventBridge Rule to SQS Queue
 
-This link grants an EventBridge rule permission to send messages to an SQS queue. SQS targets are delivered to by EventBridge using the queue's resource-based policy, so this link deploys a single link-owned managed `aws/sqs/queueInlinePolicy` intermediary granting the principal `events.amazonaws.com` permission to perform `sqs:SendMessage`, scoped by an `aws:SourceArn` condition to the rule's ARN. The intermediary's lifecycle (create, update, drift, destroy) is owned by the engine through Cloud Control; on removal the inline policy is destroyed.
+Lets an EventBridge rule deliver matched events to an SQS queue.
 
-The rule-to-queue wiring itself is modelled inline in the rule's `targets[]` array (the target entry, the FIFO `messageGroupId`, input transformation, retry configuration), with each target referencing the queue via its `arn`. That reference is what activates this link, `targets[].arn` is a link wiring slot, so no `linkSelector` is required. This link carries no user input.
+When a rule targets a queue, the queue's access policy is configured to allow the rule to send messages to it, so events matched by the rule are delivered to the queue.
 
-> **Note (KMS-encrypted queues):** When the queue is encrypted with a customer managed KMS key, EventBridge additionally needs `kms:GenerateDataKey` and `kms:Decrypt` on that key. This link manages only the queue inline policy; granting those key-policy permissions to `events.amazonaws.com` will be handled automatically by a `rule → KMS key` link.
+Add the queue as a target on the rule by referencing the queue's `arn` in the rule's `targets`; the connection takes effect automatically, with no link selector required. Per-target options including the target id, the FIFO message group id, input transformation and retry configuration are set on the rule's target entry.
+
+### Encryption
+
+If the queue is encrypted with a customer managed KMS key, that key's policy must allow EventBridge (`events.amazonaws.com`) to use it (`kms:GenerateDataKey` and `kms:Decrypt`).
 
 ### Example
 

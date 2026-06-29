@@ -48,6 +48,10 @@ func GeneratedDataSources(
 			cloudControlServiceFactory,
 			awsConfigStore,
 		),
+		"aws/sns/topic": snsTopicDataSource(
+			cloudControlServiceFactory,
+			awsConfigStore,
+		),
 		"aws/sqs/queue": sqsQueueDataSource(
 			cloudControlServiceFactory,
 			awsConfigStore,

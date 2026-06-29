@@ -1,0 +1,53 @@
+version: "1.0.0"
+resourceDefinitions: []
+dataSourceDefinitions: []
+
+linkDefinitions:
+  # An SNS subscription (lambda protocol) invoking a Lambda function.
+  # The subscription (A) references the function through its endpoint field; this link
+  # grants SNS permission to invoke the function.
+  # Semantics: "This SNS subscription invokes this Lambda function."
+  #
+  # The subscription wiring and all of its configuration (topicArn, endpoint, protocol,
+  # filterPolicy, ...) live on the aws/sns/subscription resource. This link carries no
+  # user input - only the derived invoke-permission side-effect - and is reference-implied:
+  # it activates when the subscription's endpoint references the function (no linkSelector
+  # required, see the endpoint ActivatesLinkOnReference overlay).
+  - resourceTypeA: aws/sns/subscription
+    resourceTypeB: aws/lambda/function
+    kind: soft
+    priorityResource: none
+    summary: A link that grants SNS permission to invoke a Lambda function for a subscription delivering to it.
+    annotations:
+      resourceA: []
+      resourceB: []
+    operations:
+      updateResourceA: {}
+      updateResourceB: {}
+      updateIntermediaryResources:
+        # The permission allowing SNS to invoke the function, scoped to the subscription's
+        # topic ARN as the source.
+        aws/lambda/permission:
+          create:
+            - AddPermission
+          update:
+            - AddPermission
+          destroy:
+            - RemovePermission
+          config:
+            intermediaryType: managed
+            config:
+              functionName: resourceB.state.arn
+              principal: sns.amazonaws.com
+              sourceArn: resourceA.state.topicArn
+    docLinks:
+      - https://docs.aws.amazon.com/sns/latest/dg/sns-lambda-as-subscriber.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_AddPermission.html
+    notes: |
+      This link adds a managed Lambda permission allowing `sns.amazonaws.com` to invoke
+      the function, scoped to the subscription's topic ARN as the source. It carries no
+      user input: the subscription itself (the topic->function wiring, filterPolicy and
+      all other configuration) is modelled on the aws/sns/subscription resource.
+
+      The permission is a managed Cloud Control resource deployed and destroyed by the link
+      through the framework's ResourceService.
