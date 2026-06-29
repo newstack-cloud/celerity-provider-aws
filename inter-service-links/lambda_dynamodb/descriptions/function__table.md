@@ -12,38 +12,50 @@ The Lambda function's execution role must be defined in the same blueprint. The 
 
 ### Example
 
-```yaml
-resources:
-  myFunction:
-    type: aws/lambda/function
-    metadata:
-      labels:
-        app: my-app
-      annotations:
-        aws.lambda.dynamodb.ordersTable.accessLevel: read
-        aws.lambda.dynamodb.ordersTable.envVarName: ORDERS_TABLE_NAME
-    linkSelector:
-      byLabel:
-        table: orders
-    spec:
-      functionName: my-function
-      role: ${resources.myFunctionRole.state.arn}
-      # ... other function configuration
+```blueprintlang
+version "2025-11-02"
 
-  ordersTable:
-    type: aws/dynamodb/table
-    metadata:
-      labels:
-        table: orders
-    spec:
-      tableName: orders-table
-      # ... other table configuration
+resource myFunction: aws/lambda/function {
+    metadata {
+        labels = {
+            app = "my-app"
+        }
+        annotations = {
+            "aws.lambda.dynamodb.ordersTable.accessLevel" = "read",
+            "aws.lambda.dynamodb.ordersTable.envVarName" = "ORDERS_TABLE_NAME"
+        }
+    }
 
-  myFunctionRole:
-    type: aws/iam/role
-    spec:
-      name: my-function-role
-      # ... role configuration
+    select by label {
+        table = "orders"
+    }
+
+    spec {
+        functionName = "my-function"
+        role = myFunctionRole.spec.arn
+        # ... other function configuration
+    }
+}
+
+resource ordersTable: aws/dynamodb/table {
+    metadata {
+        labels = {
+            table = "orders"
+        }
+    }
+
+    spec {
+        tableName = "orders-table"
+        # ... other table configuration
+    }
+}
+
+resource myFunctionRole: aws/iam/role {
+    spec {
+        name = "my-function-role"
+        # ... role configuration
+    }
+}
 ```
 
 In this example:

@@ -8,43 +8,49 @@ The function's execution role must be defined as a resource in the same blueprin
 
 If the function runs inside a VPC without internet access, the link also sets up the network access it needs to reach SNS.
 
-### Annotations
-
-- `aws.lambda.sns.populateEnvVars` - whether to add a topic environment variable for all linked topics (default `true`).
-- `aws.lambda.sns.<targetTopic>.populateEnvVars` - override for a specific topic.
-- `aws.lambda.sns.<targetTopic>.envVarName` - custom environment variable name (default `SNS_TOPIC_<targetTopic>`).
-
 ### Example
 
-```yaml
-resources:
-  publishOrderFunction:
-    type: aws/lambda/function
-    metadata:
-      labels:
-        topic: orders
-      annotations:
-        aws.lambda.sns.ordersTopic.envVarName: ORDERS_TOPIC
-    linkSelector:
-      byLabel:
-        topic: orders
-    spec:
-      functionName: publish-order
-      role: ${publishOrderFunctionRole.spec.arn}
-      # ... other function configuration
+```blueprintlang
+version "2025-11-02"
 
-  ordersTopic:
-    type: aws/sns/topic
-    metadata:
-      labels:
-        topic: orders
-    spec:
-      topicName: orders
+resource publishOrderFunction: aws/lambda/function {
+    metadata {
+        labels = {
+            topic = "orders"
+        }
+        annotations = {
+            "aws.lambda.sns.ordersTopic.envVarName" = "ORDERS_TOPIC"
+        }
+    }
 
-  publishOrderFunctionRole:
-    type: aws/iam/role
-    spec:
-      name: publish-order-role
-      # ... role configuration
+    select by label {
+        topic = "orders"
+    }
+
+    spec {
+        functionName = "publish-order"
+        role = publishOrderFunctionRole.spec.arn
+        # ... other function configuration
+    }
+}
+
+resource ordersTopic: aws/sns/topic {
+    metadata {
+        labels = {
+            topic = "orders"
+        }
+    }
+
+    spec {
+        topicName = "orders"
+    }
+}
+
+resource publishOrderFunctionRole: aws/iam/role {
+    spec {
+        name = "publish-order-role"
+        # ... role configuration
+    }
+}
 ```
 

@@ -44,6 +44,10 @@ func GeneratedDataSources(
 			cloudControlServiceFactory,
 			awsConfigStore,
 		),
+		"aws/kinesis/stream": kinesisStreamDataSource(
+			cloudControlServiceFactory,
+			awsConfigStore,
+		),
 		"aws/logs/logGroup": logsLogGroupDataSource(
 			cloudControlServiceFactory,
 			awsConfigStore,

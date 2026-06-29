@@ -6,38 +6,43 @@ When a VPC links to a function, the function is placed in the VPC's subnets so i
 
 Once a function runs inside the VPC, links from the function to other resources in that VPC (such as a database or cache) set up the network access it needs to reach them.
 
-### Annotations
-
-- `aws.flexvpc.lambda.subnetType` is the subnet tier to place the function in, `public` or `private` (default `private`).
-  - `private` lets the function reach private resources in the VPC and, where the VPC provides a NAT gateway, the internet.
-  - `public` lets the function reach private resources in the VPC but has no outbound internet access, which avoids NAT gateway cost for VPCs provisioned without one.
-
 ### Example
 
-```yaml
-resources:
-  appVpc:
-    type: aws/flex/vpc
-    metadata:
-      labels:
-        app: orders
-    linkSelector:
-      byLabel:
-        app: orders
-    spec:
-      name: orders-vpc
-      preset: standard
-      cidrBlock: 10.0.0.0/16
-      # ... other VPC configuration
+```blueprintlang
+version "2025-11-02"
 
-  getOrderFunction:
-    type: aws/lambda/function
-    metadata:
-      labels:
-        app: orders
-      annotations:
-        aws.flexvpc.lambda.subnetType: private
-    spec:
-      functionName: get-order
-      # ... other function configuration
+resource appVpc: aws/flex/vpc {
+    metadata {
+        labels = {
+            app = "orders"
+        }
+    }
+
+    select by label {
+        app = "orders"
+    }
+
+    spec {
+        name = "orders-vpc"
+        preset = "standard"
+        cidrBlock = "10.0.0.0/16"
+        # ... other VPC configuration
+    }
+}
+
+resource getOrderFunction: aws/lambda/function {
+    metadata {
+        labels = {
+            app = "orders"
+        }
+        annotations = {
+            "aws.flexvpc.lambda.subnetType" = "private"
+        }
+    }
+
+    spec {
+        functionName = "get-order"
+        # ... other function configuration
+    }
+}
 ```

@@ -1,4 +1,4 @@
-package lambdadynamodb
+package sqslambda
 
 import (
 	"context"
@@ -9,26 +9,26 @@ import (
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 )
 
-func (l *dynamoDBTableLambdaFunctionLinkActions) StageChanges(
+func (l *sqsQueueLambdaFunctionLinkActions) StageChanges(
 	ctx context.Context,
 	input *provider.LinkStageChangesInput,
 ) (*provider.LinkStageChangesOutput, error) {
 	// This link creates a Lambda event source mapping as a link-owned intermediary
-	// resource (the DynamoDB table's stream cannot be modelled as a spec field of either
+	// resource (the SQS queue trigger cannot be modelled as a spec field of either
 	// resource). It is projected into the link's linkData under the "intermediaries" map so
-	// its create/update is surfaced as link changes; the stream/function ARNs are derived
+	// its create/update is surfaced as link changes; the queue/function ARNs are derived
 	// from the linked resources and are known on deploy when either resource is new.
 	changes := &provider.LinkChanges{}
 	currentLinkData := linkhelpers.GetLinkDataFromState(input.CurrentLinkState)
 
-	identity := tableFunctionESMIdentity(
+	identity := queueFunctionESMIdentity(
 		&input.ResourceAChanges.AppliedResourceInfo,
 		&input.ResourceBChanges.AppliedResourceInfo,
 	)
 	err := linkutils.CollectIntermediaryChanges(currentLinkData, changes, linkutils.StageIntermediary{
 		Identity: identity,
 		DerivedLeaves: []linkutils.DerivedLeaf{
-			{Leaf: "eventSourceArn", ResourceChanges: input.ResourceAChanges, ResourceSpecPath: "$.spec.streamArn"},
+			{Leaf: "eventSourceArn", ResourceChanges: input.ResourceAChanges, ResourceSpecPath: "$.spec.arn"},
 			{Leaf: "functionArn", ResourceChanges: input.ResourceBChanges, ResourceSpecPath: "$.spec.arn"},
 		},
 	})
@@ -36,15 +36,15 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) StageChanges(
 		return nil, err
 	}
 
-	// The link grants the function's execution role read access to the table's stream as
-	// part of UpdateIntermediaryResources. The grant is scoped to the stream ARN, so it
-	// only changes when either resource is (re)created; surface that as a known-on-deploy
-	// change to the role's link-data field, mirroring the access link.
+	// The link grants the function's execution role consume access to the queue as part of
+	// UpdateIntermediaryResources. The grant is scoped to the queue ARN, so it only changes
+	// when either resource is (re)created; surface that as a known-on-deploy change to the
+	// role's link-data field, mirroring the access link.
 	if pluginutils.IsResourceNew(input.ResourceAChanges) ||
 		pluginutils.IsResourceNew(input.ResourceBChanges) {
 		changes.FieldChangesKnownOnDeploy = append(
 			changes.FieldChangesKnownOnDeploy,
-			createStreamLinkDataExecutionRoleName(&input.ResourceBChanges.AppliedResourceInfo),
+			createQueueLinkDataExecutionRoleName(&input.ResourceBChanges.AppliedResourceInfo),
 		)
 	}
 

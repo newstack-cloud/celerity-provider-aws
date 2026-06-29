@@ -4,32 +4,43 @@ for any resources that match the link selector of the lambda function.
 
 **Example**
 
-```yaml
-resources:
-    ordersFunction:
-        type: aws/lambda/function
-        metadata:
-            displayName: Orders Function
-            labels:
-                app: orders
-        linkSelector:
-            byLabel:
-                app: orders
-        spec:
-            handler: index.handler
-            runtime: nodejs20.x
-            code:
-                s3Bucket: my-bucket
-                s3Key: orders.zip
+```blueprintlang
+version "2025-11-02"
 
-    ordersCodeSigningConfig:
-        type: aws/lambda/codeSigningConfig
-        metadata:
-            displayName: Orders Code Signing Config
-            labels:
-                app: orders
-        spec:
-            allowedPublishers:
-                signingProfileVersionArns:
-                    - arn:aws:signer:us-east-1:123456789012:signing-profile/orders-signing-profile
+resource ordersFunction: aws/lambda/function {
+    metadata {
+        displayName = "Orders Function"
+        labels = {
+            app = "orders"
+        }
+    }
+
+    select by label {
+        app = "orders"
+    }
+
+    spec {
+        handler = "index.handler"
+        runtime = "nodejs20.x"
+        code = {
+            s3Bucket = "my-bucket",
+            s3Key = "orders.zip"
+        }
+    }
+}
+
+resource ordersCodeSigningConfig: aws/lambda/codeSigningConfig {
+    metadata {
+        displayName = "Orders Code Signing Config"
+        labels = {
+            app = "orders"
+        }
+    }
+
+    spec {
+        allowedPublishers = {
+            signingProfileVersionArns = ["arn:aws:signer:us-east-1:123456789012:signing-profile/orders-signing-profile"]
+        }
+    }
+}
 ```

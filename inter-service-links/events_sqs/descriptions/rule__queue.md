@@ -12,27 +12,27 @@ If the queue is encrypted with a customer managed KMS key, that key's policy mus
 
 ### Example
 
-```javascript
-{
-  "version": "2025-11-02",
-  "resources": {
-    "orderCreatedRule": {
-      "type": "aws/events/rule",
-      "spec": {
-        "name": "order-created-rule",
-        "eventPattern": { "source": ["app.orders"] },
-        "targets": [
-          {
-            "id": "order-queue",
-            "arn": "${orderQueue.spec.arn}"
-          }
+```blueprintlang
+version "2025-11-02"
+
+resource orderCreatedRule: aws/events/rule {
+    spec {
+        name = "order-created-rule"
+        eventPattern = {
+            source = ["app.orders"]
+        }
+        targets = [
+            {
+                id = "order-queue",
+                arn = orderQueue.spec.arn
+            }
         ]
-      }
-    },
-    "orderQueue": {
-      "type": "aws/sqs/queue",
-      "spec": { "queueName": "order-queue" }
     }
-  }
+}
+
+resource orderQueue: aws/sqs/queue {
+    spec {
+        queueName = "order-queue"
+    }
 }
 ```

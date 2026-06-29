@@ -1,0 +1,133 @@
+version: "1.0.0"
+resourceDefinitions: []
+dataSourceDefinitions: []
+
+linkDefinitions:
+  # Kinesis data stream triggers a Lambda function
+  # The stream (A) links to the function (B); the link creates the event source
+  # mapping that reads stream records and invokes the function.
+  # Semantics: "Records on this Kinesis stream trigger this Lambda function"
+  - resourceTypeA: aws/kinesis/stream
+    resourceTypeB: aws/lambda/function
+    kind: soft
+    priorityResource: A
+    summary: A link that configures a Kinesis data stream to trigger a Lambda function via an event source mapping.
+    annotations:
+      # For trigger links, annotations go on resourceB (the target being triggered)
+      # because each stream-to-function relationship has its own event source mapping
+      # config. A stream can trigger multiple functions with different configurations.
+      resourceA: []
+      resourceB:
+        - name: aws.kinesis.lambda.batchSize
+          valueType: integer
+          description: "The maximum number of records to retrieve per batch."
+          default: 100
+          min: 1
+          max: 10000
+        - name: aws.kinesis.lambda.maximumBatchingWindowInSeconds
+          valueType: integer
+          description: "The maximum amount of time (in seconds) to gather records before invoking the function."
+          default: 0
+          min: 0
+          max: 300
+        - name: aws.kinesis.lambda.startingPosition
+          valueType: enum
+          description: "The position in the stream where Lambda should start reading."
+          required: true
+          allowedValues:
+            - TRIM_HORIZON
+            - LATEST
+            - AT_TIMESTAMP
+        - name: aws.kinesis.lambda.startingPositionTimestamp
+          valueType: string
+          description: "The time from which to start reading, in Unix epoch seconds. Used only when startingPosition is AT_TIMESTAMP."
+        - name: aws.kinesis.lambda.parallelizationFactor
+          valueType: integer
+          description: "The number of batches to process from each shard concurrently."
+          default: 1
+          min: 1
+          max: 10
+        - name: aws.kinesis.lambda.maximumRetryAttempts
+          valueType: integer
+          description: "The maximum number of retry attempts. -1 for infinite retries."
+          default: -1
+          min: -1
+          max: 10000
+        - name: aws.kinesis.lambda.maximumRecordAgeInSeconds
+          valueType: integer
+          description: "The maximum age (in seconds) of a record that Lambda sends to a function. -1 for infinite."
+          default: -1
+          min: -1
+          max: 604800
+        - name: aws.kinesis.lambda.bisectBatchOnFunctionError
+          valueType: boolean
+          description: "When true, splits the batch and retries on a smaller batch when a function returns an error."
+          default: false
+        - name: aws.kinesis.lambda.tumblingWindowInSeconds
+          valueType: integer
+          description: "The duration (in seconds) of a tumbling window for aggregating records before invoking the function. 0 disables tumbling windows."
+          default: 0
+          min: 0
+          max: 900
+        - name: aws.kinesis.lambda.reportBatchItemFailures
+          valueType: boolean
+          description: "When true, allows the function to report partial batch failures (sets the ReportBatchItemFailures function response type) so processing resumes after the last successful record."
+          default: false
+        - name: aws.kinesis.lambda.filter.<index>
+          valueType: string
+          description: "An event filter pattern controlling which records are sent to the function. <index> is the zero-based position in the event source mapping's filter array; add multiple filters with successive indices (0, 1, ...). The value is the AWS event-filtering pattern string (e.g. {\"data\":{\"eventType\":[\"created\"]}})."
+        - name: aws.kinesis.lambda.enabled
+          valueType: boolean
+          description: "When true, the event source mapping is active."
+          default: true
+    operations:
+      updateResourceA: {}
+      updateResourceB: {}
+      updateIntermediaryResources:
+        aws/lambda/eventSourceMapping:
+          create:
+            - CreateEventSourceMapping
+          update:
+            - UpdateEventSourceMapping
+          destroy:
+            - DeleteEventSourceMapping
+          config:
+            intermediaryType: managed
+            config:
+              eventSourceArn: resourceA.state.arn
+              functionName: resourceB.state.arn
+        aws/iam/role:
+          create:
+            - PutRolePolicy
+          update:
+            - PutRolePolicy
+          destroy:
+            - DeleteRolePolicy
+          config:
+            intermediaryType: existing
+            intermediaryExternalIdSource: resourceB.spec.role
+    docLinks:
+      - https://docs.aws.amazon.com/lambda/latest/dg/with-kinesis.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_CreateEventSourceMapping.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_UpdateEventSourceMapping.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_DeleteEventSourceMapping.html
+    notes: |
+      This link configures a Kinesis data stream to trigger a Lambda function:
+
+      1. Adds stream read permissions to the Lambda function's execution role:
+         - kinesis:DescribeStream
+         - kinesis:DescribeStreamSummary
+         - kinesis:GetRecords
+         - kinesis:GetShardIterator
+         - kinesis:ListShards
+         - kinesis:ListStreams
+
+      2. Creates a managed Event Source Mapping that reads stream records and invokes
+         the function. The mapping config is driven by the resourceB annotations above.
+
+      The Lambda function's execution role must be defined in the same blueprint.
+      The implementation sources the role from resourceB.spec.role.
+
+      Kinesis streams encrypted with a customer managed KMS key require the key policy
+      to allow the function's execution role (kms:Decrypt); this is outside the link's
+      control and should be surfaced in the link's rich description.

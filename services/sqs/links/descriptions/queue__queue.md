@@ -6,32 +6,43 @@ The link supports customizing the maximum receive count through annotations. The
 
 **Example**
 
-```yaml
-resources:
-    processingQueue:
-        type: aws/sqs/queue
-        metadata:
-            displayName: Processing Queue
-            labels:
-                app: order-processor
-            annotations:
-                aws.sqs.redrive.maxReceiveCount: 5
-        linkSelector:
-            byLabel:
-                app: order-processor
-        spec:
-            queueName: processing-queue
-            visibilityTimeout: 300
+```blueprintlang
+version "2025-11-02"
 
-    deadLetterQueue:
-        type: aws/sqs/queue
-        metadata:
-            displayName: Dead Letter Queue
-            labels:
-                app: order-processor
-        spec:
-            queueName: dead-letter-queue
-            messageRetentionPeriod: 1209600  # 14 days
+resource processingQueue: aws/sqs/queue {
+    metadata {
+        displayName = "Processing Queue"
+        labels = {
+            app = "order-processor"
+        }
+        annotations = {
+            "aws.sqs.redrive.maxReceiveCount" = 5
+        }
+    }
+
+    select by label {
+        app = "order-processor"
+    }
+
+    spec {
+        queueName = "processing-queue"
+        visibilityTimeout = 300
+    }
+}
+
+resource deadLetterQueue: aws/sqs/queue {
+    metadata {
+        displayName = "Dead Letter Queue"
+        labels = {
+            app = "order-processor"
+        }
+    }
+
+    spec {
+        queueName = "dead-letter-queue"
+        messageRetentionPeriod = 1209600  # 14 days
+    }
+}
 ```
 
 In this example, messages that fail to be processed after 5 attempts in the `processingQueue`

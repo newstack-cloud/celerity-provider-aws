@@ -1,13 +1,13 @@
 //go:build unit
 
-package lambdadynamodb
+package sqslambda
 
 import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	iammock "github.com/newstack-cloud/bluelink-provider-aws/internal/testutils/iam_mock"
-	dynamodbservice "github.com/newstack-cloud/bluelink-provider-aws/services/dynamodb/service"
+	cloudcontrolservice "github.com/newstack-cloud/bluelink-provider-aws/services/cloudcontrol/service"
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
 	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
@@ -18,64 +18,64 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-type TableFunctionLinkStageChangesSuite struct {
+type QueueFunctionLinkStageChangesSuite struct {
 	suite.Suite
 }
 
-func tableFunctionStageLinkFactory() func(
-	pluginutils.LinkServiceDeps[*aws.Config, dynamodbservice.Service, *aws.Config, lambdaservice.Service],
+func queueFunctionStageLinkFactory() func(
+	pluginutils.LinkServiceDeps[*aws.Config, cloudcontrolservice.Service, *aws.Config, lambdaservice.Service],
 ) provider.Link {
-	build := DynamoDBTableLambdaFunctionLink(
+	build := SQSQueueLambdaFunctionLink(
 		func(c *aws.Config, pc provider.Context) iamservice.Service {
 			return iammock.CreateIamServiceMock()
 		},
 	)
 	return func(
-		deps pluginutils.LinkServiceDeps[*aws.Config, dynamodbservice.Service, *aws.Config, lambdaservice.Service],
+		deps pluginutils.LinkServiceDeps[*aws.Config, cloudcontrolservice.Service, *aws.Config, lambdaservice.Service],
 	) provider.Link {
-		return build(DynamoDBTableToLambdaFunctionLinkDeps(deps))
+		return build(QueueToFunctionLinkDeps(deps))
 	}
 }
 
 const (
-	esmStreamARN   = "arn:aws:dynamodb:us-west-2:123456789012:table/orders/stream/2024"
-	esmFunctionARN = "arn:aws:lambda:us-west-2:123456789012:function:process-stream"
-	// The link-owned event source mapping intermediary id (table__function__suffix).
-	tableFunctionESMID = "ordersTable__processStreamFunction__event-source-mapping"
+	esmQueueARN    = "arn:aws:sqs:us-west-2:123456789012:orders-queue"
+	esmFunctionARN = "arn:aws:lambda:us-west-2:123456789012:function:process-queue"
+	// The link-owned event source mapping intermediary id (queue__function__suffix).
+	queueFunctionESMID = "ordersQueue__processQueueFunction__event-source-mapping"
 )
 
 func esmLeaf(leaf string) string {
-	return "[\"intermediaries\"][\"" + tableFunctionESMID + "\"][\"" + leaf + "\"]"
+	return "[\"intermediaries\"][\"" + queueFunctionESMID + "\"][\"" + leaf + "\"]"
 }
 
-func (s *TableFunctionLinkStageChangesSuite) Test_stage_changes() {
+func (s *QueueFunctionLinkStageChangesSuite) Test_stage_changes() {
 	testCases := []plugintestutils.LinkChangeStagingTestCase[
 		*aws.Config,
-		dynamodbservice.Service,
+		cloudcontrolservice.Service,
 		*aws.Config,
 		lambdaservice.Service,
 	]{
-		stageTableFunctionNewResourcesTestCase(),
-		stageTableFunctionArnChangesTestCase(),
-		stageTableFunctionNoChangesTestCase(),
+		stageQueueFunctionNewResourcesTestCase(),
+		stageQueueFunctionArnChangesTestCase(),
+		stageQueueFunctionNoChangesTestCase(),
 	}
 
 	plugintestutils.RunLinkChangeStagingTestCases(
 		testCases,
-		tableFunctionStageLinkFactory(),
+		queueFunctionStageLinkFactory(),
 		&s.Suite,
 	)
 }
 
-func stageTableFunctionNewResourcesTestCase() plugintestutils.LinkChangeStagingTestCase[
+func stageQueueFunctionNewResourcesTestCase() plugintestutils.LinkChangeStagingTestCase[
 	*aws.Config,
-	dynamodbservice.Service,
+	cloudcontrolservice.Service,
 	*aws.Config,
 	lambdaservice.Service,
 ] {
 	return plugintestutils.LinkChangeStagingTestCase[
 		*aws.Config,
-		dynamodbservice.Service,
+		cloudcontrolservice.Service,
 		*aws.Config,
 		lambdaservice.Service,
 	]{
@@ -83,21 +83,21 @@ func stageTableFunctionNewResourcesTestCase() plugintestutils.LinkChangeStagingT
 		Input: &provider.LinkStageChangesInput{
 			ResourceAChanges: &provider.Changes{
 				AppliedResourceInfo: provider.ResourceInfo{
-					ResourceName: "ordersTable",
+					ResourceName: "ordersQueue",
 					ResourceWithResolvedSubs: &provider.ResolvedResource{
 						Spec: &core.MappingNode{Fields: map[string]*core.MappingNode{}},
 					},
 				},
-				// A new table: a user-set field appears in NewFields (making the
-				// resource "new"), while the computed stream ARN is known only on deploy.
+				// A new queue: a user-set field appears in NewFields (making the
+				// resource "new"), while the computed ARN is known only on deploy.
 				NewFields: []provider.FieldChange{
-					{FieldPath: "spec.tableName", NewValue: core.MappingNodeFromString("orders-table")},
+					{FieldPath: "spec.queueName", NewValue: core.MappingNodeFromString("orders-queue")},
 				},
-				FieldChangesKnownOnDeploy: []string{"spec.streamArn"},
+				FieldChangesKnownOnDeploy: []string{"spec.arn"},
 			},
 			ResourceBChanges: &provider.Changes{
 				AppliedResourceInfo: provider.ResourceInfo{
-					ResourceName: "processStreamFunction",
+					ResourceName: "processQueueFunction",
 					ResourceWithResolvedSubs: &provider.ResolvedResource{
 						Spec: &core.MappingNode{Fields: map[string]*core.MappingNode{}},
 					},
@@ -117,22 +117,22 @@ func stageTableFunctionNewResourcesTestCase() plugintestutils.LinkChangeStagingT
 				FieldChangesKnownOnDeploy: []string{
 					esmLeaf("eventSourceArn"),
 					esmLeaf("functionArn"),
-					"processStreamFunctionExecutionRole",
+					"processQueueFunctionExecutionRole",
 				},
 			},
 		},
 	}
 }
 
-func stageTableFunctionArnChangesTestCase() plugintestutils.LinkChangeStagingTestCase[
+func stageQueueFunctionArnChangesTestCase() plugintestutils.LinkChangeStagingTestCase[
 	*aws.Config,
-	dynamodbservice.Service,
+	cloudcontrolservice.Service,
 	*aws.Config,
 	lambdaservice.Service,
 ] {
 	return plugintestutils.LinkChangeStagingTestCase[
 		*aws.Config,
-		dynamodbservice.Service,
+		cloudcontrolservice.Service,
 		*aws.Config,
 		lambdaservice.Service,
 	]{
@@ -140,17 +140,17 @@ func stageTableFunctionArnChangesTestCase() plugintestutils.LinkChangeStagingTes
 		Input: &provider.LinkStageChangesInput{
 			ResourceAChanges: &provider.Changes{
 				AppliedResourceInfo: provider.ResourceInfo{
-					ResourceName: "ordersTable",
+					ResourceName: "ordersQueue",
 					ResourceWithResolvedSubs: &provider.ResolvedResource{
 						Spec: &core.MappingNode{Fields: map[string]*core.MappingNode{
-							"streamArn": core.MappingNodeFromString(esmStreamARN),
+							"arn": core.MappingNodeFromString(esmQueueARN),
 						}},
 					},
 				},
 			},
 			ResourceBChanges: &provider.Changes{
 				AppliedResourceInfo: provider.ResourceInfo{
-					ResourceName: "processStreamFunction",
+					ResourceName: "processQueueFunction",
 					ResourceWithResolvedSubs: &provider.ResolvedResource{
 						Spec: &core.MappingNode{Fields: map[string]*core.MappingNode{
 							"arn": core.MappingNodeFromString(esmFunctionARN),
@@ -167,7 +167,7 @@ func stageTableFunctionArnChangesTestCase() plugintestutils.LinkChangeStagingTes
 			Changes: &provider.LinkChanges{
 				NewFields: []*provider.FieldChange{
 					{FieldPath: esmLeaf("resourceType"), NewValue: core.MappingNodeFromString("aws/lambda/eventSourceMapping")},
-					{FieldPath: esmLeaf("eventSourceArn"), NewValue: core.MappingNodeFromString(esmStreamARN)},
+					{FieldPath: esmLeaf("eventSourceArn"), NewValue: core.MappingNodeFromString(esmQueueARN)},
 					{FieldPath: esmLeaf("functionArn"), NewValue: core.MappingNodeFromString(esmFunctionARN)},
 				},
 			},
@@ -175,15 +175,15 @@ func stageTableFunctionArnChangesTestCase() plugintestutils.LinkChangeStagingTes
 	}
 }
 
-func stageTableFunctionNoChangesTestCase() plugintestutils.LinkChangeStagingTestCase[
+func stageQueueFunctionNoChangesTestCase() plugintestutils.LinkChangeStagingTestCase[
 	*aws.Config,
-	dynamodbservice.Service,
+	cloudcontrolservice.Service,
 	*aws.Config,
 	lambdaservice.Service,
 ] {
 	return plugintestutils.LinkChangeStagingTestCase[
 		*aws.Config,
-		dynamodbservice.Service,
+		cloudcontrolservice.Service,
 		*aws.Config,
 		lambdaservice.Service,
 	]{
@@ -191,17 +191,17 @@ func stageTableFunctionNoChangesTestCase() plugintestutils.LinkChangeStagingTest
 		Input: &provider.LinkStageChangesInput{
 			ResourceAChanges: &provider.Changes{
 				AppliedResourceInfo: provider.ResourceInfo{
-					ResourceName: "ordersTable",
+					ResourceName: "ordersQueue",
 					ResourceWithResolvedSubs: &provider.ResolvedResource{
 						Spec: &core.MappingNode{Fields: map[string]*core.MappingNode{
-							"streamArn": core.MappingNodeFromString(esmStreamARN),
+							"arn": core.MappingNodeFromString(esmQueueARN),
 						}},
 					},
 				},
 			},
 			ResourceBChanges: &provider.Changes{
 				AppliedResourceInfo: provider.ResourceInfo{
-					ResourceName: "processStreamFunction",
+					ResourceName: "processQueueFunction",
 					ResourceWithResolvedSubs: &provider.ResolvedResource{
 						Spec: &core.MappingNode{Fields: map[string]*core.MappingNode{
 							"arn": core.MappingNodeFromString(esmFunctionARN),
@@ -213,9 +213,9 @@ func stageTableFunctionNoChangesTestCase() plugintestutils.LinkChangeStagingTest
 				LinkID: "test-link",
 				Data: map[string]*core.MappingNode{
 					"intermediaries": {Fields: map[string]*core.MappingNode{
-						tableFunctionESMID: {Fields: map[string]*core.MappingNode{
+						queueFunctionESMID: {Fields: map[string]*core.MappingNode{
 							"resourceType":   core.MappingNodeFromString("aws/lambda/eventSourceMapping"),
-							"eventSourceArn": core.MappingNodeFromString(esmStreamARN),
+							"eventSourceArn": core.MappingNodeFromString(esmQueueARN),
 							"functionArn":    core.MappingNodeFromString(esmFunctionARN),
 						}},
 					}},
@@ -234,6 +234,6 @@ func stageTableFunctionNoChangesTestCase() plugintestutils.LinkChangeStagingTest
 	}
 }
 
-func TestTableFunctionLinkStageChangesSuite(t *testing.T) {
-	suite.Run(t, new(TableFunctionLinkStageChangesSuite))
+func TestQueueFunctionLinkStageChangesSuite(t *testing.T) {
+	suite.Run(t, new(QueueFunctionLinkStageChangesSuite))
 }

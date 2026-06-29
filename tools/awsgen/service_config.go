@@ -84,6 +84,15 @@ var services = []serviceEntry{
 		},
 	},
 	{
+		// Kinesis: data streams as an external/stream event source for consumers
+		// (celerity/consumer). Only the Stream type is needed; consumer groups and
+		// stream consumers (enhanced fan-out) will come later.
+		Name: "Kinesis",
+		Include: []string{
+			"AWS::Kinesis::Stream",
+		},
+	},
+	{
 		// EC2 is onboarded for data-source lookups only, the flex/vpc abstraction owns
 		// the networking fabric, so no managed EC2 resources are emitted. Only the
 		// types needed for existing-infrastructure lookups are synced.
@@ -140,6 +149,10 @@ var dataSourceConfigs = map[string]dataSourceConfig{
 	"AWS::SNS::Topic": {
 		FilterFields:            []string{"topicArn", "topicName", "region"},
 		DeriveIdentifierFromARN: false,
+	},
+	"AWS::Kinesis::Stream": {
+		FilterFields:            []string{"name", "arn", "region"},
+		DeriveIdentifierFromARN: true,
 	},
 	// EC2 lookups (data-source-only service) for referencing existing networking
 	// infrastructure from blueprints. Primary identifiers (vpcId/subnetId/id) take the

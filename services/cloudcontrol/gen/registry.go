@@ -133,6 +133,11 @@ func GeneratedResources(
 			resourceGroupTaggingServiceFactory,
 			awsConfigStore,
 		),
+		"aws/kinesis/stream": kinesisStreamResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
 		"aws/lambda/alias": lambdaAliasResource(
 			cloudControlServiceFactory,
 			resourceGroupTaggingServiceFactory,

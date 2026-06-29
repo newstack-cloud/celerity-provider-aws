@@ -8,26 +8,31 @@ You don't wire this up explicitly: it takes effect automatically when you create
 
 ### Example
 
-```yaml
-resources:
-  ordersTopic:
-    type: aws/sns/topic
-    spec:
-      topicName: orders
+```blueprintlang
+version "2025-11-02"
 
-  processOrderFunction:
-    type: aws/lambda/function
-    spec:
-      functionName: process-order
-      # ... other function configuration
+resource ordersTopic: aws/sns/topic {
+    spec {
+        topicName = "orders"
+    }
+}
 
-  processOrderSubscription:
-    type: aws/sns/subscription
-    spec:
-      topicArn: ${ordersTopic.spec.topicArn}
-      protocol: lambda
-      endpoint: ${processOrderFunction.spec.arn}
-      filterPolicy:
-        eventType: ["order.created"]
+resource processOrderFunction: aws/lambda/function {
+    spec {
+        functionName = "process-order"
+        # ... other function configuration
+    }
+}
+
+resource processOrderSubscription: aws/sns/subscription {
+    spec {
+        topicArn = ordersTopic.spec.topicArn
+        protocol = "lambda"
+        endpoint = processOrderFunction.spec.arn
+        filterPolicy = {
+            eventType = ["order.created"]
+        }
+    }
+}
 ```
 

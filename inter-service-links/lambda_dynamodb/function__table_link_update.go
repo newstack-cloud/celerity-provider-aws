@@ -305,7 +305,7 @@ func accessLinkOutput(
 	linkDataKey := createLinkDataExecutionRoleName(input.ResourceAInfo)
 	roleLinkData := core.MappingNodeFields(
 		linkutils.PermissionFieldName,
-		camelAccessStatementNode(sid, tableARN, accessLevel),
+		specAccessStatementNode(sid, tableARN, accessLevel),
 	)
 
 	// Attribute the grant to this link so the role's drift/deploy does not strip it:
@@ -320,10 +320,10 @@ func accessLinkOutput(
 	}
 }
 
-// camelAccessStatementNode builds the statement in the camelCase spec form the
+// specAccessStatementNode builds the statement in the camelCase spec form the
 // role's external state uses (after Cloud Control name translation), so the drift
 // comparison against link data matches.
-func camelAccessStatementNode(sid, tableARN, accessLevel string) *core.MappingNode {
+func specAccessStatementNode(sid, tableARN, accessLevel string) *core.MappingNode {
 	actions := dynamoDBActionsForAccessLevel(accessLevel)
 	actionItems := make([]*core.MappingNode, len(actions))
 	for i, action := range actions {

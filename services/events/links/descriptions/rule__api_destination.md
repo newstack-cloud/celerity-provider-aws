@@ -8,62 +8,62 @@ Add the destination as a target on the rule by referencing the destination's `ar
 
 ### Example
 
-```javascript
-{
-  "version": "2025-11-02",
-  "resources": {
-    "orderCreatedRule": {
-      "type": "aws/events/rule",
-      "spec": {
-        "name": "order-created-rule",
-        "eventPattern": { "source": ["app.orders"] },
-        "targets": [
-          {
-            "id": "order-webhook",
-            "arn": "${orderWebhookDestination.spec.arn}",
-            "roleArn": "${orderWebhookRole.spec.arn}"
-          }
-        ]
-      }
-    },
-    "orderWebhookConnection": {
-      "type": "aws/events/connection",
-      "spec": {
-        "name": "order-webhook-connection",
-        "authorizationType": "API_KEY",
-        "authParameters": {
-          "apiKeyAuthParameters": {
-            "apiKeyName": "x-api-key",
-            "apiKeyValue": "${variables.webhookApiKey}"
-          }
+```blueprintlang
+version "2025-11-02"
+
+resource orderCreatedRule: aws/events/rule {
+    spec {
+        name = "order-created-rule"
+        eventPattern = {
+            source = ["app.orders"]
         }
-      }
-    },
-    "orderWebhookDestination": {
-      "type": "aws/events/apiDestination",
-      "spec": {
-        "name": "order-webhook-destination",
-        "connectionArn": "${orderWebhookConnection.spec.arn}",
-        "invocationEndpoint": "https://example.com/hooks/orders",
-        "httpMethod": "POST"
-      }
-    },
-    "orderWebhookRole": {
-      "type": "aws/iam/role",
-      "spec": {
-        "roleName": "order-webhook-invoke-role",
-        "assumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
+        targets = [
             {
-              "Effect": "Allow",
-              "Principal": { "Service": "events.amazonaws.com" },
-              "Action": "sts:AssumeRole"
+                id = "order-webhook",
+                arn = orderWebhookDestination.spec.arn,
+                roleArn = orderWebhookRole.spec.arn
             }
-          ]
-        }
-      }
+        ]
     }
-  }
+}
+
+resource orderWebhookConnection: aws/events/connection {
+    spec {
+        name = "order-webhook-connection"
+        authorizationType = "API_KEY"
+        authParameters = {
+            apiKeyAuthParameters = {
+                apiKeyName = "x-api-key",
+                apiKeyValue = variables.webhookApiKey
+            }
+        }
+    }
+}
+
+resource orderWebhookDestination: aws/events/apiDestination {
+    spec {
+        name = "order-webhook-destination"
+        connectionArn = orderWebhookConnection.spec.arn
+        invocationEndpoint = "https://example.com/hooks/orders"
+        httpMethod = "POST"
+    }
+}
+
+resource orderWebhookRole: aws/iam/role {
+    spec {
+        roleName = "order-webhook-invoke-role"
+        assumeRolePolicyDocument = {
+            Version = "2012-10-17",
+            Statement = [
+                {
+                    Effect = "Allow",
+                    Principal = {
+                        Service = "events.amazonaws.com"
+                    },
+                    Action = "sts:AssumeRole"
+                }
+            ]
+        }
+    }
 }
 ```

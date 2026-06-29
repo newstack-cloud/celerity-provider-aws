@@ -12,25 +12,30 @@ If the queue is encrypted with a customer managed KMS key, that key's policy mus
 
 ### Example
 
-```yaml
-resources:
-  ordersTopic:
-    type: aws/sns/topic
-    spec:
-      topicName: orders
+```blueprintlang
+version "2025-11-02"
 
-  ordersConsumerQueue:
-    type: aws/sqs/queue
-    spec:
-      queueName: orders-consumer
+resource ordersTopic: aws/sns/topic {
+    spec {
+        topicName = "orders"
+    }
+}
 
-  ordersConsumerSubscription:
-    type: aws/sns/subscription
-    spec:
-      topicArn: ${ordersTopic.spec.topicArn}
-      protocol: sqs
-      endpoint: ${ordersConsumerQueue.spec.arn}
-      rawMessageDelivery: true
-      filterPolicy:
-        eventType: ["order.created", "order.updated"]
+resource ordersConsumerQueue: aws/sqs/queue {
+    spec {
+        queueName = "orders-consumer"
+    }
+}
+
+resource ordersConsumerSubscription: aws/sns/subscription {
+    spec {
+        topicArn = ordersTopic.spec.topicArn
+        protocol = "sqs"
+        endpoint = ordersConsumerQueue.spec.arn
+        rawMessageDelivery = true
+        filterPolicy = {
+            eventType = ["order.created", "order.updated"]
+        }
+    }
+}
 ```

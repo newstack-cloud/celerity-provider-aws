@@ -18,48 +18,61 @@ The Lambda function's execution role must be defined in the same blueprint.
 
 ### Example
 
-```yaml
-resources:
-  ordersTable:
-    type: aws/dynamodb/table
-    metadata:
-      labels:
-        table: orders
-      annotations:
+```blueprintlang
+version "2025-11-02"
+
+resource ordersTable: aws/dynamodb/table {
+    metadata {
+        labels = {
+            table = "orders"
+        }
         # viewType is on the table because it configures the stream format
         # (affects all functions that consume from this stream)
-        aws.dynamodb.stream.viewType: NEW_AND_OLD_IMAGES
-    linkSelector:
-      byLabel:
-        processor: orders
-    spec:
-      tableName: orders-table
-      # No need to specify streamSpecification - the link enables it automatically
+        annotations = {
+            "aws.dynamodb.stream.viewType" = "NEW_AND_OLD_IMAGES"
+        }
+    }
 
-  orderProcessor:
-    type: aws/lambda/function
-    metadata:
-      labels:
-        processor: orders
-      annotations:
+    select by label {
+        processor = "orders"
+    }
+
+    spec {
+        tableName = "orders-table"
+        # No need to specify streamSpecification - the link enables it automatically
+    }
+}
+
+resource orderProcessor: aws/lambda/function {
+    metadata {
+        labels = {
+            processor = "orders"
+        }
         # Event source mapping config is on the function because it's specific
         # to how THIS function processes records from the stream.
         # Relationship annotations use aws.dynamodb.lambda.stream.* to indicate they
         # configure the DynamoDB→Lambda stream relationship.
-        aws.dynamodb.lambda.stream.startingPosition: LATEST
-        aws.dynamodb.lambda.stream.batchSize: 50
-        aws.dynamodb.lambda.stream.batchWindow: 5
-        aws.dynamodb.lambda.stream.enabled: true
-    spec:
-      functionName: order-processor
-      role: ${resources.orderProcessorRole.state.arn}
-      # ... other function configuration
+        annotations = {
+            "aws.dynamodb.lambda.stream.startingPosition" = "LATEST",
+            "aws.dynamodb.lambda.stream.batchSize" = 50,
+            "aws.dynamodb.lambda.stream.batchWindow" = 5,
+            "aws.dynamodb.lambda.stream.enabled" = true
+        }
+    }
 
-  orderProcessorRole:
-    type: aws/iam/role
-    spec:
-      name: order-processor-role
-      # Stream read permissions are automatically added by the link
+    spec {
+        functionName = "order-processor"
+        role = orderProcessorRole.spec.arn
+        # ... other function configuration
+    }
+}
+
+resource orderProcessorRole: aws/iam/role {
+    spec {
+        name = "order-processor-role"
+        # Stream read permissions are automatically added by the link
+    }
+}
 ```
 
 In this example:

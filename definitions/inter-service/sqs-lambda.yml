@@ -1,0 +1,96 @@
+version: "1.0.0"
+resourceDefinitions: []
+dataSourceDefinitions: []
+
+linkDefinitions:
+  # SQS queue triggers a Lambda function
+  # The queue (A) links to the function (B); the link creates the event source
+  # mapping that polls the queue and invokes the function on new messages.
+  # Semantics: "Messages on this queue trigger this Lambda function"
+  - resourceTypeA: aws/sqs/queue
+    resourceTypeB: aws/lambda/function
+    kind: soft
+    priorityResource: A
+    summary: A link that configures an SQS queue to trigger a Lambda function via an event source mapping.
+    annotations:
+      # For trigger links, annotations go on resourceB (the target being triggered)
+      # because each queue-to-function relationship has its own event source mapping
+      # config. A queue can trigger multiple functions with different configurations.
+      resourceA: []
+      resourceB:
+        - name: aws.sqs.lambda.batchSize
+          valueType: integer
+          description: "The maximum number of messages to retrieve per batch."
+          default: 10
+          min: 1
+          max: 10000
+        - name: aws.sqs.lambda.maximumBatchingWindowInSeconds
+          valueType: integer
+          description: "The maximum amount of time (in seconds) to gather messages before invoking the function. Required to be greater than 0 when batchSize exceeds 10."
+          default: 0
+          min: 0
+          max: 300
+        - name: aws.sqs.lambda.maximumConcurrency
+          valueType: integer
+          description: "The maximum number of concurrent function invocations the event source mapping can create for the queue."
+          min: 2
+          max: 1000
+        - name: aws.sqs.lambda.reportBatchItemFailures
+          valueType: boolean
+          description: "When true, allows the function to report partial batch failures (sets the ReportBatchItemFailures function response type) so only failed messages are retried."
+          default: false
+        - name: aws.sqs.lambda.filter.<index>
+          valueType: string
+          description: "An event filter pattern controlling which messages are sent to the function. <index> is the zero-based position in the event source mapping's filter array; add multiple filters with successive indices (0, 1, ...). The value is the AWS event-filtering pattern string (e.g. {\"body\":{\"action\":[\"process\"]}})."
+        - name: aws.sqs.lambda.enabled
+          valueType: boolean
+          description: "When true, the event source mapping is active."
+          default: true
+    operations:
+      updateResourceA: {}
+      updateResourceB: {}
+      updateIntermediaryResources:
+        aws/lambda/eventSourceMapping:
+          create:
+            - CreateEventSourceMapping
+          update:
+            - UpdateEventSourceMapping
+          destroy:
+            - DeleteEventSourceMapping
+          config:
+            intermediaryType: managed
+            config:
+              eventSourceArn: resourceA.state.arn
+              functionName: resourceB.state.arn
+        aws/iam/role:
+          create:
+            - PutRolePolicy
+          update:
+            - PutRolePolicy
+          destroy:
+            - DeleteRolePolicy
+          config:
+            intermediaryType: existing
+            intermediaryExternalIdSource: resourceB.spec.role
+    docLinks:
+      - https://docs.aws.amazon.com/lambda/latest/dg/with-sqs.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_CreateEventSourceMapping.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_UpdateEventSourceMapping.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_DeleteEventSourceMapping.html
+    notes: |
+      This link configures an SQS queue to trigger a Lambda function:
+
+      1. Adds queue consume permissions to the Lambda function's execution role:
+         - sqs:ReceiveMessage
+         - sqs:DeleteMessage
+         - sqs:GetQueueAttributes
+
+      2. Creates a managed Event Source Mapping that polls the queue and invokes the
+         function. The mapping config is driven by the resourceB annotations above.
+
+      The Lambda function's execution role must be defined in the same blueprint.
+      The implementation sources the role from resourceB.spec.role.
+
+      SQS queues encrypted with a customer managed KMS key require the key policy to
+      allow the function's execution role (kms:Decrypt); this is outside the link's
+      control and should be surfaced in the link's rich description.

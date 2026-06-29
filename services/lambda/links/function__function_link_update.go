@@ -339,7 +339,7 @@ func invokeAccessLinkOutput(
 	linkDataKey := createLinkDataExecutionRoleName(input.ResourceAInfo)
 	roleLinkData := core.MappingNodeFields(
 		linkutils.PermissionFieldName,
-		camelInvokeStatementNode(sid, otherFunctionARN),
+		specInvokeStatementNode(sid, otherFunctionARN),
 	)
 
 	// Attribute the grant to this link so the role's drift/deploy does not strip it:
@@ -354,10 +354,10 @@ func invokeAccessLinkOutput(
 	}
 }
 
-// camelInvokeStatementNode builds the statement in the camelCase spec form the
+// specInvokeStatementNode builds the statement in the camelCase spec form the
 // role's external state uses (after Cloud Control name translation), so the drift
 // comparison against link data matches.
-func camelInvokeStatementNode(sid, otherFunctionARN string) *core.MappingNode {
+func specInvokeStatementNode(sid, otherFunctionARN string) *core.MappingNode {
 	return core.MappingNodeFields(
 		"sid", core.MappingNodeFromString(sid),
 		"effect", core.MappingNodeFromString("Allow"),

@@ -1,16 +1,16 @@
-package lambdadynamodb
+package kinesislambda
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
-	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
+	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/smithy-go"
 	"github.com/newstack-cloud/bluelink-provider-aws/linkutils"
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
@@ -22,108 +22,24 @@ import (
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 )
 
-func (l *dynamoDBTableLambdaFunctionLinkActions) UpdateResourceA(
+func (l *kinesisStreamLambdaFunctionLinkActions) UpdateResourceA(
 	ctx context.Context,
 	input *provider.LinkUpdateResourceInput,
 ) (*provider.LinkUpdateResourceOutput, error) {
-	// On destroy, we don't disable streams - that would be destructive
-	// and the user may want streams for other purposes
-	if input.LinkUpdateType == provider.LinkUpdateTypeDestroy {
-		return &provider.LinkUpdateResourceOutput{
-			LinkData: core.MappingNodeFields(),
-		}, nil
-	}
-
-	providerCtx := provider.NewProviderContextFromLinkContext(
-		input.LinkContext,
-		"aws",
-	)
-
-	// Check if streams are already enabled
-	currentStreamEnabled := isStreamEnabled(input.ResourceInfo)
-	if currentStreamEnabled {
-		// Streams already enabled, nothing to do
-		return &provider.LinkUpdateResourceOutput{
-			LinkData: core.MappingNodeFields(),
-		}, nil
-	}
-
-	// Get the table name
-	tableName, hasTableName := extractTableNameFromResourceInfo(input.ResourceInfo)
-	if !hasTableName {
-		return nil, fmt.Errorf(
-			"table name could not be retrieved from the DynamoDB table %q",
-			pluginutils.GetResourceName(input.ResourceInfo),
-		)
-	}
-
-	// Get the desired stream view type from annotation
-	streamViewType := getStreamViewTypeAnnotation(input.ResourceInfo)
-
-	// Enable streams on the table
-	dynamodbService, err := l.getDynamoDBService(ctx, providerCtx)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = dynamodbService.UpdateTable(ctx, &dynamodb.UpdateTableInput{
-		TableName: aws.String(tableName),
-		StreamSpecification: &dynamodbtypes.StreamSpecification{
-			StreamEnabled:  aws.Bool(true),
-			StreamViewType: dynamodbtypes.StreamViewType(streamViewType),
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to enable DynamoDB Streams on table %q: %w",
-			tableName,
-			err,
-		)
-	}
-
+	// A Kinesis data stream needs no enabling to act as an event source, so there
+	// is nothing to do on the stream itself for this link.
 	return &provider.LinkUpdateResourceOutput{
-		LinkData: core.MappingNodeFields(
-			"streamSpecification",
-			core.MappingNodeFields(
-				"streamEnabled",
-				core.MappingNodeFromBool(true),
-				"streamViewType",
-				core.MappingNodeFromString(streamViewType),
-			),
-		),
+		LinkData: core.MappingNodeFields(),
 	}, nil
 }
 
-func isStreamEnabled(resourceInfo *provider.ResourceInfo) bool {
-	// The CFN-canonical DynamoDB table has no streamEnabled flag (CFN models
-	// stream enablement by the presence of the streamSpecification block). The
-	// computed streamArn is populated only once a stream is active, so its
-	// presence is the reliable signal that streams are already enabled.
-	streamARN, hasStreamARN := pluginutils.GetValueByPath(
-		"$.streamArn",
-		resourceInfo.CurrentResourceState.SpecData,
-	)
-	return hasStreamARN && core.StringValue(streamARN) != ""
-}
-
-func getStreamViewTypeAnnotation(resourceInfo *provider.ResourceInfo) string {
-	viewType, _ := pluginutils.GetStringAnnotation(
-		resourceInfo,
-		&pluginutils.AnnotationQuery[string]{
-			Key:     "aws.dynamodb.stream.viewType",
-			Default: "NEW_AND_OLD_IMAGES",
-		},
-	)
-	return viewType
-}
-
-func (l *dynamoDBTableLambdaFunctionLinkActions) UpdateResourceB(
+func (l *kinesisStreamLambdaFunctionLinkActions) UpdateResourceB(
 	ctx context.Context,
 	input *provider.LinkUpdateResourceInput,
 ) (*provider.LinkUpdateResourceOutput, error) {
 	// The Lambda function is not modified as part of this link.
-	// The function's execution role should have stream read permissions,
-	// typically configured via the access link (aws/lambda/function::aws/dynamodb/table).
+	// The function's execution role is granted stream read permissions via the
+	// intermediary resource update.
 	return &provider.LinkUpdateResourceOutput{
 		LinkData: &core.MappingNode{
 			Fields: map[string]*core.MappingNode{},
@@ -131,7 +47,7 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) UpdateResourceB(
 	}, nil
 }
 
-func (l *dynamoDBTableLambdaFunctionLinkActions) UpdateIntermediaryResources(
+func (l *kinesisStreamLambdaFunctionLinkActions) UpdateIntermediaryResources(
 	ctx context.Context,
 	input *provider.LinkUpdateIntermediaryResourcesInput,
 ) (*provider.LinkUpdateIntermediaryResourcesOutput, error) {
@@ -144,12 +60,11 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) UpdateIntermediaryResources(
 		return nil, err
 	}
 
-	// Get the stream ARN from the DynamoDB table
+	// Get the stream ARN from the Kinesis stream (the stream is the event source).
 	streamARN, hasStreamARN := extractStreamARNFromResourceInfo(input.ResourceAInfo)
 	if !hasStreamARN {
 		return nil, fmt.Errorf(
-			"stream ARN could not be retrieved from the DynamoDB table %q; "+
-				"ensure the table has DynamoDB Streams enabled",
+			"stream ARN could not be retrieved from the Kinesis stream %q",
 			pluginutils.GetResourceName(input.ResourceAInfo),
 		)
 	}
@@ -164,7 +79,7 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) UpdateIntermediaryResources(
 	}
 
 	// Stream trigger annotations are on resourceB (Lambda function) because they configure
-	// the event source mapping for this specific function. A table can trigger multiple
+	// the event source mapping for this specific function. A stream can trigger multiple
 	// functions with different configurations.
 	annotations := getStreamTriggerAnnotations(input.ResourceBInfo)
 
@@ -214,7 +129,7 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) UpdateIntermediaryResources(
 	}
 
 	// Check if we have an existing event source mapping UUID in the link state
-	esmResourceID := tableFunctionESMResourceID(input.ResourceAInfo, input.ResourceBInfo)
+	esmResourceID := streamFunctionESMResourceID(input.ResourceAInfo, input.ResourceBInfo)
 	existingUUID := getExistingEventSourceMappingUUID(input.CurrentLinkState, esmResourceID)
 
 	if existingUUID != "" {
@@ -243,7 +158,7 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) UpdateIntermediaryResources(
 	)
 }
 
-func (l *dynamoDBTableLambdaFunctionLinkActions) createIntermediaryResources(
+func (l *kinesisStreamLambdaFunctionLinkActions) createIntermediaryResources(
 	ctx context.Context,
 	input *provider.LinkUpdateIntermediaryResourcesInput,
 	streamARN string,
@@ -268,16 +183,18 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) createIntermediaryResources(
 	}
 
 	// Create the Event Source Mapping.
-	esmOutput, err := l.createEventSourceMapping(ctx, streamARN, functionARN, annotations, lambdaService)
+	esmOutput, err := l.createEventSourceMapping(
+		ctx, streamARN, functionARN, annotations, lambdaService,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	esmIdentity := tableFunctionESMIdentity(input.ResourceAInfo, input.ResourceBInfo)
+	esmIdentity := streamFunctionESMIdentity(input.ResourceAInfo, input.ResourceBInfo)
 	return mergeIntermediaryOutputs(esmIdentity, esmOutput, permOutput), nil
 }
 
-func (l *dynamoDBTableLambdaFunctionLinkActions) updateIntermediaryResources(
+func (l *kinesisStreamLambdaFunctionLinkActions) updateIntermediaryResources(
 	ctx context.Context,
 	input *provider.LinkUpdateIntermediaryResourcesInput,
 	existingUUID string,
@@ -314,11 +231,11 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) updateIntermediaryResources(
 		return nil, err
 	}
 
-	esmIdentity := tableFunctionESMIdentity(input.ResourceAInfo, input.ResourceBInfo)
+	esmIdentity := streamFunctionESMIdentity(input.ResourceAInfo, input.ResourceBInfo)
 	return mergeIntermediaryOutputs(esmIdentity, esmOutput, permOutput), nil
 }
 
-func (l *dynamoDBTableLambdaFunctionLinkActions) destroyIntermediaryResources(
+func (l *kinesisStreamLambdaFunctionLinkActions) destroyIntermediaryResources(
 	ctx context.Context,
 	input *provider.LinkUpdateIntermediaryResourcesInput,
 	setupCtx *linkutils.LambdaLinkSetupContext,
@@ -326,7 +243,7 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) destroyIntermediaryResources(
 	iamService iamservice.Service,
 ) (*provider.LinkUpdateIntermediaryResourcesOutput, error) {
 	// Delete the Event Source Mapping
-	esmResourceID := tableFunctionESMResourceID(input.ResourceAInfo, input.ResourceBInfo)
+	esmResourceID := streamFunctionESMResourceID(input.ResourceAInfo, input.ResourceBInfo)
 	uuid := getExistingEventSourceMappingUUID(input.CurrentLinkState, esmResourceID)
 	if uuid != "" {
 		_, err := lambdaService.DeleteEventSourceMapping(ctx, &lambda.DeleteEventSourceMappingInput{
@@ -338,7 +255,7 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) destroyIntermediaryResources(
 	}
 
 	// Remove the stream-read grant from the role's allocator-managed policy set.
-	sid := createDynamoDBStreamSID(input.ResourceAInfo)
+	sid := createKinesisStreamSID(input.ResourceAInfo)
 	_, err := linkutils.ReconcileRoleAccessPolicy(ctx, iamService, linkutils.RoleAccessGrant{
 		RoleName: setupCtx.RoleName,
 		SID:      sid,
@@ -353,7 +270,7 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) destroyIntermediaryResources(
 	}, nil
 }
 
-func (l *dynamoDBTableLambdaFunctionLinkActions) createEventSourceMapping(
+func (l *kinesisStreamLambdaFunctionLinkActions) createEventSourceMapping(
 	ctx context.Context,
 	streamARN string,
 	functionARN string,
@@ -363,15 +280,23 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) createEventSourceMapping(
 	createInput := &lambda.CreateEventSourceMappingInput{
 		EventSourceArn:   aws.String(streamARN),
 		FunctionName:     aws.String(functionARN),
-		StartingPosition: types.EventSourcePosition(annotations.startingPosition),
+		StartingPosition: lambdatypes.EventSourcePosition(annotations.startingPosition),
 		Enabled:          aws.Bool(annotations.enabled),
+	}
+
+	if annotations.startingPosition == "AT_TIMESTAMP" && annotations.startingPositionTimestamp != "" {
+		ts, err := parseStartingPositionTimestamp(annotations.startingPositionTimestamp)
+		if err != nil {
+			return nil, err
+		}
+		createInput.StartingPositionTimestamp = aws.Time(ts)
 	}
 
 	if annotations.batchSize > 0 {
 		createInput.BatchSize = aws.Int32(int32(annotations.batchSize))
 	}
-	if annotations.batchWindow > 0 {
-		createInput.MaximumBatchingWindowInSeconds = aws.Int32(int32(annotations.batchWindow))
+	if annotations.maximumBatchingWindowInSeconds > 0 {
+		createInput.MaximumBatchingWindowInSeconds = aws.Int32(int32(annotations.maximumBatchingWindowInSeconds))
 	}
 	if annotations.parallelizationFactor > 0 {
 		createInput.ParallelizationFactor = aws.Int32(int32(annotations.parallelizationFactor))
@@ -384,6 +309,14 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) createEventSourceMapping(
 	}
 	if annotations.bisectBatchOnFunctionError {
 		createInput.BisectBatchOnFunctionError = aws.Bool(true)
+	}
+	if annotations.tumblingWindowInSeconds > 0 {
+		createInput.TumblingWindowInSeconds = aws.Int32(int32(annotations.tumblingWindowInSeconds))
+	}
+	if annotations.reportBatchItemFailures {
+		createInput.FunctionResponseTypes = []lambdatypes.FunctionResponseType{
+			lambdatypes.FunctionResponseTypeReportBatchItemFailures,
+		}
 	}
 	if len(annotations.filterPatterns) > 0 {
 		createInput.FilterCriteria = buildFilterCriteria(annotations.filterPatterns)
@@ -413,6 +346,25 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) createEventSourceMapping(
 	}, nil
 }
 
+// parseStartingPositionTimestamp parses an AT_TIMESTAMP starting-position annotation
+// (Unix epoch seconds) into a time, tolerating a value expressed as a float.
+func parseStartingPositionTimestamp(value string) (time.Time, error) {
+	secs, err := strconv.ParseInt(value, 10, 64)
+	if err == nil {
+		return time.Unix(secs, 0), nil
+	}
+
+	if floatSecs, floatErr := strconv.ParseFloat(value, 64); floatErr == nil {
+		return time.Unix(int64(floatSecs), 0), nil
+	}
+
+	return time.Time{}, fmt.Errorf(
+		"invalid aws.kinesis.lambda.startingPositionTimestamp %q: expected Unix epoch seconds: %w",
+		value,
+		err,
+	)
+}
+
 // isRoleNotYetPropagatedError reports whether an error is the transient
 // InvalidParameterValueException AWS returns when an execution role's freshly-granted
 // stream permissions have not yet propagated (IAM eventual consistency).
@@ -429,7 +381,7 @@ func isRoleNotYetPropagatedError(err error) bool {
 	return false
 }
 
-func (l *dynamoDBTableLambdaFunctionLinkActions) updateEventSourceMapping(
+func (l *kinesisStreamLambdaFunctionLinkActions) updateEventSourceMapping(
 	ctx context.Context,
 	uuid string,
 	streamARN string,
@@ -446,8 +398,8 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) updateEventSourceMapping(
 	if annotations.batchSize > 0 {
 		updateInput.BatchSize = aws.Int32(int32(annotations.batchSize))
 	}
-	if annotations.batchWindow >= 0 {
-		updateInput.MaximumBatchingWindowInSeconds = aws.Int32(int32(annotations.batchWindow))
+	if annotations.maximumBatchingWindowInSeconds >= 0 {
+		updateInput.MaximumBatchingWindowInSeconds = aws.Int32(int32(annotations.maximumBatchingWindowInSeconds))
 	}
 	if annotations.parallelizationFactor > 0 {
 		updateInput.ParallelizationFactor = aws.Int32(int32(annotations.parallelizationFactor))
@@ -459,6 +411,14 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) updateEventSourceMapping(
 		updateInput.MaximumRecordAgeInSeconds = aws.Int32(int32(annotations.maximumRecordAgeInSeconds))
 	}
 	updateInput.BisectBatchOnFunctionError = aws.Bool(annotations.bisectBatchOnFunctionError)
+	if annotations.tumblingWindowInSeconds > 0 {
+		updateInput.TumblingWindowInSeconds = aws.Int32(int32(annotations.tumblingWindowInSeconds))
+	}
+	if annotations.reportBatchItemFailures {
+		updateInput.FunctionResponseTypes = []lambdatypes.FunctionResponseType{
+			lambdatypes.FunctionResponseTypeReportBatchItemFailures,
+		}
+	}
 
 	if len(annotations.filterPatterns) > 0 {
 		updateInput.FilterCriteria = buildFilterCriteria(annotations.filterPatterns)
@@ -484,27 +444,27 @@ type esmLinkData struct {
 	functionArn    string
 }
 
-// grantStreamPermissions packs the DynamoDB stream-read statement into the Lambda
+// Packs the Kinesis stream-read statement into the Lambda
 // execution role's allocator-managed policy set (a single shared inline policy,
 // with managed-policy overflow), replacing any prior statement with the same Sid.
-func (l *dynamoDBTableLambdaFunctionLinkActions) grantStreamPermissions(
+func (l *kinesisStreamLambdaFunctionLinkActions) grantStreamPermissions(
 	ctx context.Context,
 	input *provider.LinkUpdateIntermediaryResourcesInput,
 	streamARN string,
 	setupCtx *linkutils.LambdaLinkSetupContext,
 	iamService iamservice.Service,
 ) (*permissionLinkData, error) {
-	sid := createDynamoDBStreamSID(input.ResourceAInfo)
+	sid := createKinesisStreamSID(input.ResourceAInfo)
 
 	result, err := linkutils.ReconcileRoleAccessPolicy(ctx, iamService, linkutils.RoleAccessGrant{
 		RoleName:  setupCtx.RoleName,
 		SID:       sid,
-		Statement: dynamoDBStreamStatement(sid, streamARN),
+		Statement: kinesisStreamStatement(sid, streamARN),
 	})
 	if err != nil {
 		if errors.Is(err, linkutils.ErrAccessPolicyBudgetExhausted) {
 			return nil, fmt.Errorf(
-				"cannot grant Lambda %q read access to the DynamoDB stream of table %q: %w",
+				"cannot grant Lambda %q read access to the Kinesis stream %q: %w",
 				pluginutils.GetResourceName(input.ResourceBInfo),
 				pluginutils.GetResourceName(input.ResourceAInfo),
 				err,
@@ -522,13 +482,13 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) grantStreamPermissions(
 	}, nil
 }
 
-// dynamoDBStreamStatement builds the IAM policy statement (canonical PascalCase, as
-// the IAM API expects) granting read access to the table's stream.
-func dynamoDBStreamStatement(sid, streamARN string) map[string]any {
+// Builds the IAM policy statement (canonical PascalCase, as
+// the IAM API expects) granting read access to the Kinesis stream.
+func kinesisStreamStatement(sid, streamARN string) map[string]any {
 	return map[string]any{
 		"Sid":      sid,
 		"Effect":   "Allow",
-		"Action":   dynamoDBStreamActions(),
+		"Action":   kinesisStreamActions(),
 		"Resource": streamARN,
 	}
 }
@@ -541,7 +501,7 @@ type permissionLinkData struct {
 	result            linkutils.RoleAccessResult
 }
 
-// mergeIntermediaryOutputs combines the event source mapping link data with the
+// Combines the event source mapping link data with the
 // stream-read grant's link data and (for inline placements) drift mappings, so the
 // ESM outputs and the role-policy outputs are both preserved.
 func mergeIntermediaryOutputs(
@@ -559,7 +519,12 @@ func mergeIntermediaryOutputs(
 	// the attached managed policy ARN.
 	mappings := map[string]string{}
 	linkutils.AppendRoleAccessMapping(
-		mappings, roleLinkData, permData.roleResourceName, permData.executionRoleName, permData.sid, permData.result,
+		mappings,
+		roleLinkData,
+		permData.roleResourceName,
+		permData.executionRoleName,
+		permData.sid,
+		permData.result,
 	)
 
 	// Project the event source mapping into the "intermediaries" link-data map (alongside
@@ -584,11 +549,8 @@ func mergeIntermediaryOutputs(
 	}
 }
 
-// specStreamStatementNode builds the statement in the camelCase spec form the
-// role's external state uses (after Cloud Control name translation), so the drift
-// comparison against link data matches.
 func specStreamStatementNode(sid, streamARN string) *core.MappingNode {
-	actions := dynamoDBStreamActions()
+	actions := kinesisStreamActions()
 	actionItems := make([]*core.MappingNode, len(actions))
 	for i, action := range actions {
 		actionItems[i] = core.MappingNodeFromString(action)
@@ -601,9 +563,9 @@ func specStreamStatementNode(sid, streamARN string) *core.MappingNode {
 	)
 }
 
-func createDynamoDBStreamSID(resourceInfo *provider.ResourceInfo) string {
+func createKinesisStreamSID(resourceInfo *provider.ResourceInfo) string {
 	return fmt.Sprintf(
-		"DynamoDBStreamRead%s",
+		"KinesisStreamRead%s",
 		pluginutils.StripNonAlphaNumericChars(resourceInfo.ResourceName),
 	)
 }
@@ -615,44 +577,49 @@ func createStreamLinkDataExecutionRoleName(resourceInfo *provider.ResourceInfo) 
 	)
 }
 
-func dynamoDBStreamActions() []string {
+func kinesisStreamActions() []string {
 	return []string{
-		"dynamodb:DescribeStream",
-		"dynamodb:GetRecords",
-		"dynamodb:GetShardIterator",
-		"dynamodb:ListStreams",
+		"kinesis:DescribeStream",
+		"kinesis:DescribeStreamSummary",
+		"kinesis:GetRecords",
+		"kinesis:GetShardIterator",
+		"kinesis:ListShards",
+		"kinesis:ListStreams",
 	}
 }
 
 type streamTriggerAnnotations struct {
-	batchSize                  int
-	batchWindow                int
-	startingPosition           string
-	parallelizationFactor      int
-	maximumRetryAttempts       int
-	maximumRecordAgeInSeconds  int
-	bisectBatchOnFunctionError bool
-	filterPatterns             []string
-	enabled                    bool
+	batchSize                      int
+	maximumBatchingWindowInSeconds int
+	startingPosition               string
+	startingPositionTimestamp      string
+	parallelizationFactor          int
+	maximumRetryAttempts           int
+	maximumRecordAgeInSeconds      int
+	bisectBatchOnFunctionError     bool
+	tumblingWindowInSeconds        int
+	reportBatchItemFailures        bool
+	filterPatterns                 []string
+	enabled                        bool
 }
 
 func getStreamTriggerAnnotations(
 	resourceInfo *provider.ResourceInfo,
 ) *streamTriggerAnnotations {
-	// Relationship annotations use aws.dynamodb.lambda.stream.* pattern to indicate
-	// these configure the DynamoDB→Lambda stream relationship
+	// Relationship annotations use aws.kinesis.lambda.* pattern to indicate
+	// these configure the Kinesis→Lambda stream relationship.
 	batchSize, _ := pluginutils.GetIntAnnotation(
 		resourceInfo,
 		&pluginutils.AnnotationQuery[int]{
-			Key:     "aws.dynamodb.lambda.stream.batchSize",
+			Key:     "aws.kinesis.lambda.batchSize",
 			Default: 100,
 		},
 	)
 
-	batchWindow, _ := pluginutils.GetIntAnnotation(
+	maximumBatchingWindowInSeconds, _ := pluginutils.GetIntAnnotation(
 		resourceInfo,
 		&pluginutils.AnnotationQuery[int]{
-			Key:     "aws.dynamodb.lambda.stream.batchWindow",
+			Key:     "aws.kinesis.lambda.maximumBatchingWindowInSeconds",
 			Default: 0,
 		},
 	)
@@ -660,15 +627,22 @@ func getStreamTriggerAnnotations(
 	startingPosition, _ := pluginutils.GetStringAnnotation(
 		resourceInfo,
 		&pluginutils.AnnotationQuery[string]{
-			Key:     "aws.dynamodb.lambda.stream.startingPosition",
+			Key:     "aws.kinesis.lambda.startingPosition",
 			Default: "LATEST",
+		},
+	)
+
+	startingPositionTimestamp, _ := pluginutils.GetStringAnnotation(
+		resourceInfo,
+		&pluginutils.AnnotationQuery[string]{
+			Key: "aws.kinesis.lambda.startingPositionTimestamp",
 		},
 	)
 
 	parallelizationFactor, _ := pluginutils.GetIntAnnotation(
 		resourceInfo,
 		&pluginutils.AnnotationQuery[int]{
-			Key:     "aws.dynamodb.lambda.stream.parallelizationFactor",
+			Key:     "aws.kinesis.lambda.parallelizationFactor",
 			Default: 1,
 		},
 	)
@@ -676,7 +650,7 @@ func getStreamTriggerAnnotations(
 	maximumRetryAttempts, _ := pluginutils.GetIntAnnotation(
 		resourceInfo,
 		&pluginutils.AnnotationQuery[int]{
-			Key:     "aws.dynamodb.lambda.stream.maximumRetryAttempts",
+			Key:     "aws.kinesis.lambda.maximumRetryAttempts",
 			Default: -1,
 		},
 	)
@@ -684,7 +658,7 @@ func getStreamTriggerAnnotations(
 	maximumRecordAgeInSeconds, _ := pluginutils.GetIntAnnotation(
 		resourceInfo,
 		&pluginutils.AnnotationQuery[int]{
-			Key:     "aws.dynamodb.lambda.stream.maximumRecordAgeInSeconds",
+			Key:     "aws.kinesis.lambda.maximumRecordAgeInSeconds",
 			Default: -1,
 		},
 	)
@@ -692,7 +666,23 @@ func getStreamTriggerAnnotations(
 	bisectBatchOnFunctionError, _ := pluginutils.GetBoolAnnotation(
 		resourceInfo,
 		&pluginutils.AnnotationQuery[bool]{
-			Key:     "aws.dynamodb.lambda.stream.bisectBatchOnFunctionError",
+			Key:     "aws.kinesis.lambda.bisectBatchOnFunctionError",
+			Default: false,
+		},
+	)
+
+	tumblingWindowInSeconds, _ := pluginutils.GetIntAnnotation(
+		resourceInfo,
+		&pluginutils.AnnotationQuery[int]{
+			Key:     "aws.kinesis.lambda.tumblingWindowInSeconds",
+			Default: 0,
+		},
+	)
+
+	reportBatchItemFailures, _ := pluginutils.GetBoolAnnotation(
+		resourceInfo,
+		&pluginutils.AnnotationQuery[bool]{
+			Key:     "aws.kinesis.lambda.reportBatchItemFailures",
 			Default: false,
 		},
 	)
@@ -702,29 +692,31 @@ func getStreamTriggerAnnotations(
 	enabled, _ := pluginutils.GetBoolAnnotation(
 		resourceInfo,
 		&pluginutils.AnnotationQuery[bool]{
-			Key:     "aws.dynamodb.lambda.stream.enabled",
+			Key:     "aws.kinesis.lambda.enabled",
 			Default: true,
 		},
 	)
 
 	return &streamTriggerAnnotations{
-		batchSize:                  batchSize,
-		batchWindow:                batchWindow,
-		startingPosition:           startingPosition,
-		parallelizationFactor:      parallelizationFactor,
-		maximumRetryAttempts:       maximumRetryAttempts,
-		maximumRecordAgeInSeconds:  maximumRecordAgeInSeconds,
-		bisectBatchOnFunctionError: bisectBatchOnFunctionError,
-		filterPatterns:             filterPatterns,
-		enabled:                    enabled,
+		batchSize:                      batchSize,
+		maximumBatchingWindowInSeconds: maximumBatchingWindowInSeconds,
+		startingPosition:               startingPosition,
+		startingPositionTimestamp:      startingPositionTimestamp,
+		parallelizationFactor:          parallelizationFactor,
+		maximumRetryAttempts:           maximumRetryAttempts,
+		maximumRecordAgeInSeconds:      maximumRecordAgeInSeconds,
+		bisectBatchOnFunctionError:     bisectBatchOnFunctionError,
+		tumblingWindowInSeconds:        tumblingWindowInSeconds,
+		reportBatchItemFailures:        reportBatchItemFailures,
+		filterPatterns:                 filterPatterns,
+		enabled:                        enabled,
 	}
 }
 
 func extractStreamARNFromResourceInfo(resourceInfo *provider.ResourceInfo) (string, bool) {
-	// The CFN-canonical DynamoDB table exposes the stream ARN as the computed
-	// streamArn field (the native resource called it latestStreamArn).
+	// The Kinesis stream is the event source; its ARN is the computed arn field.
 	streamARN, hasStreamARN := pluginutils.GetValueByPath(
-		"$.streamArn",
+		"$.arn",
 		resourceInfo.CurrentResourceState.SpecData,
 	)
 	if hasStreamARN && streamARN != nil {
@@ -734,31 +726,26 @@ func extractStreamARNFromResourceInfo(resourceInfo *provider.ResourceInfo) (stri
 	return "", false
 }
 
-// The single source of truth for the link-owned event source
-// mapping's identity, used by UpdateIntermediaryResources (to persist it), StageChanges (to
-// project it into link changes) and the UUID lookup. The event source mapping is created via
-// the Lambda SDK rather than as a managed Cloud Control resource, but it is projected into
-// link data the same way as other link-owned intermediaries.
-func tableFunctionESMIdentity(tableInfo, functionInfo *provider.ResourceInfo) linkutils.IntermediaryIdentity {
+func streamFunctionESMIdentity(streamInfo, functionInfo *provider.ResourceInfo) linkutils.IntermediaryIdentity {
 	return linkutils.IntermediaryIdentity{
 		ResourceType: "aws/lambda/eventSourceMapping",
-		ResourceID:   tableFunctionESMResourceID(tableInfo, functionInfo),
-		ResourceName: tableFunctionESMResourceName(tableInfo, functionInfo),
+		ResourceID:   streamFunctionESMResourceID(streamInfo, functionInfo),
+		ResourceName: streamFunctionESMResourceName(streamInfo, functionInfo),
 	}
 }
 
-func tableFunctionESMResourceID(tableInfo, functionInfo *provider.ResourceInfo) string {
+func streamFunctionESMResourceID(streamInfo, functionInfo *provider.ResourceInfo) string {
 	return fmt.Sprintf(
 		"%s__%s__event-source-mapping",
-		pluginutils.GetResourceName(tableInfo),
+		pluginutils.GetResourceName(streamInfo),
 		pluginutils.GetResourceName(functionInfo),
 	)
 }
 
-func tableFunctionESMResourceName(tableInfo, functionInfo *provider.ResourceInfo) string {
+func streamFunctionESMResourceName(streamInfo, functionInfo *provider.ResourceInfo) string {
 	return fmt.Sprintf(
 		"%sStream%s",
-		pluginutils.StripNonAlphaNumericChars(pluginutils.GetResourceName(tableInfo)),
+		pluginutils.StripNonAlphaNumericChars(pluginutils.GetResourceName(streamInfo)),
 		pluginutils.StripNonAlphaNumericChars(pluginutils.GetResourceName(functionInfo)),
 	)
 }
@@ -783,16 +770,16 @@ func getExistingEventSourceMappingUUID(linkState *state.LinkState, resourceID st
 }
 
 // Reads the indexed filter-pattern annotations
-// (aws.dynamodb.lambda.stream.filter.<index>) in order, stopping at the first
-// absent index. Each value is a single AWS event-filtering pattern string; the set
-// forms the event source mapping's filter criteria.
+// (aws.kinesis.lambda.filter.<index>) in order, stopping at the first absent index.
+// Each value is a single AWS event-filtering pattern string; the set forms the event
+// source mapping's filter criteria.
 func getStreamFilterPatterns(resourceInfo *provider.ResourceInfo) []string {
 	var patterns []string
 	for i := 0; ; i++ {
 		pattern, found := pluginutils.GetStringAnnotation(
 			resourceInfo,
 			&pluginutils.AnnotationQuery[string]{
-				Key: fmt.Sprintf("aws.dynamodb.lambda.stream.filter.%d", i),
+				Key: fmt.Sprintf("aws.kinesis.lambda.filter.%d", i),
 			},
 		)
 		if !found || pattern == "" {
@@ -803,19 +790,19 @@ func getStreamFilterPatterns(resourceInfo *provider.ResourceInfo) []string {
 	return patterns
 }
 
-func buildFilterCriteria(patterns []string) *types.FilterCriteria {
+func buildFilterCriteria(patterns []string) *lambdatypes.FilterCriteria {
 	if len(patterns) == 0 {
 		return nil
 	}
 
-	filters := make([]types.Filter, 0, len(patterns))
+	filters := make([]lambdatypes.Filter, 0, len(patterns))
 	for _, pattern := range patterns {
-		filters = append(filters, types.Filter{
+		filters = append(filters, lambdatypes.Filter{
 			Pattern: aws.String(pattern),
 		})
 	}
 
-	return &types.FilterCriteria{
+	return &lambdatypes.FilterCriteria{
 		Filters: filters,
 	}
 }

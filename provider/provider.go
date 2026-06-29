@@ -8,10 +8,12 @@ import (
 	eventslambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/events_lambda"
 	eventssqs "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/events_sqs"
 	flexlambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/flex_lambda"
+	kinesislambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/kinesis_lambda"
 	lambdadynamodb "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_dynamodb"
 	lambdasns "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_sns"
 	snslambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/sns_lambda"
 	snssqs "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/sns_sqs"
+	sqslambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/sqs_lambda"
 	cloudcontrolgen "github.com/newstack-cloud/bluelink-provider-aws/services/cloudcontrol/gen"
 	cloudcontrolservice "github.com/newstack-cloud/bluelink-provider-aws/services/cloudcontrol/service"
 	dynamodbservice "github.com/newstack-cloud/bluelink-provider-aws/services/dynamodb/service"
@@ -138,6 +140,35 @@ func NewProvider(
 				lambdadynamodb.DynamoDBTableToLambdaFunctionLinkDeps{
 					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, dynamodbservice.Service]{
 						ServiceFactory: dynamodbServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
+						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
+			// Consumer triggers: SQS queue / Kinesis stream -> Lambda function (event source mappings).
+			"aws/sqs/queue::aws/lambda/function": sqslambda.SQSQueueLambdaFunctionLink(
+				iamServiceFactory,
+			)(
+				sqslambda.QueueToFunctionLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, cloudcontrolservice.Service]{
+						ServiceFactory: cloudControlServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
+						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
+			"aws/kinesis/stream::aws/lambda/function": kinesislambda.StreamFunctionLink(
+				iamServiceFactory,
+			)(
+				kinesislambda.StreamToFunctionLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, cloudcontrolservice.Service]{
+						ServiceFactory: cloudControlServiceFactory,
 						ConfigStore:    awsConfigStore,
 					},
 					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
