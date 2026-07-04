@@ -1,0 +1,87 @@
+version: "1.0.0"
+resourceDefinitions: []
+dataSourceDefinitions: []
+
+linkDefinitions:
+  # S3 bucket notifies a Lambda function on object events
+  # The bucket (A) selects the function (B) via a link selector; the link wires the
+  # bucket's notification configuration to invoke the function and grants S3 permission
+  # to invoke it.
+  # Semantics: "Object events on this bucket trigger this Lambda function"
+  #
+  # This is the promoted, low-boilerplate way to wire bucket notifications: the author
+  # selects the target by label and the link manages both the bucket notification entry
+  # and the Lambda permission. The bucket's notificationConfiguration remains available
+  # for manual configuration; this link merges its own entry and preserves any entries
+  # declared inline or by other links.
+  - resourceTypeA: aws/s3/bucket
+    resourceTypeB: aws/lambda/function
+    kind: soft
+    priorityResource: A
+    summary: A link that configures an S3 bucket to invoke a Lambda function on object event notifications.
+    annotations:
+      # Notification config is on resourceB (the target being notified) because each
+      # bucket-to-function relationship has its own event/filter configuration.
+      resourceA: []
+      resourceB:
+        - name: aws.s3.lambda.event.<index>
+          valueType: enum
+          description: "An S3 event type that triggers the function. <index> is the zero-based position in the event list; add multiple events with successive indices (0, 1, ...). Defaults to s3:ObjectCreated:* when none are specified."
+          allowedValues:
+            - "s3:ObjectCreated:*"
+            - "s3:ObjectCreated:Put"
+            - "s3:ObjectCreated:Post"
+            - "s3:ObjectCreated:Copy"
+            - "s3:ObjectCreated:CompleteMultipartUpload"
+            - "s3:ObjectRemoved:*"
+            - "s3:ObjectRemoved:Delete"
+            - "s3:ObjectRemoved:DeleteMarkerCreated"
+            - "s3:ObjectRestore:*"
+            - "s3:ObjectRestore:Post"
+            - "s3:ObjectRestore:Completed"
+            - "s3:ReducedRedundancyLostObject"
+            - "s3:Replication:*"
+        - name: aws.s3.lambda.filterPrefix
+          valueType: string
+          description: "Restricts notifications to objects whose key begins with this prefix."
+        - name: aws.s3.lambda.filterSuffix
+          valueType: string
+          description: "Restricts notifications to objects whose key ends with this suffix."
+    operations:
+      updateResourceA: {}
+      updateResourceB: {}
+      # The link performs all of its work in the intermediary phase, the only phase with
+      # access to the resource service (for the bucket lock and the managed permission).
+      # It first grants the Lambda permission, then merges this link's lambda notification
+      # entry into the bucket's notification configuration (PutBucketNotificationConfiguration)
+      # under a bucket lock, preserving entries declared inline or by other links. The
+      # permission is granted before the notification entry is written because S3 validates
+      # the destination permission when the notification configuration is applied.
+      updateIntermediaryResources:
+        # The Lambda permission allowing S3 to invoke the function. The source bucket
+        # (s3.amazonaws.com, SourceArn = resourceA.state.arn) is read by the link.
+        aws/lambda/permission:
+          create:
+            - AddPermission
+          update:
+            - AddPermission
+          destroy:
+            - RemovePermission
+          config:
+            intermediaryType: managed
+            config:
+              functionName: resourceB.state.arn
+    docLinks:
+      - https://docs.aws.amazon.com/AmazonS3/latest/userguide/ways-to-add-notification-config-to-bucket.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/with-s3.html
+    notes: |
+      This link configures an S3 bucket to invoke a Lambda function on object events:
+
+      1. Adds a managed Lambda permission allowing s3.amazonaws.com to invoke the function,
+         scoped to the source bucket ARN.
+      2. Merges a lambda notification entry into the bucket's notification configuration
+         (event types and key filters from the resourceB annotations above), preserving any
+         entries declared inline on the bucket or by other links.
+
+      The permission is granted before the notification entry is written, since S3
+      validates the destination permission when the notification configuration is applied.

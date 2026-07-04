@@ -4,14 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
-	"github.com/aws/smithy-go"
 	"github.com/newstack-cloud/bluelink-provider-aws/linkutils"
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
 	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
@@ -397,7 +395,7 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) createEventSourceMapping(
 		func(ctx context.Context, in *lambda.CreateEventSourceMappingInput) (*lambda.CreateEventSourceMappingOutput, error) {
 			return lambdaService.CreateEventSourceMapping(ctx, in)
 		},
-		isRoleNotYetPropagatedError,
+		linkutils.IsRoleNotYetPropagatedError,
 	)
 
 	output, err := createESM(ctx, createInput)
@@ -411,22 +409,6 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) createEventSourceMapping(
 		eventSourceArn: streamARN,
 		functionArn:    functionARN,
 	}, nil
-}
-
-// isRoleNotYetPropagatedError reports whether an error is the transient
-// InvalidParameterValueException AWS returns when an execution role's freshly-granted
-// stream permissions have not yet propagated (IAM eventual consistency).
-func isRoleNotYetPropagatedError(err error) bool {
-	if err == nil {
-		return false
-	}
-	var apiErr smithy.APIError
-	if errors.As(err, &apiErr) && apiErr.ErrorCode() == "InvalidParameterValueException" {
-		msg := apiErr.ErrorMessage()
-		return strings.Contains(msg, "Cannot access stream") ||
-			strings.Contains(msg, "ensure the role can perform")
-	}
-	return false
 }
 
 func (l *dynamoDBTableLambdaFunctionLinkActions) updateEventSourceMapping(

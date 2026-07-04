@@ -13,6 +13,7 @@ import (
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
 	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
 	resgrouptagservice "github.com/newstack-cloud/bluelink-provider-aws/services/resgrouptag/service"
+	s3service "github.com/newstack-cloud/bluelink-provider-aws/services/s3/service"
 	sqsservice "github.com/newstack-cloud/bluelink-provider-aws/services/sqs/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/utils"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
@@ -76,6 +77,7 @@ func (s *ProviderSuite) Test_loads_provider_and_applies_duration_validation() {
 		dynamodbservice.NewService,
 		eventsservice.NewService,
 		cloudcontrolservice.NewService,
+		s3service.NewService,
 		configStore,
 	)
 	configDef, err := provider.ConfigDefinition(context.Background())
@@ -165,6 +167,7 @@ func (s *ProviderSuite) Test_loads_provider_and_applies_role_arn_validation() {
 		dynamodbservice.NewService,
 		eventsservice.NewService,
 		cloudcontrolservice.NewService,
+		s3service.NewService,
 		configStore,
 	)
 	configDef, err := provider.ConfigDefinition(context.Background())

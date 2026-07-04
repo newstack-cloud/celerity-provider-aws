@@ -213,12 +213,27 @@ func GeneratedResources(
 			resourceGroupTaggingServiceFactory,
 			awsConfigStore,
 		),
+		"aws/s3/bucket": s3BucketResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
+		"aws/s3/bucketPolicy": s3BucketPolicyResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
 		"aws/sns/subscription": snsSubscriptionResource(
 			cloudControlServiceFactory,
 			resourceGroupTaggingServiceFactory,
 			awsConfigStore,
 		),
 		"aws/sns/topic": snsTopicResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
+		"aws/sns/topicInlinePolicy": snsTopicInlinePolicyResource(
 			cloudControlServiceFactory,
 			resourceGroupTaggingServiceFactory,
 			awsConfigStore,

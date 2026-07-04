@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"reflect"
 )
 
 func main() {
@@ -132,7 +133,7 @@ func generateExamples(outDir, curatedDir string, res *irResource) error {
 		return err
 	}
 
-	for _, variant := range []exampleVariant{variantBasic, variantComplete} {
+	for _, variant := range exampleVariantsFor(curatedDir, res) {
 		fileName := fmt.Sprintf("%s_%s.md", exampleStem(res.CFNType), variant.name())
 		content, err := exampleContent(curatedDir, fileName, res, variant)
 		if err != nil {
@@ -143,6 +144,31 @@ func generateExamples(outDir, curatedDir string, res *irResource) error {
 		}
 	}
 	return nil
+}
+
+// Rturns the example variants to emit. The complete variant is
+// dropped when it would be identical to the basic one (the resource has no optional
+// settable fields beyond those required), to avoid a redundant near-duplicate example.
+func exampleVariantsFor(curatedDir string, res *irResource) []exampleVariant {
+	if curatedExampleExists(curatedDir, res, variantComplete) || !exampleSpecsIdentical(res) {
+		return []exampleVariant{variantBasic, variantComplete}
+	}
+	return []exampleVariant{variantBasic}
+}
+
+func curatedExampleExists(curatedDir string, res *irResource, variant exampleVariant) bool {
+	if curatedDir == "" {
+		return false
+	}
+	fileName := fmt.Sprintf("%s_%s.md", exampleStem(res.CFNType), variant.name())
+	_, err := os.Stat(filepath.Join(curatedDir, fileName))
+	return err == nil
+}
+
+func exampleSpecsIdentical(res *irResource) bool {
+	basic := buildExampleObject(res.Schema, variantBasic, res.BlueprintType)
+	complete := buildExampleObject(res.Schema, variantComplete, res.BlueprintType)
+	return reflect.DeepEqual(basic, complete)
 }
 
 func exampleContent(curatedDir, fileName string, res *irResource, variant exampleVariant) (string, error) {

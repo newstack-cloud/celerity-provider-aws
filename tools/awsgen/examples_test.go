@@ -37,6 +37,37 @@ func TestExampleGeneration(t *testing.T) {
 	}
 }
 
+// Asserts that a resource whose complete example would be
+// identical to its basic one (no optional settable fields beyond those required) emits
+// only the basic variant, while a resource with optional fields emits both.
+func TestExampleVariantCollapse(t *testing.T) {
+	// BucketPolicy has only required fields (bucket, policyDocument), so basic == complete.
+	policy := loadResource(t, "aws-s3-bucketpolicy.json", "")
+	if !exampleSpecsIdentical(policy) {
+		t.Error("expected bucketpolicy basic and complete specs to be identical")
+	}
+	if got := exampleVariantsFor("", policy); len(got) != 1 || got[0] != variantBasic {
+		t.Errorf("expected only the basic variant for bucketpolicy, got %v", variantNames(got))
+	}
+
+	// Bucket has many optional fields, so the two variants differ and both are emitted.
+	bucket := loadResource(t, "aws-s3-bucket.json", "")
+	if exampleSpecsIdentical(bucket) {
+		t.Error("expected bucket basic and complete specs to differ")
+	}
+	if got := exampleVariantsFor("", bucket); len(got) != 2 {
+		t.Errorf("expected both variants for bucket, got %v", variantNames(got))
+	}
+}
+
+func variantNames(variants []exampleVariant) []string {
+	names := make([]string, len(variants))
+	for i, v := range variants {
+		names[i] = v.name()
+	}
+	return names
+}
+
 func renderVariant(t *testing.T, resource *irResource, variant exampleVariant) string {
 	t.Helper()
 	blueprint := buildExampleBlueprint(resource, variant)

@@ -10,7 +10,11 @@ import (
 	flexlambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/flex_lambda"
 	kinesislambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/kinesis_lambda"
 	lambdadynamodb "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_dynamodb"
+	lambdas3 "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_s3"
 	lambdasns "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_sns"
+	s3lambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/s3_lambda"
+	s3sns "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/s3_sns"
+	s3sqs "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/s3_sqs"
 	snslambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/sns_lambda"
 	snssqs "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/sns_sqs"
 	sqslambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/sqs_lambda"
@@ -25,6 +29,7 @@ import (
 	lambdalinks "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/links"
 	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
 	resgrouptagservice "github.com/newstack-cloud/bluelink-provider-aws/services/resgrouptag/service"
+	s3service "github.com/newstack-cloud/bluelink-provider-aws/services/s3/service"
 	sqslinks "github.com/newstack-cloud/bluelink-provider-aws/services/sqs/links"
 	sqsservice "github.com/newstack-cloud/bluelink-provider-aws/services/sqs/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/utils"
@@ -44,6 +49,7 @@ func NewProvider(
 	dynamodbServiceFactory pluginutils.ServiceFactory[*aws.Config, dynamodbservice.Service],
 	eventsServiceFactory pluginutils.ServiceFactory[*aws.Config, eventsservice.Service],
 	cloudControlServiceFactory pluginutils.ServiceFactory[*aws.Config, cloudcontrolservice.Service],
+	s3ServiceFactory pluginutils.ServiceFactory[*aws.Config, s3service.Service],
 	awsConfigStore *utils.AWSConfigStore,
 ) provider.Provider {
 	return &providerv1.ProviderPluginDefinition{
@@ -173,6 +179,59 @@ func NewProvider(
 					},
 					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
 						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
+			// S3 bucket notifications: the bucket notifies a Lambda function on object events.
+			"aws/s3/bucket::aws/lambda/function": s3lambda.BucketFunctionLink()(
+				s3lambda.BucketToFunctionLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, s3service.Service]{
+						ServiceFactory: s3ServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
+						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
+			"aws/s3/bucket::aws/sqs/queue": s3sqs.BucketQueueLink()(
+				s3sqs.BucketToQueueLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, s3service.Service]{
+						ServiceFactory: s3ServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, sqsservice.Service]{
+						ServiceFactory: sqsServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
+			"aws/s3/bucket::aws/sns/topic": s3sns.BucketTopicLink()(
+				s3sns.BucketToTopicLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, s3service.Service]{
+						ServiceFactory: s3ServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, cloudcontrolservice.Service]{
+						ServiceFactory: cloudControlServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
+			// Lambda access: the function reads/writes the bucket.
+			"aws/lambda/function::aws/s3/bucket": lambdas3.FunctionBucketLink(
+				iamServiceFactory,
+				ec2ServiceFactory,
+			)(
+				lambdas3.FunctionToBucketLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
+						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, cloudcontrolservice.Service]{
+						ServiceFactory: cloudControlServiceFactory,
 						ConfigStore:    awsConfigStore,
 					},
 				},

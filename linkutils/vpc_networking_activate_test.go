@@ -165,6 +165,146 @@ func (s *ActivateLinkNetworkingSuite) Test_propagates_flex_vpc_lookup_error() {
 	s.Contains(err.Error(), "vpc not found")
 }
 
+func gatewayActivation() NetworkingActivation {
+	return NetworkingActivation{
+		Caller: CallerNetworking{
+			VPCID:            "vpc-1",
+			SubnetIDs:        []string{"subnet-1"},
+			SecurityGroupIDs: []string{"sg-caller"},
+		},
+		Region:       "us-west-2",
+		AWSService:   "s3",
+		EndpointType: ec2types.VpcEndpointTypeGateway,
+	}
+}
+
+// A gateway endpoint (S3/DynamoDB) attaches to the caller's route tables and has no
+// security group: when absent, the helper resolves the route tables and creates the
+// gateway endpoint without provisioning a security group.
+func (s *ActivateLinkNetworkingSuite) Test_creates_gateway_endpoint_when_absent() {
+	ec2Svc := ec2mock.CreateEc2ServiceMock(
+		ec2mock.WithDescribeRouteTablesOutput(&ec2.DescribeRouteTablesOutput{
+			RouteTables: []ec2types.RouteTable{
+				{
+					RouteTableId: aws.String("rtb-1"),
+					Associations: []ec2types.RouteTableAssociation{
+						{SubnetId: aws.String("subnet-1")},
+					},
+				},
+			},
+		}),
+		ec2mock.WithDescribeVpcEndpointsOutput(&ec2.DescribeVpcEndpointsOutput{}),
+		ec2mock.WithCreateVpcEndpointOutput(&ec2.CreateVpcEndpointOutput{
+			VpcEndpoint: &ec2types.VpcEndpoint{VpcEndpointId: aws.String("vpce-gw-1")},
+		}),
+	)
+	rs := resourceservicemock.Create(
+		resourceservicemock.WithLookupResourceInState(flexVPCStateForNetworking()),
+	)
+
+	output := &provider.LinkUpdateIntermediaryResourcesOutput{LinkData: core.MappingNodeFields()}
+	result, err := ActivateLinkNetworking(
+		context.Background(),
+		ec2Svc,
+		networkingInput(provider.LinkUpdateTypeCreate, rs),
+		gatewayActivation(),
+		output,
+	)
+
+	s.Require().NoError(err)
+	ec2Svc.AssertCalled(&s.Suite, "DescribeRouteTables")
+	ec2Svc.AssertCalled(&s.Suite, "CreateVpcEndpoint")
+	ec2Svc.AssertNotCalled(&s.Suite, "CreateSecurityGroup")
+
+	endpoint := result.LinkData.Fields["callerVPCEndpoint"]
+	s.Require().NotNil(endpoint)
+	s.Equal("vpce-gw-1", core.StringValue(endpoint.Fields["id"]))
+}
+
+// On destroy, when the current link is the gateway endpoint's only referencer, the
+// endpoint is deleted and no security group cleanup is attempted (gateway endpoints have
+// none).
+func (s *ActivateLinkNetworkingSuite) Test_removes_gateway_endpoint_on_destroy_when_last_referencer() {
+	linkTag := utils.CreateTagBlueprintLinkID("link-1")
+	ec2Svc := ec2mock.CreateEc2ServiceMock(
+		ec2mock.WithDescribeRouteTablesOutput(&ec2.DescribeRouteTablesOutput{
+			RouteTables: []ec2types.RouteTable{
+				{
+					RouteTableId: aws.String("rtb-1"),
+					Associations: []ec2types.RouteTableAssociation{
+						{SubnetId: aws.String("subnet-1")},
+					},
+				},
+			},
+		}),
+		ec2mock.WithDescribeVpcEndpointsOutput(&ec2.DescribeVpcEndpointsOutput{
+			VpcEndpoints: []ec2types.VpcEndpoint{
+				{VpcEndpointId: aws.String("vpce-gw-1"), Tags: []ec2types.Tag{linkTag}},
+			},
+		}),
+		ec2mock.WithDeleteVpcEndpointsOutput(&ec2.DeleteVpcEndpointsOutput{}),
+	)
+	rs := resourceservicemock.Create(
+		resourceservicemock.WithLookupResourceInState(flexVPCStateForNetworking()),
+	)
+
+	output := &provider.LinkUpdateIntermediaryResourcesOutput{LinkData: core.MappingNodeFields()}
+	_, err := ActivateLinkNetworking(
+		context.Background(),
+		ec2Svc,
+		networkingInput(provider.LinkUpdateTypeDestroy, rs),
+		gatewayActivation(),
+		output,
+	)
+
+	s.Require().NoError(err)
+	ec2Svc.AssertCalled(&s.Suite, "DeleteVpcEndpoints")
+	ec2Svc.AssertNotCalled(&s.Suite, "DeleteSecurityGroup")
+}
+
+// When a gateway endpoint already exists but is not yet associated with the caller's
+// route table or tagged for this link, the helper tags it (reference counting) and adds
+// the missing route table association rather than creating a new endpoint.
+func (s *ActivateLinkNetworkingSuite) Test_updates_existing_gateway_endpoint() {
+	ec2Svc := ec2mock.CreateEc2ServiceMock(
+		ec2mock.WithDescribeRouteTablesOutput(&ec2.DescribeRouteTablesOutput{
+			RouteTables: []ec2types.RouteTable{
+				{
+					RouteTableId: aws.String("rtb-1"),
+					Associations: []ec2types.RouteTableAssociation{
+						{SubnetId: aws.String("subnet-1")},
+					},
+				},
+			},
+		}),
+		ec2mock.WithDescribeVpcEndpointsOutput(&ec2.DescribeVpcEndpointsOutput{
+			VpcEndpoints: []ec2types.VpcEndpoint{
+				// Existing endpoint with no link tag and not yet on rtb-1.
+				{VpcEndpointId: aws.String("vpce-gw-1"), RouteTableIds: []string{"rtb-other"}},
+			},
+		}),
+		ec2mock.WithCreateTagsOutput(&ec2.CreateTagsOutput{}),
+		ec2mock.WithModifyVpcEndpointOutput(&ec2.ModifyVpcEndpointOutput{}),
+	)
+	rs := resourceservicemock.Create(
+		resourceservicemock.WithLookupResourceInState(flexVPCStateForNetworking()),
+	)
+
+	output := &provider.LinkUpdateIntermediaryResourcesOutput{LinkData: core.MappingNodeFields()}
+	_, err := ActivateLinkNetworking(
+		context.Background(),
+		ec2Svc,
+		networkingInput(provider.LinkUpdateTypeUpdate, rs),
+		gatewayActivation(),
+		output,
+	)
+
+	s.Require().NoError(err)
+	ec2Svc.AssertCalled(&s.Suite, "CreateTags")
+	ec2Svc.AssertCalled(&s.Suite, "ModifyVpcEndpoint")
+	ec2Svc.AssertNotCalled(&s.Suite, "CreateVpcEndpoint")
+}
+
 func TestActivateLinkNetworkingSuite(t *testing.T) {
 	suite.Run(t, new(ActivateLinkNetworkingSuite))
 }

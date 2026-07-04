@@ -17,28 +17,33 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/iam v1.42.2
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.71.2
 	github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi v1.26.7
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.104.0
 	github.com/aws/aws-sdk-go-v2/service/signer v1.33.6
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.42.3
 	github.com/aws/aws-sdk-go-v2/service/sts v1.42.0
 	github.com/aws/smithy-go v1.27.1
 	github.com/matoous/go-nanoid/v2 v2.1.0
-	github.com/newstack-cloud/bluelink/libs/blueprint v0.50.0
+	github.com/newstack-cloud/bluelink/libs/blueprint v0.51.0
 	github.com/newstack-cloud/bluelink/libs/plugin-framework v0.14.0
 	github.com/stretchr/testify v1.11.1
 	github.com/wI2L/jsondiff v0.7.1
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-require github.com/aws/aws-sdk-go-v2/service/signin v1.0.10 // indirect
+require (
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.22 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.29 // indirect
+	github.com/aws/aws-sdk-go-v2/service/signin v1.0.10 // indirect
+)
 
 require (
-	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.9 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.13 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.29 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.29 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.30 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.8 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.12 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.11.16 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.22 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.29 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.30.16 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.20 // indirect
 	github.com/coreos/go-json v0.0.0-20231102161613-e49c8866685a // indirect

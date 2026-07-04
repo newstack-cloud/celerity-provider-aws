@@ -47,8 +47,9 @@ type NetworkingActivation struct {
 	// "lambda", "sns", "sqs", "secretsmanager", "ssm", "kms"); the full endpoint
 	// service name is com.amazonaws.<region>.<AWSService>.
 	AWSService string
-	// EndpointType selects the VPC endpoint type. Only Interface is implemented here;
-	// gateway endpoints (S3, DynamoDB) are handled separately.
+	// EndpointType selects the VPC endpoint type. Interface (the default) provisions an
+	// interface endpoint with a security group; Gateway provisions a gateway endpoint
+	// attached to the caller's route tables (used for S3 and DynamoDB).
 	EndpointType ec2types.VpcEndpointType
 
 	// TargetSecurityGroupID and TargetPort, when set, pair the caller's security group
@@ -105,7 +106,24 @@ func ActivateLinkNetworking(
 	}
 
 	if activation.AWSService != "" {
-		return activateServiceEndpoint(ctx, ec2Service, input, activation, flexVPCResourceState, output)
+		if activation.EndpointType == ec2types.VpcEndpointTypeGateway {
+			return activateGatewayEndpoint(
+				ctx,
+				ec2Service,
+				input,
+				activation,
+				flexVPCResourceState,
+				output,
+			)
+		}
+		return activateServiceEndpoint(
+			ctx,
+			ec2Service,
+			input,
+			activation,
+			flexVPCResourceState,
+			output,
+		)
 	}
 
 	if activation.TargetSecurityGroupID != "" {

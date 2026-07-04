@@ -52,6 +52,10 @@ func GeneratedDataSources(
 			cloudControlServiceFactory,
 			awsConfigStore,
 		),
+		"aws/s3/bucket": s3BucketDataSource(
+			cloudControlServiceFactory,
+			awsConfigStore,
+		),
 		"aws/sns/topic": snsTopicDataSource(
 			cloudControlServiceFactory,
 			awsConfigStore,

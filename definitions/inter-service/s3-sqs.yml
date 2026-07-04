@@ -1,0 +1,89 @@
+version: "1.0.0"
+resourceDefinitions: []
+dataSourceDefinitions: []
+
+linkDefinitions:
+  # S3 bucket notifies an SQS queue on object events
+  # The bucket (A) selects the queue (B) via a link selector; the link wires the bucket's
+  # notification configuration to deliver to the queue and grants S3 permission to send
+  # messages to it.
+  # Semantics: "Object events on this bucket are delivered to this SQS queue"
+  #
+  # This is the promoted, low-boilerplate way to wire bucket notifications: the author
+  # selects the target by label and the link manages both the bucket notification entry
+  # and the queue policy. The bucket's notificationConfiguration remains available for
+  # manual configuration; this link merges its own entry and preserves any entries
+  # declared inline or by other links.
+  - resourceTypeA: aws/s3/bucket
+    resourceTypeB: aws/sqs/queue
+    kind: soft
+    priorityResource: A
+    summary: A link that configures an S3 bucket to deliver object event notifications to an SQS queue.
+    annotations:
+      resourceA: []
+      resourceB:
+        - name: aws.s3.sqs.event.<index>
+          valueType: enum
+          description: "An S3 event type that delivers a message to the queue. <index> is the zero-based position in the event list; add multiple events with successive indices (0, 1, ...). Defaults to s3:ObjectCreated:* when none are specified."
+          allowedValues:
+            - "s3:ObjectCreated:*"
+            - "s3:ObjectCreated:Put"
+            - "s3:ObjectCreated:Post"
+            - "s3:ObjectCreated:Copy"
+            - "s3:ObjectCreated:CompleteMultipartUpload"
+            - "s3:ObjectRemoved:*"
+            - "s3:ObjectRemoved:Delete"
+            - "s3:ObjectRemoved:DeleteMarkerCreated"
+            - "s3:ObjectRestore:*"
+            - "s3:ObjectRestore:Post"
+            - "s3:ObjectRestore:Completed"
+            - "s3:ReducedRedundancyLostObject"
+            - "s3:Replication:*"
+        - name: aws.s3.sqs.filterPrefix
+          valueType: string
+          description: "Restricts notifications to objects whose key begins with this prefix."
+        - name: aws.s3.sqs.filterSuffix
+          valueType: string
+          description: "Restricts notifications to objects whose key ends with this suffix."
+    operations:
+      updateResourceA: {}
+      updateResourceB: {}
+      # The link performs all of its work in the intermediary phase, the only phase with
+      # access to the resource service (for the bucket lock and the managed queue policy).
+      # It first sets the queue policy, then merges this link's queue notification entry
+      # into the bucket's notification configuration (PutBucketNotificationConfiguration)
+      # under a bucket lock, preserving entries declared inline or by other links. The
+      # queue policy is set before the notification entry is written because S3 validates
+      # the destination permission when the notification configuration is applied.
+      updateIntermediaryResources:
+        # The queue policy allowing S3 to send messages to the queue. The source bucket
+        # (s3.amazonaws.com, SourceArn = resourceA.state.arn) is read by the link.
+        aws/sqs/queueInlinePolicy:
+          create:
+            - SetQueueAttributes
+          update:
+            - SetQueueAttributes
+          destroy:
+            - SetQueueAttributes
+          config:
+            intermediaryType: managed
+            config:
+              queue: resourceB.state.queueUrl
+    docLinks:
+      - https://docs.aws.amazon.com/AmazonS3/latest/userguide/ways-to-add-notification-config-to-bucket.html
+      - https://docs.aws.amazon.com/AmazonS3/latest/userguide/grant-destinations-permissions-to-s3.html
+    notes: |
+      This link configures an S3 bucket to deliver object events to an SQS queue:
+
+      1. Adds a managed resource-based policy on the queue granting `sqs:SendMessage` to
+         s3.amazonaws.com, scoped to the source bucket ARN.
+      2. Merges a queue notification entry into the bucket's notification configuration
+         (event types and key filters from the resourceB annotations above), preserving any
+         entries declared inline on the bucket or by other links.
+
+      The queue policy is set before the notification entry is written, since S3 validates
+      the destination permission when the notification configuration is applied.
+
+      Queues encrypted with a customer managed KMS key require the key policy to allow
+      s3.amazonaws.com (kms:GenerateDataKey, kms:Decrypt); that is outside this link's
+      control and is surfaced in the link's rich description.

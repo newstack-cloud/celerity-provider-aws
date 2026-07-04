@@ -4,12 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
-	"github.com/aws/smithy-go"
 	"github.com/newstack-cloud/bluelink-provider-aws/linkutils"
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
 	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
@@ -304,7 +302,7 @@ func (l *sqsQueueLambdaFunctionLinkActions) createEventSourceMapping(
 		func(ctx context.Context, in *lambda.CreateEventSourceMappingInput) (*lambda.CreateEventSourceMappingOutput, error) {
 			return lambdaService.CreateEventSourceMapping(ctx, in)
 		},
-		isRoleNotYetPropagatedError,
+		linkutils.IsRoleNotYetPropagatedError,
 	)
 
 	output, err := createESM(ctx, createInput)
@@ -318,19 +316,6 @@ func (l *sqsQueueLambdaFunctionLinkActions) createEventSourceMapping(
 		eventSourceArn: queueARN,
 		functionArn:    functionARN,
 	}, nil
-}
-
-func isRoleNotYetPropagatedError(err error) bool {
-	if err == nil {
-		return false
-	}
-	var apiErr smithy.APIError
-	if errors.As(err, &apiErr) && apiErr.ErrorCode() == "InvalidParameterValueException" {
-		msg := apiErr.ErrorMessage()
-		return strings.Contains(msg, "Cannot access") ||
-			strings.Contains(msg, "ensure the role can perform")
-	}
-	return false
 }
 
 func (l *sqsQueueLambdaFunctionLinkActions) updateEventSourceMapping(

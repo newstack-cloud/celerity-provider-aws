@@ -74,13 +74,27 @@ var services = []serviceEntry{
 		},
 	},
 	{
-		// SNS: pub/sub topics (celerity/topic) and their subscriptions. TopicPolicy is
-		// not Cloud Control–provisionable, so topic access policies are handled via the
-		// topic's own Policy attribute / link intermediaries where needed.
+		// SNS: pub/sub topics (celerity/topic) and their subscriptions. The legacy
+		// AWS::SNS::TopicPolicy is not Cloud Control–provisionable; TopicInlinePolicy is
+		// the Cloud Control–friendly variant (the SNS analogue of QueueInlinePolicy) used
+		// as a managed link intermediary for resource-based topic policies (e.g. s3→sns).
 		Name: "SNS",
 		Include: []string{
 			"AWS::SNS::Topic",
 			"AWS::SNS::Subscription",
+			"AWS::SNS::TopicInlinePolicy",
+		},
+	},
+	{
+		// S3: object storage buckets (celerity/bucket). Bucket carries inline
+		// notification, versioning, encryption, lifecycle and CORS config; BucketPolicy
+		// is the resource-based access policy. Bucket notifications to Lambda/SQS/SNS are
+		// modelled inline on the bucket's NotificationConfiguration, with links handling
+		// the target permission side-effects.
+		Name: "S3",
+		Include: []string{
+			"AWS::S3::Bucket",
+			"AWS::S3::BucketPolicy",
 		},
 	},
 	{
@@ -153,6 +167,10 @@ var dataSourceConfigs = map[string]dataSourceConfig{
 	"AWS::Kinesis::Stream": {
 		FilterFields:            []string{"name", "arn", "region"},
 		DeriveIdentifierFromARN: true,
+	},
+	"AWS::S3::Bucket": {
+		FilterFields:            []string{"bucketName", "arn", "region"},
+		DeriveIdentifierFromARN: false,
 	},
 	// EC2 lookups (data-source-only service) for referencing existing networking
 	// infrastructure from blueprints. Primary identifiers (vpcId/subnetId/id) take the
