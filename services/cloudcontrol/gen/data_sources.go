@@ -60,6 +60,14 @@ func GeneratedDataSources(
 			cloudControlServiceFactory,
 			awsConfigStore,
 		),
+		"aws/rds/dbInstance": rdsDBInstanceDataSource(
+			cloudControlServiceFactory,
+			awsConfigStore,
+		),
+		"aws/rds/dbProxy": rdsDBProxyDataSource(
+			cloudControlServiceFactory,
+			awsConfigStore,
+		),
 		"aws/s3/bucket": s3BucketDataSource(
 			cloudControlServiceFactory,
 			awsConfigStore,

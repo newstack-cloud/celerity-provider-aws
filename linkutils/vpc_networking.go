@@ -127,9 +127,7 @@ func ActivateLinkNetworking(
 	}
 
 	if activation.TargetSecurityGroupID != "" {
-		return nil, errors.New(
-			"in-VPC security-group pairing is not yet implemented; added in the data-tier slices",
-		)
+		return activateSecurityGroupPair(ctx, ec2Service, input, activation, output)
 	}
 
 	return output, nil

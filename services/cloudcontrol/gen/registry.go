@@ -223,6 +223,21 @@ func GeneratedResources(
 			resourceGroupTaggingServiceFactory,
 			awsConfigStore,
 		),
+		"aws/rds/dbProxy": rdsDBProxyResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
+		"aws/rds/dbProxyTargetGroup": rdsDBProxyTargetGroupResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
+		"aws/rds/dbSubnetGroup": rdsDBSubnetGroupResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
 		"aws/s3/bucket": s3BucketResource(
 			cloudControlServiceFactory,
 			resourceGroupTaggingServiceFactory,

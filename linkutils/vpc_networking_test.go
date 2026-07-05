@@ -13,8 +13,8 @@ import (
 
 func TestCallerNetworking_attached(t *testing.T) {
 	cases := []struct {
-		name    string
-		caller  CallerNetworking
+		name     string
+		caller   CallerNetworking
 		attached bool
 	}{
 		{

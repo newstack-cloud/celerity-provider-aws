@@ -118,6 +118,9 @@ type ec2ServiceMock struct {
 	authorizeSecurityGroupIngressOutput *ec2.AuthorizeSecurityGroupIngressOutput
 	authorizeSecurityGroupIngressError  error
 
+	authorizeSecurityGroupEgressOutput *ec2.AuthorizeSecurityGroupEgressOutput
+	authorizeSecurityGroupEgressError  error
+
 	// Tag-related mock fields
 	createTagsOutput *ec2.CreateTagsOutput
 	createTagsError  error
@@ -644,6 +647,18 @@ func WithAuthorizeSecurityGroupIngressOutput(output *ec2.AuthorizeSecurityGroupI
 	}
 }
 
+func WithAuthorizeSecurityGroupEgressOutput(output *ec2.AuthorizeSecurityGroupEgressOutput) ec2ServiceMockOption {
+	return func(m *ec2ServiceMock) {
+		m.authorizeSecurityGroupEgressOutput = output
+	}
+}
+
+func WithAuthorizeSecurityGroupEgressError(err error) ec2ServiceMockOption {
+	return func(m *ec2ServiceMock) {
+		m.authorizeSecurityGroupEgressError = err
+	}
+}
+
 func WithAuthorizeSecurityGroupIngressError(err error) ec2ServiceMockOption {
 	return func(m *ec2ServiceMock) {
 		m.authorizeSecurityGroupIngressError = err
@@ -1109,6 +1124,15 @@ func (m *ec2ServiceMock) AuthorizeSecurityGroupIngress(
 ) (*ec2.AuthorizeSecurityGroupIngressOutput, error) {
 	m.RegisterCall(ctx, params)
 	return m.authorizeSecurityGroupIngressOutput, m.authorizeSecurityGroupIngressError
+}
+
+func (m *ec2ServiceMock) AuthorizeSecurityGroupEgress(
+	ctx context.Context,
+	params *ec2.AuthorizeSecurityGroupEgressInput,
+	optFns ...func(*ec2.Options),
+) (*ec2.AuthorizeSecurityGroupEgressOutput, error) {
+	m.RegisterCall(ctx, params)
+	return m.authorizeSecurityGroupEgressOutput, m.authorizeSecurityGroupEgressError
 }
 
 // Tag methods.

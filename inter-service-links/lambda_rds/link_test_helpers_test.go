@@ -1,0 +1,70 @@
+//go:build unit
+
+package lambdards
+
+import (
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/newstack-cloud/bluelink-provider-aws/internal/testutils"
+	ec2mock "github.com/newstack-cloud/bluelink-provider-aws/internal/testutils/ec2_mock"
+	cloudcontrolservice "github.com/newstack-cloud/bluelink-provider-aws/services/cloudcontrol/service"
+	ec2service "github.com/newstack-cloud/bluelink-provider-aws/services/ec2/service"
+	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
+	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
+	"github.com/newstack-cloud/bluelink-provider-aws/utils"
+	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
+	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
+	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/plugintestutils"
+	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
+)
+
+const (
+	testProxyEndpoint = "orders-proxy.proxy-abc.us-west-2.rds.amazonaws.com"
+	testProxyARN      = "arn:aws:rds:us-west-2:123456789012:db-proxy:prx-0123456789abcdef"
+	testProxyID       = "prx-0123456789abcdef"
+	testProxySGID     = "sg-db"
+)
+
+func testLinkContext() provider.LinkContext {
+	return plugintestutils.NewTestLinkContext(
+		map[string]map[string]*core.ScalarValue{
+			"aws": {"region": core.ScalarFromString("us-west-2")},
+		},
+		map[string]*core.ScalarValue{
+			"session_id": core.ScalarFromString("test-session-id"),
+		},
+	)
+}
+
+func testConfigStore(loader *testutils.MockAWSConfigLoader) pluginutils.ServiceConfigStore[*aws.Config] {
+	return utils.NewAWSConfigStore(
+		[]string{},
+		utils.AWSConfigFromProviderContext,
+		loader,
+		utils.AWSConfigCacheKey,
+	)
+}
+
+func functionProxyLinkFactory(
+	iamSvc iamservice.Service,
+	ec2Factory pluginutils.ServiceFactory[*aws.Config, ec2service.Service],
+) func(
+	pluginutils.LinkServiceDeps[*aws.Config, lambdaservice.Service, *aws.Config, cloudcontrolservice.Service],
+) provider.Link {
+	build := FunctionProxyLink(
+		func(c *aws.Config, pc provider.Context) iamservice.Service { return iamSvc },
+		ec2Factory,
+	)
+	return func(
+		deps pluginutils.LinkServiceDeps[*aws.Config, lambdaservice.Service, *aws.Config, cloudcontrolservice.Service],
+	) provider.Link {
+		return build(FunctionToProxyLinkDeps(deps))
+	}
+}
+
+func noopEC2ServiceFactory() pluginutils.ServiceFactory[*aws.Config, ec2service.Service] {
+	return ec2mock.CreateEc2ServiceMockFactory()
+}
+
+func noopCloudControlServiceFactory(_ *aws.Config, _ provider.Context) cloudcontrolservice.Service {
+	return nil
+}

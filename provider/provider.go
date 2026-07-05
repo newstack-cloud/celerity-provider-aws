@@ -11,6 +11,7 @@ import (
 	kinesislambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/kinesis_lambda"
 	lambdadynamodb "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_dynamodb"
 	lambdakms "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_kms"
+	lambdards "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_rds"
 	lambdas3 "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_s3"
 	lambdasecretsmanager "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_secretsmanager"
 	lambdasns "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_sns"
@@ -259,6 +260,22 @@ func NewProvider(
 				ec2ServiceFactory,
 			)(
 				lambdasecretsmanager.FunctionToSecretLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
+						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, cloudcontrolservice.Service]{
+						ServiceFactory: cloudControlServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
+			// Inter-service link: Lambda -> RDS Proxy (database access via connection pooling)
+			"aws/lambda/function::aws/rds/dbProxy": lambdards.FunctionProxyLink(
+				iamServiceFactory,
+				ec2ServiceFactory,
+			)(
+				lambdards.FunctionToProxyLinkDeps{
 					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
 						ServiceFactory: lambdaServiceFactory,
 						ConfigStore:    awsConfigStore,

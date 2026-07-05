@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/newstack-cloud/bluelink-provider-aws/linkutils"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/linkhelpers"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
@@ -58,6 +59,10 @@ func (l *functionSecretLinkActions) StageChanges(
 			createLinkDataExecutionRoleName(&input.ResourceAChanges.AppliedResourceInfo),
 		)
 	}
+
+	// Networking activation for a VPC-attached caller is configured at deploy; surface it as a
+	// best-effort known-on-deploy signal.
+	linkutils.StageNetworkAccessKnownOnDeploy(input.ResourceAChanges, changes)
 
 	return &provider.LinkStageChangesOutput{
 		Changes: changes,

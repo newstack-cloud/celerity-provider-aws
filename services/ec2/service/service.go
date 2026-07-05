@@ -449,6 +449,11 @@ type Service interface {
 	// [Security group rules]: https://docs.aws.amazon.com/vpc/latest/userguide/security-group-rules.html
 	// [Security group rules for different use cases]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/security-group-rules-reference.html
 	AuthorizeSecurityGroupIngress(ctx context.Context, params *ec2.AuthorizeSecurityGroupIngressInput, optFns ...func(*ec2.Options)) (*ec2.AuthorizeSecurityGroupIngressOutput, error)
+	// Adds the specified outbound (egress) rules to a security group.
+	//
+	// This is used to open the caller side of a security-group pair (e.g. a Lambda function's
+	// security group being allowed to reach a database security group on the database port).
+	AuthorizeSecurityGroupEgress(ctx context.Context, params *ec2.AuthorizeSecurityGroupEgressInput, optFns ...func(*ec2.Options)) (*ec2.AuthorizeSecurityGroupEgressOutput, error)
 	// Modifies attributes of a specified VPC endpoint. The attributes that you can
 	// modify depend on the type of VPC endpoint (interface, gateway, or Gateway Load
 	// Balancer). For more information, see the [Amazon Web Services PrivateLink Guide].

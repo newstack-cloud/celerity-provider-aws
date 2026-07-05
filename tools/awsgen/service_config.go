@@ -58,23 +58,35 @@ var services = []serviceEntry{
 	},
 	{Name: "Events"},
 	{
+		// RDS relational databases. DBInstance is the standalone primary (and read replicas /
+		// Aurora member instances); DBProxy + DBProxyTargetGroup provide Lambda connection
+		// pooling for the standalone-instance path; DBSubnetGroup groups the private subnets a
+		// database is placed in. DBCluster (Aurora Serverless v2) is onboarded separately.
+		// TypeOverrides preserve readable casing (the derived names would be
+		// "dBInstance"/"dBProxy"/... from the DB acronym).
 		Name: "RDS",
 		Include: []string{
 			"AWS::RDS::DBInstance",
+			"AWS::RDS::DBProxy",
+			"AWS::RDS::DBProxyTargetGroup",
+			"AWS::RDS::DBSubnetGroup",
 		},
 		TypeOverrides: map[string]string{
-			"AWS::RDS::DBInstance": "aws/rds/dbInstance",
+			"AWS::RDS::DBInstance":         "aws/rds/dbInstance",
+			"AWS::RDS::DBProxy":            "aws/rds/dbProxy",
+			"AWS::RDS::DBProxyTargetGroup": "aws/rds/dbProxyTargetGroup",
+			"AWS::RDS::DBSubnetGroup":      "aws/rds/dbSubnetGroup",
 		},
 	},
 	{
-		// CloudWatch Logs: handler log groups.
+		// CloudWatch Logs: log groups.
 		Name: "Logs",
 		Include: []string{
 			"AWS::Logs::LogGroup",
 		},
 	},
 	{
-		// SNS: pub/sub topics (celerity/topic) and their subscriptions. The legacy
+		// SNS: pub/sub topics and their subscriptions. The legacy
 		// AWS::SNS::TopicPolicy is not Cloud Control–provisionable; TopicInlinePolicy is
 		// the Cloud Control–friendly variant (the SNS analogue of QueueInlinePolicy) used
 		// as a managed link intermediary for resource-based topic policies (e.g. s3→sns).
@@ -86,7 +98,7 @@ var services = []serviceEntry{
 		},
 	},
 	{
-		// S3: object storage buckets (celerity/bucket). Bucket carries inline
+		// S3: object storage buckets. Bucket carries inline
 		// notification, versioning, encryption, lifecycle and CORS config; BucketPolicy
 		// is the resource-based access policy. Bucket notifications to Lambda/SQS/SNS are
 		// modelled inline on the bucket's NotificationConfiguration, with links handling
@@ -98,16 +110,15 @@ var services = []serviceEntry{
 		},
 	},
 	{
-		// Kinesis: data streams as an external/stream event source for consumers
-		// (celerity/consumer). Only the Stream type is needed; consumer groups and
-		// stream consumers (enhanced fan-out) will come later.
+		// Kinesis: data streams as a stream event source. Only the Stream type is needed;
+		// consumer groups and stream consumers (enhanced fan-out) will come later.
 		Name: "Kinesis",
 		Include: []string{
 			"AWS::Kinesis::Stream",
 		},
 	},
 	{
-		// SecretsManager: encrypted configuration secrets (celerity/config). Secret holds
+		// SecretsManager: encrypted secrets. Secret holds
 		// the value; ResourcePolicy is the resource-based access policy (the SecretsManager
 		// analogue of BucketPolicy/TopicInlinePolicy), available as a managed intermediary or
 		// for manual cross-account grants. Identity-based grants (lambda->secret) go through
@@ -120,11 +131,10 @@ var services = []serviceEntry{
 	},
 	// SSM parameters are intentionally NOT onboarded via Cloud Control: CloudFormation (and
 	// therefore Cloud Control) cannot create SecureString parameters (AWS::SSM::Parameter Type
-	// allows only String | StringList), and SecureString is essential to transformer
-	// plugin abstractions (such as Celerity)
-	// as a low-cost alternative to Secrets Manager. aws/ssm/parameter is a custom implementation against the SSM
-	// SDK in services/ssm/, supporting String | StringList | SecureString
-	// with a `secureValue` field marked Sensitive.
+	// allows only String | StringList), and SecureString is a low-cost alternative to Secrets
+	// Manager that practitioners will want. aws/ssm/parameter is a custom implementation against
+	// the SSM SDK in services/ssm/, supporting String | StringList | SecureString with a
+	// `secureValue` field marked Sensitive.
 	{
 		// KMS: customer managed keys for encrypting secrets, parameters, queues and buckets,
 		// plus human-friendly Aliases used to look up keys by a stable name.
@@ -198,6 +208,16 @@ var dataSourceConfigs = map[string]dataSourceConfig{
 	},
 	"AWS::S3::Bucket": {
 		FilterFields:            []string{"bucketName", "arn", "region"},
+		DeriveIdentifierFromARN: false,
+	},
+	// RDS instance identifier is the DBInstanceIdentifier; the ARN suffix (db:<id>) derives it.
+	"AWS::RDS::DBInstance": {
+		FilterFields:            []string{"dbInstanceIdentifier", "arn", "region"},
+		DeriveIdentifierFromARN: true,
+	},
+	// RDS proxy identifier is the DBProxyName; the ARN is a separate computed field.
+	"AWS::RDS::DBProxy": {
+		FilterFields:            []string{"dbProxyName", "arn", "region"},
 		DeriveIdentifierFromARN: false,
 	},
 	// SecretsManager secret's primary identifier IS its ARN, so an `arn` filter takes the

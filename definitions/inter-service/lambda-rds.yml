@@ -1,0 +1,104 @@
+version: "1.0.0"
+resourceDefinitions: []
+dataSourceDefinitions: []
+
+linkDefinitions:
+  # Lambda function with network + auth access to an RDS database through an RDS Proxy.
+  # The function (A) links to the proxy (B) to connect to the pooled database endpoint.
+  # Semantics: "My Lambda function connects to this database (via its proxy)".
+  #
+  # NOTE (placement vs access): placing the database in the VPC (subnet group + security-group
+  # membership) is handled at resource-creation time via references in the composed blueprint
+  # (aws/rds/dbSubnetGroup referencing the flex VPC's private subnets; the proxy/instance
+  # referencing the flex VPC security group) -- RDS subnet placement is immutable/set-at-create,
+  # so it cannot be a post-creation link. This link handles only what is genuinely
+  # post-creation and access-shaped: opening the security-group port rule between the function
+  # and the proxy, granting IAM auth, and populating connection environment variables.
+  - resourceTypeA: aws/lambda/function
+    resourceTypeB: aws/rds/dbProxy
+    kind: soft
+    priorityResource: none
+    summary: A link that grants a Lambda function network and auth access to an RDS database via an RDS Proxy.
+    annotations:
+      resourceA:
+        - name: aws.lambda.rds.populateEnvVars
+          valueType: boolean
+          description: "When true, populates connection environment variables for all linked RDS proxies."
+          default: true
+        - name: aws.lambda.rds.<targetProxy>.populateEnvVars
+          valueType: boolean
+          description: "When true, populates connection environment variables for the specific target proxy. Overrides the global setting."
+        - name: aws.lambda.rds.<targetProxy>.envVarPrefix
+          valueType: string
+          description: "Prefix for the connection environment variables the link populates (<PREFIX>_HOST, <PREFIX>_PORT, <PREFIX>_DATABASE). Defaults to an auto-generated prefix based on the proxy name."
+        - name: aws.lambda.rds.<targetProxy>.authMode
+          valueType: enum
+          description: "How the function authenticates to the database. 'password' relies on a Secrets Manager secret (link the function to the secret separately); 'iam' grants the execution role rds-db:connect for token-based auth."
+          default: password
+          allowedValues:
+            - password
+            - iam
+        - name: aws.lambda.rds.<targetProxy>.dbUser
+          valueType: string
+          description: "The database username the function authenticates as, used to scope the rds-db:connect grant when authMode is 'iam'. Defaults to '*' (any IAM-enabled user on the linked database)."
+          default: "*"
+        - name: aws.lambda.rds.<targetProxy>.port
+          valueType: integer
+          description: "The database port opened in the security-group rule and populated in the <PREFIX>_PORT environment variable."
+          default: 5432
+        - name: aws.lambda.rds.<targetProxy>.databaseName
+          valueType: string
+          description: "The database name populated in the <PREFIX>_DATABASE environment variable."
+      resourceB: []
+    operations:
+      updateResourceA:
+        create:
+          - UpdateFunctionConfiguration
+        update:
+          - UpdateFunctionConfiguration
+        destroy:
+          - UpdateFunctionConfiguration
+      updateResourceB: {}
+      updateIntermediaryResources:
+        aws/iam/role:
+          # Only exercised when authMode is 'iam': grants the execution role rds-db:connect.
+          create:
+            - PutRolePolicy
+          update:
+            - PutRolePolicy
+          destroy:
+            - DeleteRolePolicy
+          config:
+            intermediaryType: existing
+            intermediaryExternalIdSource: resourceA.spec.role
+    docLinks:
+      - https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-proxy.html
+      - https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_UpdateFunctionConfiguration.html
+    notes: |
+      This link configures a Lambda function to connect to an RDS database through an RDS Proxy by:
+
+      1. Opening a security-group rule so the function can reach the proxy on the database port.
+         The function's flex-VPC security group is authorised (egress) to reach the proxy's
+         security group (ingress) on the configured port. When the function and proxy share the
+         flex VPC's managed security group, this is a self-referencing rule. This uses the
+         ActivateLinkNetworking SG-pair mode (EC2 AuthorizeSecurityGroupIngress /
+         AuthorizeSecurityGroupEgress); it is a no-op when the function is not VPC-attached.
+
+      2. When authMode is 'iam', adding an inline IAM policy to the function's execution role
+         granting rds-db:connect, scoped to the linked database's resource id and the dbUser
+         annotation (default '*'). The runtime SDK generates short-lived STS tokens instead of a
+         static password. When authMode is 'password' (default), no IAM grant is added -- the
+         function obtains credentials from a Secrets Manager secret it is linked to separately
+         (via the aws/lambda/function -> aws/secretsmanager/secret link).
+
+      3. Populating connection environment variables on the function (unless disabled):
+         <PREFIX>_HOST (the proxy endpoint), <PREFIX>_PORT and <PREFIX>_DATABASE.
+
+      The IAM role is an intermediary resource that must be defined in the same blueprint; the
+      implementation sources the role from resourceA.spec.role.
+
+      Placement (subnet group + security-group membership) is NOT handled here -- it is composed
+      via references at resource-creation time because RDS subnet placement is immutable. See the
+      note at the top of this link definition.
