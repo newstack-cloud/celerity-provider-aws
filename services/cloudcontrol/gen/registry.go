@@ -138,6 +138,16 @@ func GeneratedResources(
 			resourceGroupTaggingServiceFactory,
 			awsConfigStore,
 		),
+		"aws/kms/alias": kmsAliasResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
+		"aws/kms/key": kmsKeyResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
 		"aws/lambda/alias": lambdaAliasResource(
 			cloudControlServiceFactory,
 			resourceGroupTaggingServiceFactory,
@@ -219,6 +229,16 @@ func GeneratedResources(
 			awsConfigStore,
 		),
 		"aws/s3/bucketPolicy": s3BucketPolicyResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
+		"aws/secretsmanager/resourcePolicy": secretsmanagerResourcePolicyResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
+		"aws/secretsmanager/secret": secretsmanagerSecretResource(
 			cloudControlServiceFactory,
 			resourceGroupTaggingServiceFactory,
 			awsConfigStore,

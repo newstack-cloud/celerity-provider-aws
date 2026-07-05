@@ -29,6 +29,8 @@ var Services = map[string][]string{
 	"iam":             {},
 	"dynamodb":        {},
 	"sqs":             {},
+	"ssm":             {},
+	"kms":             {},
 	"events":          {"eventbridge"},
 	"cloudcontrolapi": {"cloudcontrol"},
 }

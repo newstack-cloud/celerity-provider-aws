@@ -22,6 +22,7 @@ resource function: aws/lambda/function {
             imageUri = "example-image-uri",
             s3Bucket = "example-s3-bucket",
             s3Key = "example-s3-key",
+            s3ObjectStorageMode = "COPY",
             s3ObjectVersion = "example-s3-object-version",
             sourceKMSKeyArn = "example-source-k-m-s-key-arn",
             zipFile = "example-zip-file"
@@ -33,6 +34,7 @@ resource function: aws/lambda/function {
         description = "example-description"
         durableConfig = {
             executionTimeout = 1,
+            kmsKeyArn = "example-kms-key-arn",
             retentionPeriodInDays = 1
         }
         environment = {
@@ -133,6 +135,7 @@ resources:
                 imageUri: example-image-uri
                 s3Bucket: example-s3-bucket
                 s3Key: example-s3-key
+                s3ObjectStorageMode: COPY
                 s3ObjectVersion: example-s3-object-version
                 sourceKMSKeyArn: example-source-k-m-s-key-arn
                 zipFile: example-zip-file
@@ -142,6 +145,7 @@ resources:
             description: example-description
             durableConfig:
                 executionTimeout: 1
+                kmsKeyArn: example-kms-key-arn
                 retentionPeriodInDays: 1
             environment:
                 variables:
@@ -222,6 +226,7 @@ resources:
           "imageUri": "example-image-uri",
           "s3Bucket": "example-s3-bucket",
           "s3Key": "example-s3-key",
+          "s3ObjectStorageMode": "COPY",
           "s3ObjectVersion": "example-s3-object-version",
           "sourceKMSKeyArn": "example-source-k-m-s-key-arn",
           "zipFile": "example-zip-file"
@@ -233,6 +238,7 @@ resources:
         "description": "example-description",
         "durableConfig": {
           "executionTimeout": 1,
+          "kmsKeyArn": "example-kms-key-arn",
           "retentionPeriodInDays": 1
         },
         "environment": {

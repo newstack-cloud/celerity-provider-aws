@@ -1,0 +1,108 @@
+version: "1.0.0"
+resourceDefinitions: []
+dataSourceDefinitions: []
+
+linkDefinitions:
+  # Lambda function granted cryptographic use of a KMS key.
+  # The function (A) links to the key (B) to decrypt (and optionally encrypt) data at runtime.
+  # Semantics: "My Lambda function needs to use this KMS key".
+  - resourceTypeA: aws/lambda/function
+    resourceTypeB: aws/kms/key
+    kind: soft
+    priorityResource: none
+    summary: A link that grants a Lambda function cryptographic use of a KMS key.
+    annotations:
+      resourceA:
+        - name: aws.lambda.kms.populateEnvVars
+          valueType: boolean
+          description: "When true, populates environment variables for all linked keys."
+          default: true
+        - name: aws.lambda.kms.<targetKey>.populateEnvVars
+          valueType: boolean
+          description: "When true, populates environment variables for the specific target key. Overrides the global setting."
+        - name: aws.lambda.kms.<targetKey>.envVarName
+          valueType: string
+          description: "Custom environment variable name for the target key ARN. Defaults to an auto-generated name based on the key id."
+        - name: aws.lambda.kms.<targetKey>.accessLevel
+          valueType: enum
+          description: "The level of cryptographic access to grant to the key."
+          default: decrypt
+          allowedValues:
+            - decrypt
+            - encryptDecrypt
+        - name: aws.lambda.kms.<targetKey>.manageKeyGrant
+          valueType: boolean
+          description: "When true, the link also creates a KMS grant for the function's execution role covering the granted operations, guaranteeing key-side authorisation regardless of whether the key policy delegates to IAM. Use this when the key policy has been locked down (the default 'Enable IAM policies' delegation removed). The grant is revoked when the link is destroyed or this is set back to false."
+          default: false
+      resourceB: []
+    operations:
+      updateResourceA:
+        create:
+          - UpdateFunctionConfiguration
+        update:
+          - UpdateFunctionConfiguration
+        destroy:
+          - UpdateFunctionConfiguration
+      updateResourceB:
+        # KMS grant operations applied directly to the key, only when the
+        # aws.lambda.kms.<targetKey>.manageKeyGrant annotation is true. The grant is reconciled
+        # by a deterministic name: ListGrants locates it, CreateGrant/RevokeGrant converge it.
+        create:
+          - ListGrants
+          - CreateGrant
+        update:
+          - ListGrants
+          - CreateGrant
+          - RevokeGrant
+        destroy:
+          - ListGrants
+          - RevokeGrant
+        notes: "Grant operations are only performed when the manageKeyGrant annotation is enabled; otherwise the link makes no changes to the key. Grants are applied to the key via the KMS API and are not part of the key's declarative spec/state, so no key-policy edit or drift mapping is involved."
+      updateIntermediaryResources:
+        aws/iam/role:
+          create:
+            - PutRolePolicy
+          update:
+            - PutRolePolicy
+          destroy:
+            - DeleteRolePolicy
+          config:
+            intermediaryType: existing
+            intermediaryExternalIdSource: resourceA.spec.role
+    docLinks:
+      - https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html
+      - https://docs.aws.amazon.com/kms/latest/developerguide/key-policy-default.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_UpdateFunctionConfiguration.html
+    notes: |
+      This link configures the Lambda function to use the KMS key by:
+      1. Optionally populating an environment variable with the key ARN (controlled by annotations)
+      2. Adding an inline IAM policy to the function's execution role with KMS permissions
+
+      The accessLevel annotation controls the permissions granted:
+      - "decrypt" (default): kms:Decrypt, kms:DescribeKey
+      - "encryptDecrypt": adds kms:Encrypt, kms:GenerateDataKey, kms:GenerateDataKeyWithoutPlaintext
+
+      The IAM role is an intermediary resource that must be defined in the same blueprint.
+      The implementation sources the role from resourceA.spec.role.
+
+      IMPORTANT: KMS authorises requests against BOTH the key policy and the caller's IAM
+      policy. This link grants the IAM (identity) side. By default it relies on the key policy
+      delegating authorisation to IAM -- the default statement AWS adds to newly created keys
+      ("Enable IAM policies", allowing kms:* to the account root).
+
+      If the key policy has been locked down to remove that delegation, set the
+      aws.lambda.kms.<targetKey>.manageKeyGrant annotation to true. The link then also creates a
+      KMS grant for the function's execution role (via CreateGrant) covering the accessLevel
+      operations, which authorises use of the key independently of the key policy. The grant is
+      reconciled statelessly by a deterministic name unique to the function/key pair, and is
+      revoked (via RevokeGrant) when the link is destroyed or the annotation is set back to
+      false. KMS grants are used rather than editing the key policy, so the key's declarative
+      policy is never modified.
+
+      When manageKeyGrant is left false and the key defines a custom key policy that does not
+      appear to delegate to IAM, the link surfaces a validation warning at plan time so the
+      otherwise-silent runtime AccessDenied is caught early.
+
+      When the function runs inside a VPC without NAT egress, the link activates the KMS
+      interface VPC endpoint (com.amazonaws.<region>.kms) on the linked aws/flex/vpc so the
+      function can reach KMS over the private network. With NAT egress present this is a no-op.

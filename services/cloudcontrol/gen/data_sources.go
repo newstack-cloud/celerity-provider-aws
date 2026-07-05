@@ -48,11 +48,23 @@ func GeneratedDataSources(
 			cloudControlServiceFactory,
 			awsConfigStore,
 		),
+		"aws/kms/alias": kmsAliasDataSource(
+			cloudControlServiceFactory,
+			awsConfigStore,
+		),
+		"aws/kms/key": kmsKeyDataSource(
+			cloudControlServiceFactory,
+			awsConfigStore,
+		),
 		"aws/logs/logGroup": logsLogGroupDataSource(
 			cloudControlServiceFactory,
 			awsConfigStore,
 		),
 		"aws/s3/bucket": s3BucketDataSource(
+			cloudControlServiceFactory,
+			awsConfigStore,
+		),
+		"aws/secretsmanager/secret": secretsmanagerSecretDataSource(
 			cloudControlServiceFactory,
 			awsConfigStore,
 		),

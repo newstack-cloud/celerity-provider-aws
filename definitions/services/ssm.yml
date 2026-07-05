@@ -1,0 +1,81 @@
+version: "1.0.0"
+resourceDefinitions:
+  - type: aws/ssm/parameter
+    label: AWS SSM Parameter
+    requiredFields:
+      - name
+      - type
+    computedFields:
+      - arn
+      - version
+    operations:
+      create:
+        # PutParameter creates the parameter (with tags, since Overwrite is false);
+        # GetParameter reads back the ARN which PutParameter does not return.
+        - PutParameter
+        - GetParameter
+      update:
+        # PutParameter overwrites value/metadata; tags are reconciled separately since
+        # they cannot be sent alongside an overwriting PutParameter.
+        - PutParameter
+        - ListTagsForResource
+        - AddTagsToResource
+        - RemoveTagsFromResource
+        - GetParameter
+      destroy:
+        - DeleteParameter
+      getExternalState:
+        - GetParameter
+        - DescribeParameters
+        - ListTagsForResource
+      # No stabilisation operations: PutParameter provisions synchronously and returns
+      # the version immediately, so the parameter is stable as soon as it is created.
+      stabilised: []
+    tags:
+      saveTags: AddTagsToResource
+      removeTags: RemoveTagsFromResource
+    docLinks:
+      - https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_PutParameter.html
+      - https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_GetParameter.html
+      - https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_DeleteParameter.html
+      - https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_DescribeParameters.html
+      - https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_AddTagsToResource.html
+      - https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_RemoveTagsFromResource.html
+    propertyDocLinks:
+      type: https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-paramstore-su-create.html
+      secureValue: https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-paramstore-securestring.html
+      keyId: https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#key-id
+      tier: https://docs.aws.amazon.com/systems-manager/latest/userguide/parameter-store-advanced-parameters.html
+      policies: https://docs.aws.amazon.com/systems-manager/latest/userguide/parameter-store-policies.html
+      allowedPattern: https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-paramstore-su-create.html
+    notes: |
+      aws/ssm/parameter is a hand-written resource (implemented directly against the SSM SDK,
+      like aws/flex/vpc) rather than a Cloud Control-backed generated resource. CloudFormation
+      (and therefore Cloud Control) cannot create SecureString parameters, AWS::SSM::Parameter
+      only allows the String and StringList types, SecureString is essential to low-cost
+      configuration management as an alternative to Secrets Manager.
+
+      Value handling:
+      - String / StringList parameters set their plaintext value via the "value" field, which is
+        visible in diffs and logs.
+      - SecureString parameters set their value via the "secureValue" field, which is marked
+        sensitive (redacted from diffs and logs) and encrypted at rest by KMS. When "keyId" is
+        omitted, the AWS-managed alias/aws/ssm key is used.
+
+      Exactly one of "value" / "secureValue" must be set, consistent with "type". Drift on
+      "keyId" and "policies" is ignored: AWS resolves the default key and returns policies as
+      structured metadata that does not round-trip byte-for-byte to the submitted JSON.
+
+dataSourceDefinitions:
+  - type: aws/ssm/parameter
+    filterableFields:
+      - name
+      - region
+    docLinks:
+      - https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_GetParameter.html
+      - https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_DescribeParameters.html
+    notes: |
+      Looks up an existing SSM parameter by name. SecureString values are never returned by the
+      data source (only plaintext String / StringList values populate the "value" export).
+
+linkDefinitions: []

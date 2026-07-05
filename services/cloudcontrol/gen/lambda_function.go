@@ -33,6 +33,7 @@ func lambdaFunctionResource(
 				WriteOnlyFields:        []string{"snapStart", "code", "publishToLatestPublished"},
 				TagPropertyName:        "tags",
 				TagShape:               cloudcontrol.TagShapeKeyValueList,
+				FieldNameOverrides:     map[string]string{"durableConfig.kmsKeyArn": "KMSKeyArn"},
 			},
 		},
 		cloudControlServiceFactory,
@@ -132,6 +133,13 @@ func lambdaFunctionSchema() *provider.ResourceDefinitionsSchema {
 						MinLength:   1,
 						MaxLength:   1024,
 					},
+					"s3ObjectStorageMode": &provider.ResourceDefinitionsSchema{
+						Type:          provider.ResourceDefinitionsSchemaTypeString,
+						Nullable:      true,
+						Sensitive:     true,
+						IgnoreDrift:   true,
+						AllowedValues: []*core.MappingNode{core.MappingNodeFromString("COPY"), core.MappingNodeFromString("REFERENCE")},
+					},
 					"s3ObjectVersion": &provider.ResourceDefinitionsSchema{
 						Type:        provider.ResourceDefinitionsSchemaTypeString,
 						Description: "For versioned objects, the version of the deployment package object to use.",
@@ -196,6 +204,11 @@ func lambdaFunctionSchema() *provider.ResourceDefinitionsSchema {
 						Description: "The maximum time (in seconds) that a durable execution can run before timing out. This timeout applies to the entire durable execution, not individual function invocations.",
 						Minimum:     core.ScalarFromInt(1),
 						Maximum:     core.ScalarFromInt(31622400),
+					},
+					"kmsKeyArn": &provider.ResourceDefinitionsSchema{
+						Type:     provider.ResourceDefinitionsSchemaTypeString,
+						Nullable: true,
+						Pattern:  "^(arn:(aws[a-zA-Z-]*)?:[a-z0-9-.]+:.*)|()$",
 					},
 					"retentionPeriodInDays": &provider.ResourceDefinitionsSchema{
 						Type:        provider.ResourceDefinitionsSchemaTypeInteger,

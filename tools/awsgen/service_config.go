@@ -107,6 +107,34 @@ var services = []serviceEntry{
 		},
 	},
 	{
+		// SecretsManager: encrypted configuration secrets (celerity/config). Secret holds
+		// the value; ResourcePolicy is the resource-based access policy (the SecretsManager
+		// analogue of BucketPolicy/TopicInlinePolicy), available as a managed intermediary or
+		// for manual cross-account grants. Identity-based grants (lambda->secret) go through
+		// the function's execution role, not the resource policy.
+		Name: "SecretsManager",
+		Include: []string{
+			"AWS::SecretsManager::Secret",
+			"AWS::SecretsManager::ResourcePolicy",
+		},
+	},
+	// SSM parameters are intentionally NOT onboarded via Cloud Control: CloudFormation (and
+	// therefore Cloud Control) cannot create SecureString parameters (AWS::SSM::Parameter Type
+	// allows only String | StringList), and SecureString is essential to transformer
+	// plugin abstractions (such as Celerity)
+	// as a low-cost alternative to Secrets Manager. aws/ssm/parameter is a custom implementation against the SSM
+	// SDK in services/ssm/, supporting String | StringList | SecureString
+	// with a `secureValue` field marked Sensitive.
+	{
+		// KMS: customer managed keys for encrypting secrets, parameters, queues and buckets,
+		// plus human-friendly Aliases used to look up keys by a stable name.
+		Name: "KMS",
+		Include: []string{
+			"AWS::KMS::Key",
+			"AWS::KMS::Alias",
+		},
+	},
+	{
 		// EC2 is onboarded for data-source lookups only, the flex/vpc abstraction owns
 		// the networking fabric, so no managed EC2 resources are emitted. Only the
 		// types needed for existing-infrastructure lookups are synced.
@@ -170,6 +198,24 @@ var dataSourceConfigs = map[string]dataSourceConfig{
 	},
 	"AWS::S3::Bucket": {
 		FilterFields:            []string{"bucketName", "arn", "region"},
+		DeriveIdentifierFromARN: false,
+	},
+	// SecretsManager secret's primary identifier IS its ARN, so an `arn` filter takes the
+	// GetResource fast path directly; `name` resolves via ListResources + filter.
+	"AWS::SecretsManager::Secret": {
+		FilterFields:            []string{"name", "arn", "region"},
+		DeriveIdentifierFromARN: false,
+	},
+	// KMS key's identifier is the KeyId; the ARN suffix (key/<keyId>) derives it, so a single
+	// `arn` filter resolves via GetResource.
+	"AWS::KMS::Key": {
+		FilterFields:            []string{"keyId", "arn", "region"},
+		DeriveIdentifierFromARN: true,
+	},
+	// KMS alias lookup: resolve a key by its stable human-friendly alias name. The identifier
+	// is the AliasName (e.g. "alias/my-key").
+	"AWS::KMS::Alias": {
+		FilterFields:            []string{"aliasName", "region"},
 		DeriveIdentifierFromARN: false,
 	},
 	// EC2 lookups (data-source-only service) for referencing existing networking

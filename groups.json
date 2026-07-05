@@ -4,6 +4,10 @@
       "label": "DynamoDB",
       "description": "Amazon DynamoDB fully managed NoSQL database resources, data sources and links."
     },
+    "ec2": {
+      "label": "EC2",
+      "description": "Amazon EC2 data sources for referencing existing VPC, subnet and security group networking infrastructure."
+    },
     "events": {
       "label": "EventBridge",
       "description": "Amazon EventBridge event bus, rule and target resources, data sources and links."
@@ -16,13 +20,45 @@
       "label": "IAM",
       "description": "AWS Identity and Access Management (IAM) role, user and group resources."
     },
+    "kinesis": {
+      "label": "Kinesis",
+      "description": "Amazon Kinesis Data Streams stream resources, data sources and links for stream-based event sources."
+    },
+    "kms": {
+      "label": "KMS",
+      "description": "AWS Key Management Service (KMS) customer managed key and alias resources, data sources and links."
+    },
     "lambda": {
       "label": "Lambda",
       "description": "AWS Lambda serverless compute function and alias resources, data sources and links."
     },
+    "logs": {
+      "label": "CloudWatch Logs",
+      "description": "Amazon CloudWatch Logs log group resources and data sources."
+    },
+    "rds": {
+      "label": "RDS",
+      "description": "Amazon Relational Database Service (RDS) database instance resources and data sources."
+    },
+    "s3": {
+      "label": "S3",
+      "description": "Amazon Simple Storage Service (S3) bucket and bucket policy resources, data sources and links."
+    },
+    "secretsmanager": {
+      "label": "Secrets Manager",
+      "description": "AWS Secrets Manager secret and resource policy resources, data sources and links."
+    },
+    "sns": {
+      "label": "SNS",
+      "description": "Amazon Simple Notification Service (SNS) topic and subscription resources, data sources and links."
+    },
     "sqs": {
       "label": "SQS",
       "description": "Amazon Simple Queue Service (SQS) queue resources and links."
+    },
+    "ssm": {
+      "label": "Systems Manager",
+      "description": "AWS Systems Manager (SSM) parameter resources, data sources and links."
     }
   }
 }

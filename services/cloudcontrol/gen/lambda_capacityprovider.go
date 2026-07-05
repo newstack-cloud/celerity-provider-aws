@@ -179,14 +179,16 @@ func lambdaCapacityProviderSchema() *provider.ResourceDefinitionsSchema {
 				},
 			},
 			"propagateTags": &provider.ResourceDefinitionsSchema{
-				Type:     provider.ResourceDefinitionsSchemaTypeObject,
-				Label:    "Propagate Tags",
-				Nullable: true,
+				Type:        provider.ResourceDefinitionsSchemaTypeObject,
+				Label:       "Propagate Tags",
+				Description: "Configuration that defines how tags are propagated to managed resources.",
+				Nullable:    true,
 				Attributes: map[string]*provider.ResourceDefinitionsSchema{
 					"explicitTags": &provider.ResourceDefinitionsSchema{
-						Type:     provider.ResourceDefinitionsSchemaTypeArray,
-						Label:    "Explicit Tags",
-						Nullable: true,
+						Type:        provider.ResourceDefinitionsSchemaTypeArray,
+						Label:       "Explicit Tags",
+						Description: "A list of tags to explicitly propagate to managed resources. Maximum of 40 tags.",
+						Nullable:    true,
 						Items: &provider.ResourceDefinitionsSchema{
 							Type:        provider.ResourceDefinitionsSchemaTypeObject,
 							Label:       "Explicit Tags",
@@ -262,16 +264,14 @@ func lambdaCapacityProviderSchema() *provider.ResourceDefinitionsSchema {
 						Nullable: true,
 						Attributes: map[string]*provider.ResourceDefinitionsSchema{
 							"logGroup": &provider.ResourceDefinitionsSchema{
-								Type:        provider.ResourceDefinitionsSchemaTypeString,
-								Description: "The log group name.",
-								Nullable:    true,
-								Pattern:     "[\\.\\-_/#A-Za-z0-9]+",
-								MinLength:   1,
-								MaxLength:   512,
+								Type:      provider.ResourceDefinitionsSchemaTypeString,
+								Nullable:  true,
+								Pattern:   "[\\.\\-_/#A-Za-z0-9]+",
+								MinLength: 1,
+								MaxLength: 512,
 							},
 							"systemLogLevel": &provider.ResourceDefinitionsSchema{
 								Type:          provider.ResourceDefinitionsSchemaTypeString,
-								Description:   "System log granularity level",
 								Nullable:      true,
 								AllowedValues: []*core.MappingNode{core.MappingNodeFromString("DEBUG"), core.MappingNodeFromString("INFO"), core.MappingNodeFromString("WARN")},
 							},

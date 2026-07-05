@@ -10,8 +10,11 @@ import (
 	flexlambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/flex_lambda"
 	kinesislambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/kinesis_lambda"
 	lambdadynamodb "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_dynamodb"
+	lambdakms "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_kms"
 	lambdas3 "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_s3"
+	lambdasecretsmanager "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_secretsmanager"
 	lambdasns "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_sns"
+	lambdassm "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_ssm"
 	s3lambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/s3_lambda"
 	s3sns "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/s3_sns"
 	s3sqs "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/s3_sqs"
@@ -25,6 +28,7 @@ import (
 	eventslinks "github.com/newstack-cloud/bluelink-provider-aws/services/events/links"
 	eventsservice "github.com/newstack-cloud/bluelink-provider-aws/services/events/service"
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
+	kmsservice "github.com/newstack-cloud/bluelink-provider-aws/services/kms/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/services/lambda"
 	lambdalinks "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/links"
 	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
@@ -32,6 +36,8 @@ import (
 	s3service "github.com/newstack-cloud/bluelink-provider-aws/services/s3/service"
 	sqslinks "github.com/newstack-cloud/bluelink-provider-aws/services/sqs/links"
 	sqsservice "github.com/newstack-cloud/bluelink-provider-aws/services/sqs/service"
+	"github.com/newstack-cloud/bluelink-provider-aws/services/ssm"
+	ssmservice "github.com/newstack-cloud/bluelink-provider-aws/services/ssm/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/utils"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
@@ -50,6 +56,8 @@ func NewProvider(
 	eventsServiceFactory pluginutils.ServiceFactory[*aws.Config, eventsservice.Service],
 	cloudControlServiceFactory pluginutils.ServiceFactory[*aws.Config, cloudcontrolservice.Service],
 	s3ServiceFactory pluginutils.ServiceFactory[*aws.Config, s3service.Service],
+	ssmServiceFactory pluginutils.ServiceFactory[*aws.Config, ssmservice.Service],
+	kmsServiceFactory pluginutils.ServiceFactory[*aws.Config, kmsservice.Service],
 	awsConfigStore *utils.AWSConfigStore,
 ) provider.Provider {
 	return &providerv1.ProviderPluginDefinition{
@@ -60,6 +68,10 @@ func NewProvider(
 				"aws/flex/vpc": flex.VPCResource(
 					ec2ServiceFactory,
 					resourceGroupTaggingServiceFactory,
+					awsConfigStore,
+				),
+				"aws/ssm/parameter": ssm.ParameterResource(
+					ssmServiceFactory,
 					awsConfigStore,
 				),
 			},
@@ -91,6 +103,11 @@ func NewProvider(
 			),
 			"aws/lambda/layerVersion": lambda.LayerVersionDataSource(
 				lambdaServiceFactory,
+				awsConfigStore,
+			),
+			// aws/ssm/parameter is custom to be consistent with its resource.
+			"aws/ssm/parameter": ssm.ParameterDataSource(
+				ssmServiceFactory,
 				awsConfigStore,
 			),
 		}, cloudcontrolgen.GeneratedDataSources(
@@ -232,6 +249,55 @@ func NewProvider(
 					},
 					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, cloudcontrolservice.Service]{
 						ServiceFactory: cloudControlServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
+			// Inter-service link: Lambda -> Secrets Manager (config secrets access)
+			"aws/lambda/function::aws/secretsmanager/secret": lambdasecretsmanager.FunctionSecretLink(
+				iamServiceFactory,
+				ec2ServiceFactory,
+			)(
+				lambdasecretsmanager.FunctionToSecretLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
+						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, cloudcontrolservice.Service]{
+						ServiceFactory: cloudControlServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
+			// Inter-service link: Lambda -> KMS key (cryptographic use)
+			"aws/lambda/function::aws/kms/key": lambdakms.FunctionKeyLink(
+				iamServiceFactory,
+				ec2ServiceFactory,
+				kmsServiceFactory,
+			)(
+				lambdakms.FunctionToKeyLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
+						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, cloudcontrolservice.Service]{
+						ServiceFactory: cloudControlServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
+			// Inter-service link: Lambda -> SSM parameter (config access)
+			"aws/lambda/function::aws/ssm/parameter": lambdassm.FunctionParameterLink(
+				iamServiceFactory,
+				ec2ServiceFactory,
+			)(
+				lambdassm.FunctionToParameterLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
+						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, ssmservice.Service]{
+						ServiceFactory: ssmServiceFactory,
 						ConfigStore:    awsConfigStore,
 					},
 				},

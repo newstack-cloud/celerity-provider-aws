@@ -1,0 +1,79 @@
+version: "1.0.0"
+resourceDefinitions: []
+dataSourceDefinitions: []
+
+linkDefinitions:
+  # Lambda function with read (or read/write) access to an SSM parameter.
+  # The function (A) links to the parameter (B) to read its value at runtime.
+  # Semantics: "My Lambda function needs to read this parameter".
+  - resourceTypeA: aws/lambda/function
+    resourceTypeB: aws/ssm/parameter
+    kind: soft
+    priorityResource: none
+    summary: A link that grants a Lambda function access to an SSM parameter.
+    annotations:
+      resourceA:
+        - name: aws.lambda.ssm.populateEnvVars
+          valueType: boolean
+          description: "When true, populates environment variables for all linked parameters."
+          default: true
+        - name: aws.lambda.ssm.<targetParameter>.populateEnvVars
+          valueType: boolean
+          description: "When true, populates environment variables for the specific target parameter. Overrides the global setting."
+        - name: aws.lambda.ssm.<targetParameter>.envVarName
+          valueType: string
+          description: "Custom environment variable name for the target parameter name. Defaults to an auto-generated name based on the parameter name."
+        - name: aws.lambda.ssm.<targetParameter>.accessLevel
+          valueType: enum
+          description: "The level of access to grant to the parameter."
+          default: read
+          allowedValues:
+            - read
+            - write
+            - readwrite
+      resourceB: []
+    operations:
+      updateResourceA:
+        create:
+          - UpdateFunctionConfiguration
+        update:
+          - UpdateFunctionConfiguration
+        destroy:
+          - UpdateFunctionConfiguration
+      updateResourceB: {}
+      updateIntermediaryResources:
+        aws/iam/role:
+          create:
+            - PutRolePolicy
+          update:
+            - PutRolePolicy
+          destroy:
+            - DeleteRolePolicy
+          config:
+            intermediaryType: existing
+            intermediaryExternalIdSource: resourceA.spec.role
+    docLinks:
+      - https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html
+      - https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-paramstore-access.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_UpdateFunctionConfiguration.html
+    notes: |
+      This link configures the Lambda function to access the SSM parameter by:
+      1. Optionally populating an environment variable with the parameter name (controlled by annotations)
+      2. Adding an inline IAM policy to the function's execution role with SSM permissions
+
+      The accessLevel annotation controls the permissions granted:
+      - "read" (default): ssm:GetParameter, ssm:GetParameters, ssm:GetParametersByPath
+      - "write": ssm:PutParameter
+      - "readwrite": Both read and write permissions
+
+      The IAM role is an intermediary resource that must be defined in the same blueprint.
+      The implementation sources the role from resourceA.spec.role.
+
+      When the function runs inside a VPC without NAT egress, the link activates the SSM
+      interface VPC endpoint (com.amazonaws.<region>.ssm) on the linked aws/flex/vpc so the
+      function can reach Parameter Store over the private network. With NAT egress present this
+      is a no-op.
+
+      NOTE: aws/ssm/parameter models only plaintext String/StringList parameters -- CloudFormation
+      (and Cloud Control) do not support SecureString. Use aws/secretsmanager/secret for encrypted
+      values. Consequently no KMS decrypt grant is required for parameters read through this link.

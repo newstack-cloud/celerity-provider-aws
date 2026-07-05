@@ -12,6 +12,7 @@ resource function: aws/lambda/function {
             imageUri = "example-image-uri",
             s3Bucket = "example-s3-bucket",
             s3Key = "example-s3-key",
+            s3ObjectStorageMode = "COPY",
             s3ObjectVersion = "example-s3-object-version",
             sourceKMSKeyArn = "example-source-k-m-s-key-arn",
             zipFile = "example-zip-file"
@@ -33,6 +34,7 @@ resources:
                 imageUri: example-image-uri
                 s3Bucket: example-s3-bucket
                 s3Key: example-s3-key
+                s3ObjectStorageMode: COPY
                 s3ObjectVersion: example-s3-object-version
                 sourceKMSKeyArn: example-source-k-m-s-key-arn
                 zipFile: example-zip-file
@@ -53,6 +55,7 @@ resources:
           "imageUri": "example-image-uri",
           "s3Bucket": "example-s3-bucket",
           "s3Key": "example-s3-key",
+          "s3ObjectStorageMode": "COPY",
           "s3ObjectVersion": "example-s3-object-version",
           "sourceKMSKeyArn": "example-source-k-m-s-key-arn",
           "zipFile": "example-zip-file"
