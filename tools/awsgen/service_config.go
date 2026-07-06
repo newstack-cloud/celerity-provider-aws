@@ -81,6 +81,21 @@ var services = []serviceEntry{
 		},
 	},
 	{
+		// ElastiCache for Redis/Valkey. ReplicationGroup is the cache cluster (single-instance =
+		// one primary; cluster mode = multiple shards); SubnetGroup groups the private subnets a
+		// cache is placed in. User + UserGroup model IAM (and password) authentication identities:
+		// an IAM-enabled User is attached to a UserGroup that the ReplicationGroup references, and a
+		// lambda->cache link with authMode iam grants the execution role elasticache:Connect scoped
+		// to the replication group and user.
+		Name: "ElastiCache",
+		Include: []string{
+			"AWS::ElastiCache::ReplicationGroup",
+			"AWS::ElastiCache::SubnetGroup",
+			"AWS::ElastiCache::User",
+			"AWS::ElastiCache::UserGroup",
+		},
+	},
+	{
 		// CloudWatch Logs: log groups.
 		Name: "Logs",
 		Include: []string{
@@ -221,6 +236,12 @@ var dataSourceConfigs = map[string]dataSourceConfig{
 	"AWS::RDS::DBCluster": {
 		FilterFields:            []string{"dbClusterIdentifier", "arn", "region"},
 		DeriveIdentifierFromARN: true,
+	},
+	// ElastiCache replication group identifier is the ReplicationGroupId. The CFN resource exposes
+	// no ARN attribute, so there is no `arn` filter; lookups resolve by ReplicationGroupId directly.
+	"AWS::ElastiCache::ReplicationGroup": {
+		FilterFields:            []string{"replicationGroupId", "region"},
+		DeriveIdentifierFromARN: false,
 	},
 	// RDS proxy identifier is the DBProxyName; the ARN is a separate computed field.
 	"AWS::RDS::DBProxy": {

@@ -1,0 +1,107 @@
+version: "1.0.0"
+resourceDefinitions: []
+dataSourceDefinitions: []
+
+linkDefinitions:
+  # Lambda function with network + auth access to an ElastiCache (Redis/Valkey) replication group.
+  # The function (A) connects to the cache's endpoint (B). Semantics: "My Lambda function connects
+  # to this cache".
+  #
+  # NOTE (placement vs access): placing the cache in the VPC (subnet group + security-group
+  # membership) is handled at resource-creation time via references in the composed blueprint
+  # (aws/elasticache/subnetGroup referencing the flex VPC's private subnets; the replication group
+  # referencing the flex VPC security group) -- ElastiCache subnet placement is immutable/set-at-create,
+  # so it cannot be a post-creation link. This link handles only what is genuinely post-creation and
+  # access-shaped: opening the security-group port rule between the function and the cache, and
+  # populating connection environment variables. (IAM authentication -- the elasticache:Connect grant
+  # and the ElastiCache user/user-group -- is added in a follow-up slice.)
+  - resourceTypeA: aws/lambda/function
+    resourceTypeB: aws/elasticache/replicationGroup
+    kind: soft
+    priorityResource: none
+    summary: A link that grants a Lambda function network access to an ElastiCache replication group.
+    annotations:
+      resourceA:
+        - name: aws.lambda.elasticache.populateEnvVars
+          valueType: boolean
+          description: "When true, populates connection environment variables for all linked caches."
+          default: true
+        - name: aws.lambda.elasticache.<targetCache>.populateEnvVars
+          valueType: boolean
+          description: "When true, populates connection environment variables for the specific target cache. Overrides the global setting."
+        - name: aws.lambda.elasticache.<targetCache>.envVarPrefix
+          valueType: string
+          description: "Prefix for the connection environment variables the link populates (<PREFIX>_HOST and <PREFIX>_PORT). Defaults to an auto-generated prefix based on the cache name."
+        - name: aws.lambda.elasticache.<targetCache>.authMode
+          valueType: enum
+          description: "How the function authenticates to the cache. 'password' relies on an AUTH token the function reads from a Secrets Manager secret (link the function to the secret separately); 'iam' grants the execution role elasticache:Connect for token-based auth (requires an IAM-enabled ElastiCache user; see the follow-up slice)."
+          default: password
+          allowedValues:
+            - password
+            - iam
+        - name: aws.lambda.elasticache.<targetCache>.port
+          valueType: integer
+          description: "The cache port opened in the security-group rule and populated in the <PREFIX>_PORT environment variable."
+          default: 6379
+        - name: aws.lambda.elasticache.<targetCache>.userId
+          valueType: string
+          description: "The IAM-enabled ElastiCache user id the function authenticates as, used to scope the elasticache:Connect grant when authMode is 'iam'. Defaults to '*' (any user attached to the cache's user group)."
+          default: "*"
+      resourceB: []
+    operations:
+      updateResourceA:
+        create:
+          - UpdateFunctionConfiguration
+        update:
+          - UpdateFunctionConfiguration
+        destroy:
+          - UpdateFunctionConfiguration
+      updateResourceB: {}
+      updateIntermediaryResources:
+        aws/iam/role:
+          # Only exercised when authMode is 'iam': grants the execution role elasticache:Connect
+          # scoped to the replication group and the userId annotation. The security-group rule
+          # between the function and the cache is an implicit network side-effect (EC2
+          # AuthorizeSecurityGroup*), not a declared managed/existing resource.
+          create:
+            - PutRolePolicy
+          update:
+            - PutRolePolicy
+          destroy:
+            - DeleteRolePolicy
+          config:
+            intermediaryType: existing
+            intermediaryExternalIdSource: resourceA.spec.role
+    docLinks:
+      - https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/WhatIs.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_UpdateFunctionConfiguration.html
+    notes: |
+      This link configures a Lambda function to connect to an ElastiCache (Redis/Valkey) replication
+      group by:
+
+      1. Opening a security-group rule so the function can reach the cache on the cache port. The
+         function's flex-VPC security group is authorised (egress) to reach the cache's security
+         group (ingress) on the configured port (default 6379). When the function and cache share the
+         flex VPC's managed security group, this is a self-referencing rule. This uses the
+         ActivateLinkNetworking SG-pair mode (EC2 AuthorizeSecurityGroupIngress /
+         AuthorizeSecurityGroupEgress); it is a no-op when the function is not VPC-attached.
+
+      2. When authMode is 'iam', adding an inline IAM policy to the function's execution role granting
+         elasticache:Connect, scoped to the linked replication group and the IAM-enabled ElastiCache
+         user identified by the userId annotation (default '*'). The runtime SDK generates short-lived
+         SigV4 auth tokens instead of a static AUTH token. When authMode is 'password' (default), no
+         IAM grant is added -- the function obtains the AUTH token from a Secrets Manager secret it is
+         linked to separately (via the aws/lambda/function -> aws/secretsmanager/secret link).
+
+      3. Populating connection environment variables on the function (unless disabled): <PREFIX>_HOST
+         (the cache endpoint -- the configuration endpoint in cluster mode, otherwise the primary
+         endpoint) and <PREFIX>_PORT.
+
+      The replication group exposes no ARN attribute, so the elasticache:Connect resource ARNs are
+      constructed from the region, account (from the function ARN) and the replication group / user
+      ids. The IAM role is an intermediary resource that must be defined in the same blueprint; the
+      implementation sources it from resourceA.spec.role.
+
+      Placement (subnet group + security-group membership) is NOT handled here -- it is composed via
+      references at resource-creation time because ElastiCache subnet placement is immutable.

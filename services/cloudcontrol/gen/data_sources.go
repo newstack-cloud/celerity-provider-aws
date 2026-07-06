@@ -36,6 +36,10 @@ func GeneratedDataSources(
 			cloudControlServiceFactory,
 			awsConfigStore,
 		),
+		"aws/elasticache/replicationGroup": elasticacheReplicationGroupDataSource(
+			cloudControlServiceFactory,
+			awsConfigStore,
+		),
 		"aws/events/eventBus": eventsEventBusDataSource(
 			cloudControlServiceFactory,
 			awsConfigStore,

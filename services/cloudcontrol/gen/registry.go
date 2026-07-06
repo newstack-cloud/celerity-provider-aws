@@ -28,6 +28,26 @@ func GeneratedResources(
 			resourceGroupTaggingServiceFactory,
 			awsConfigStore,
 		),
+		"aws/elasticache/replicationGroup": elasticacheReplicationGroupResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
+		"aws/elasticache/subnetGroup": elasticacheSubnetGroupResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
+		"aws/elasticache/user": elasticacheUserResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
+		"aws/elasticache/userGroup": elasticacheUserGroupResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
 		"aws/events/apiDestination": eventsApiDestinationResource(
 			cloudControlServiceFactory,
 			resourceGroupTaggingServiceFactory,

@@ -10,6 +10,7 @@ import (
 	flexlambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/flex_lambda"
 	kinesislambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/kinesis_lambda"
 	lambdadynamodb "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_dynamodb"
+	lambdaelasticache "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_elasticache"
 	lambdakms "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_kms"
 	lambdards "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_rds"
 	lambdas3 "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_s3"
@@ -276,6 +277,22 @@ func NewProvider(
 				ec2ServiceFactory,
 			)(
 				lambdards.FunctionToProxyLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
+						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, cloudcontrolservice.Service]{
+						ServiceFactory: cloudControlServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
+			// Inter-service link: Lambda -> ElastiCache replication group (cache access)
+			"aws/lambda/function::aws/elasticache/replicationGroup": lambdaelasticache.FunctionCacheLink(
+				iamServiceFactory,
+				ec2ServiceFactory,
+			)(
+				lambdaelasticache.FunctionToCacheLinkDeps{
 					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
 						ServiceFactory: lambdaServiceFactory,
 						ConfigStore:    awsConfigStore,

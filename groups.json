@@ -8,6 +8,10 @@
       "label": "EC2",
       "description": "Amazon EC2 data sources for referencing existing VPC, subnet and security group networking infrastructure."
     },
+    "elasticache": {
+      "label": "ElastiCache",
+      "description": "Amazon ElastiCache for Redis/Valkey replication group and subnet group resources, data sources and links."
+    },
     "events": {
       "label": "EventBridge",
       "description": "Amazon EventBridge event bus, rule and target resources, data sources and links."
