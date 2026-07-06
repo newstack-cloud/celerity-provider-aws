@@ -59,20 +59,22 @@ var services = []serviceEntry{
 	{Name: "Events"},
 	{
 		// RDS relational databases. DBInstance is the standalone primary (and read replicas /
-		// Aurora member instances); DBProxy + DBProxyTargetGroup provide Lambda connection
-		// pooling for the standalone-instance path; DBSubnetGroup groups the private subnets a
-		// database is placed in. DBCluster (Aurora Serverless v2) is onboarded separately.
+		// Aurora member instances); DBCluster is the Aurora (Serverless v2) cluster; DBProxy +
+		// DBProxyTargetGroup provide Lambda connection pooling for the standalone-instance path;
+		// DBSubnetGroup groups the private subnets a database is placed in.
 		// TypeOverrides preserve readable casing (the derived names would be
-		// "dBInstance"/"dBProxy"/... from the DB acronym).
+		// "dBInstance"/"dBCluster"/"dBProxy"/... from the DB acronym).
 		Name: "RDS",
 		Include: []string{
 			"AWS::RDS::DBInstance",
+			"AWS::RDS::DBCluster",
 			"AWS::RDS::DBProxy",
 			"AWS::RDS::DBProxyTargetGroup",
 			"AWS::RDS::DBSubnetGroup",
 		},
 		TypeOverrides: map[string]string{
 			"AWS::RDS::DBInstance":         "aws/rds/dbInstance",
+			"AWS::RDS::DBCluster":          "aws/rds/dbCluster",
 			"AWS::RDS::DBProxy":            "aws/rds/dbProxy",
 			"AWS::RDS::DBProxyTargetGroup": "aws/rds/dbProxyTargetGroup",
 			"AWS::RDS::DBSubnetGroup":      "aws/rds/dbSubnetGroup",
@@ -213,6 +215,11 @@ var dataSourceConfigs = map[string]dataSourceConfig{
 	// RDS instance identifier is the DBInstanceIdentifier; the ARN suffix (db:<id>) derives it.
 	"AWS::RDS::DBInstance": {
 		FilterFields:            []string{"dbInstanceIdentifier", "arn", "region"},
+		DeriveIdentifierFromARN: true,
+	},
+	// RDS cluster identifier is the DBClusterIdentifier; the ARN suffix (cluster:<id>) derives it.
+	"AWS::RDS::DBCluster": {
+		FilterFields:            []string{"dbClusterIdentifier", "arn", "region"},
 		DeriveIdentifierFromARN: true,
 	},
 	// RDS proxy identifier is the DBProxyName; the ARN is a separate computed field.

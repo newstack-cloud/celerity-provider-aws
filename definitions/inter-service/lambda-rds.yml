@@ -102,3 +102,101 @@ linkDefinitions:
       Placement (subnet group + security-group membership) is NOT handled here -- it is composed
       via references at resource-creation time because RDS subnet placement is immutable. See the
       note at the top of this link definition.
+
+  # Lambda function with network + auth access to an Aurora (Serverless v2) database cluster.
+  # The function (A) connects directly to the cluster's writer endpoint (B). For connection
+  # pooling in front of the cluster, place an aws/rds/dbProxy targeting it and use the
+  # aws/lambda/function -> aws/rds/dbProxy link instead. Placement is composed via references at
+  # resource-creation time (see the note on the dbProxy link above) -- not handled by this link.
+  - resourceTypeA: aws/lambda/function
+    resourceTypeB: aws/rds/dbCluster
+    kind: soft
+    priorityResource: none
+    summary: A link that grants a Lambda function network and auth access to an Aurora database cluster.
+    annotations:
+      resourceA:
+        # Shared global toggle (same annotation as the dbProxy link -- one switch for all RDS links).
+        - name: aws.lambda.rds.populateEnvVars
+          valueType: boolean
+          description: "When true, populates connection environment variables for all linked RDS databases."
+          default: true
+        - name: aws.lambda.rds.<targetCluster>.populateEnvVars
+          valueType: boolean
+          description: "When true, populates connection environment variables for the specific target cluster. Overrides the global setting."
+        - name: aws.lambda.rds.<targetCluster>.envVarPrefix
+          valueType: string
+          description: "Prefix for the connection environment variables the link populates (<PREFIX>_HOST, <PREFIX>_PORT, <PREFIX>_DATABASE, and <PREFIX>_READER_HOST when readerEndpoint is enabled). Defaults to an auto-generated prefix based on the cluster name."
+        - name: aws.lambda.rds.<targetCluster>.authMode
+          valueType: enum
+          description: "How the function authenticates to the database. 'password' relies on a Secrets Manager secret (link the function to the secret separately); 'iam' grants the execution role rds-db:connect for token-based auth."
+          default: password
+          allowedValues:
+            - password
+            - iam
+        - name: aws.lambda.rds.<targetCluster>.dbUser
+          valueType: string
+          description: "The database username the function authenticates as, used to scope the rds-db:connect grant when authMode is 'iam'. Defaults to '*' (any IAM-enabled user on the linked cluster)."
+          default: "*"
+        - name: aws.lambda.rds.<targetCluster>.port
+          valueType: integer
+          description: "The database port opened in the security-group rule and populated in the <PREFIX>_PORT environment variable. Defaults to 5432 (Aurora PostgreSQL); set to 3306 for Aurora MySQL."
+          default: 5432
+        - name: aws.lambda.rds.<targetCluster>.databaseName
+          valueType: string
+          description: "The database name populated in the <PREFIX>_DATABASE environment variable."
+        - name: aws.lambda.rds.<targetCluster>.readerEndpoint
+          valueType: boolean
+          description: "When true, also populates <PREFIX>_READER_HOST with the cluster's reader endpoint for read scaling across Aurora replicas."
+          default: false
+      resourceB: []
+    operations:
+      updateResourceA:
+        create:
+          - UpdateFunctionConfiguration
+        update:
+          - UpdateFunctionConfiguration
+        destroy:
+          - UpdateFunctionConfiguration
+      updateResourceB: {}
+      updateIntermediaryResources:
+        aws/iam/role:
+          # Only exercised when authMode is 'iam': grants the execution role rds-db:connect
+          # scoped to the cluster resource id (cluster-XXXX) and the dbUser annotation.
+          create:
+            - PutRolePolicy
+          update:
+            - PutRolePolicy
+          destroy:
+            - DeleteRolePolicy
+          config:
+            intermediaryType: existing
+            intermediaryExternalIdSource: resourceA.spec.role
+    docLinks:
+      - https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.html
+      - https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/UsingWithRDS.IAMDBAuth.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_UpdateFunctionConfiguration.html
+    notes: |
+      This link configures a Lambda function to connect directly to an Aurora database cluster by:
+
+      1. Opening a security-group rule so the function can reach the cluster on the database port.
+         The function's flex-VPC security group is authorised (egress) to reach the cluster's
+         security group (ingress) on the configured port, via the ActivateLinkNetworking SG-pair
+         mode; it is a no-op when the function is not VPC-attached.
+
+      2. When authMode is 'iam', adding an inline IAM policy to the function's execution role
+         granting rds-db:connect, scoped to the cluster's resource id (cluster-XXXX) and the
+         dbUser annotation (default '*'). When authMode is 'password' (default), no IAM grant is
+         added -- the function obtains credentials from a Secrets Manager secret it is linked to
+         separately (via the aws/lambda/function -> aws/secretsmanager/secret link).
+
+      3. Populating connection environment variables on the function (unless disabled):
+         <PREFIX>_HOST (the cluster writer endpoint), <PREFIX>_PORT, <PREFIX>_DATABASE, and
+         (when readerEndpoint is enabled) <PREFIX>_READER_HOST (the cluster reader endpoint).
+
+      The IAM role is an intermediary resource that must be defined in the same blueprint; the
+      implementation sources the role from resourceA.spec.role.
+
+      Placement (subnet group + security-group membership) is NOT handled here -- it is composed
+      via references at resource-creation time because RDS subnet placement is immutable. See the
+      note at the top of this file.

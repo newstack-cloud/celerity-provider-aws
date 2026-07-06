@@ -218,6 +218,11 @@ func GeneratedResources(
 			resourceGroupTaggingServiceFactory,
 			awsConfigStore,
 		),
+		"aws/rds/dbCluster": rdsDBClusterResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
 		"aws/rds/dbInstance": rdsDBInstanceResource(
 			cloudControlServiceFactory,
 			resourceGroupTaggingServiceFactory,

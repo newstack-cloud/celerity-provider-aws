@@ -286,6 +286,22 @@ func NewProvider(
 					},
 				},
 			),
+			// Inter-service link: Lambda -> Aurora DB cluster (direct database access)
+			"aws/lambda/function::aws/rds/dbCluster": lambdards.FunctionClusterLink(
+				iamServiceFactory,
+				ec2ServiceFactory,
+			)(
+				lambdards.FunctionToClusterLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
+						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, cloudcontrolservice.Service]{
+						ServiceFactory: cloudControlServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
 			// Inter-service link: Lambda -> KMS key (cryptographic use)
 			"aws/lambda/function::aws/kms/key": lambdakms.FunctionKeyLink(
 				iamServiceFactory,

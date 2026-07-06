@@ -60,6 +60,10 @@ func GeneratedDataSources(
 			cloudControlServiceFactory,
 			awsConfigStore,
 		),
+		"aws/rds/dbCluster": rdsDBClusterDataSource(
+			cloudControlServiceFactory,
+			awsConfigStore,
+		),
 		"aws/rds/dbInstance": rdsDBInstanceDataSource(
 			cloudControlServiceFactory,
 			awsConfigStore,
