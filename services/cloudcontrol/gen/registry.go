@@ -18,6 +18,51 @@ func GeneratedResources(
 	awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
 ) map[string]provider.Resource {
 	return map[string]provider.Resource{
+		"aws/apigatewayv2/api": apigatewayv2ApiResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
+		"aws/apigatewayv2/apiMapping": apigatewayv2ApiMappingResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
+		"aws/apigatewayv2/authorizer": apigatewayv2AuthorizerResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
+		"aws/apigatewayv2/domainName": apigatewayv2DomainNameResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
+		"aws/apigatewayv2/integration": apigatewayv2IntegrationResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
+		"aws/apigatewayv2/integrationResponse": apigatewayv2IntegrationResponseResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
+		"aws/apigatewayv2/route": apigatewayv2RouteResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
+		"aws/apigatewayv2/routeResponse": apigatewayv2RouteResponseResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
+		"aws/apigatewayv2/stage": apigatewayv2StageResource(
+			cloudControlServiceFactory,
+			resourceGroupTaggingServiceFactory,
+			awsConfigStore,
+		),
 		"aws/dynamodb/globalTable": dynamodbGlobalTableResource(
 			cloudControlServiceFactory,
 			resourceGroupTaggingServiceFactory,

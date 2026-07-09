@@ -16,6 +16,14 @@ func GeneratedDataSources(
 	awsConfigStore pluginutils.ServiceConfigStore[*aws.Config],
 ) map[string]provider.DataSource {
 	return map[string]provider.DataSource{
+		"aws/apigatewayv2/api": apigatewayv2ApiDataSource(
+			cloudControlServiceFactory,
+			awsConfigStore,
+		),
+		"aws/apigatewayv2/domainName": apigatewayv2DomainNameDataSource(
+			cloudControlServiceFactory,
+			awsConfigStore,
+		),
 		"aws/dynamodb/globalTable": dynamodbGlobalTableDataSource(
 			cloudControlServiceFactory,
 			awsConfigStore,

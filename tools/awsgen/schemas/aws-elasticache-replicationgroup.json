@@ -396,6 +396,9 @@
     "/properties/AuthToken",
     "/properties/NodeGroupConfiguration"
   ],
+  "propertyTransform": {
+    "/properties/ReplicationGroupId": "$lowercase(ReplicationGroupId)"
+  },
   "primaryIdentifier": ["/properties/ReplicationGroupId"],
   "readOnlyProperties": [
     "/properties/ConfigurationEndPoint",

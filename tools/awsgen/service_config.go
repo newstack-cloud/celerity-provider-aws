@@ -58,6 +58,26 @@ var services = []serviceEntry{
 	},
 	{Name: "Events"},
 	{
+		// API Gateway v2: HTTP and WebSocket APIs. Api is the API itself (protocolType HTTP or
+		// WEBSOCKET); Stage is a deployment stage; Route maps a route key to an integration;
+		// Integration is the backend binding (AWS_PROXY to a Lambda function); Authorizer is a
+		// JWT or Lambda (REQUEST) request authorizer. DomainName + ApiMapping attach a custom
+		// domain and map it (at a base path) to an API + stage; RouteResponse + IntegrationResponse
+		// enable synchronous two-way responses on WebSocket routes.
+		Name: "ApiGatewayV2",
+		Include: []string{
+			"AWS::ApiGatewayV2::Api",
+			"AWS::ApiGatewayV2::Stage",
+			"AWS::ApiGatewayV2::Route",
+			"AWS::ApiGatewayV2::Integration",
+			"AWS::ApiGatewayV2::Authorizer",
+			"AWS::ApiGatewayV2::DomainName",
+			"AWS::ApiGatewayV2::ApiMapping",
+			"AWS::ApiGatewayV2::RouteResponse",
+			"AWS::ApiGatewayV2::IntegrationResponse",
+		},
+	},
+	{
 		// RDS relational databases. DBInstance is the standalone primary (and read replicas /
 		// Aurora member instances); DBCluster is the Aurora (Serverless v2) cluster; DBProxy +
 		// DBProxyTargetGroup provide Lambda connection pooling for the standalone-instance path;
@@ -241,6 +261,17 @@ var dataSourceConfigs = map[string]dataSourceConfig{
 	// no ARN attribute, so there is no `arn` filter; lookups resolve by ReplicationGroupId directly.
 	"AWS::ElastiCache::ReplicationGroup": {
 		FilterFields:            []string{"replicationGroupId", "region"},
+		DeriveIdentifierFromARN: false,
+	},
+	// API Gateway v2 API identifier is the ApiId. The CFN resource exposes no ARN attribute, so
+	// lookups resolve by ApiId (or the friendlier name via ListResources + filter).
+	"AWS::ApiGatewayV2::Api": {
+		FilterFields:            []string{"apiId", "name", "region"},
+		DeriveIdentifierFromARN: false,
+	},
+	// API Gateway v2 custom domain identifier is the DomainName; no ARN attribute.
+	"AWS::ApiGatewayV2::DomainName": {
+		FilterFields:            []string{"domainName", "region"},
 		DeriveIdentifierFromARN: false,
 	},
 	// RDS proxy identifier is the DBProxyName; the ARN is a separate computed field.

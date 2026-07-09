@@ -5,6 +5,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/newstack-cloud/bluelink-provider-aws/flex"
+	apigatewayv2lambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/apigatewayv2_lambda"
 	eventslambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/events_lambda"
 	eventssqs "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/events_sqs"
 	flexlambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/flex_lambda"
@@ -16,6 +17,7 @@ import (
 	lambdas3 "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_s3"
 	lambdasecretsmanager "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_secretsmanager"
 	lambdasns "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_sns"
+	lambdasqs "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_sqs"
 	lambdassm "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/lambda_ssm"
 	s3lambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/s3_lambda"
 	s3sns "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/s3_sns"
@@ -287,6 +289,34 @@ func NewProvider(
 					},
 				},
 			),
+			// Inter-service link: API Gateway v2 authorizer -> Lambda function (invoke permission)
+			"aws/apigatewayv2/authorizer::aws/lambda/function": apigatewayv2lambda.AuthorizerFunctionLink()(
+				apigatewayv2lambda.AuthorizerToFunctionLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, cloudcontrolservice.Service]{
+						ServiceFactory: cloudControlServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
+						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
+			// Inter-service link: API Gateway v2 API -> Lambda function (request routing)
+			"aws/apigatewayv2/api::aws/lambda/function": apigatewayv2lambda.APIFunctionLink(
+				iamServiceFactory,
+			)(
+				apigatewayv2lambda.APIToFunctionLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, cloudcontrolservice.Service]{
+						ServiceFactory: cloudControlServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
+						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
 			// Inter-service link: Lambda -> ElastiCache replication group (cache access)
 			"aws/lambda/function::aws/elasticache/replicationGroup": lambdaelasticache.FunctionCacheLink(
 				iamServiceFactory,
@@ -399,6 +429,22 @@ func NewProvider(
 				ec2ServiceFactory,
 			)(
 				lambdasns.FunctionToTopicLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
+						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, cloudcontrolservice.Service]{
+						ServiceFactory: cloudControlServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
+			// Inter-service link: Lambda -> SQS queue (producer: send messages)
+			"aws/lambda/function::aws/sqs/queue": lambdasqs.FunctionQueueLink(
+				iamServiceFactory,
+				ec2ServiceFactory,
+			)(
+				lambdasqs.FunctionToQueueLinkDeps{
 					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
 						ServiceFactory: lambdaServiceFactory,
 						ConfigStore:    awsConfigStore,

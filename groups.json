@@ -1,5 +1,9 @@
 {
   "groups": {
+    "apigatewayv2": {
+      "label": "API Gateway v2",
+      "description": "Amazon API Gateway v2 HTTP and WebSocket API, stage, route and integration resources, data sources and links."
+    },
     "dynamodb": {
       "label": "DynamoDB",
       "description": "Amazon DynamoDB fully managed NoSQL database resources, data sources and links."

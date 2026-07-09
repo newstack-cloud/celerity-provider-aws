@@ -1,0 +1,207 @@
+version: "1.0.0"
+resourceDefinitions: []
+dataSourceDefinitions: []
+
+linkDefinitions:
+  # API Gateway v2 API routes requests to a Lambda function.
+  # The API (A) selects the function (B) via a link selector; the link wires the function
+  # into the API by managing an AWS_PROXY integration, a route to that integration, and the
+  # Lambda permission that lets API Gateway invoke the function.
+  # Semantics: "Requests to this API route to this Lambda function"
+  #
+  # This is the low-boilerplate way to expose a function through an HTTP (or WebSocket) API:
+  # the author writes the API and its stage, selects handler functions by label, and each
+  # function declares its own route key. The link manages the per-function integration, route
+  # and invoke permission. The integration and route remain available as authorable resources
+  # for manual configuration.
+  - resourceTypeA: aws/apigatewayv2/api
+    resourceTypeB: aws/lambda/function
+    kind: soft
+    priorityResource: A
+    summary: A link that routes API Gateway v2 requests to a Lambda function via a managed integration and route.
+    annotations:
+      # Route/integration config is on resourceB (the target being invoked) because each
+      # API-to-function relationship has its own route key and integration settings.
+      resourceA: []
+      resourceB:
+        - name: aws.apigatewayv2.lambda.routeKey
+          valueType: string
+          description: "The route key that maps to this function, e.g. 'GET /users' for an HTTP API or '$connect' / '$default' for a WebSocket API. Defaults to '$default' (a catch-all route that proxies all requests to the function)."
+          default: "$default"
+        - name: aws.apigatewayv2.lambda.payloadFormatVersion
+          valueType: enum
+          description: "The format of the event payload API Gateway sends to the function. '2.0' is the HTTP API default; '1.0' matches the REST API / WebSocket format."
+          default: "2.0"
+          allowedValues:
+            - "1.0"
+            - "2.0"
+        - name: aws.apigatewayv2.lambda.authorizerId
+          valueType: string
+          description: "The id of the authorizer that protects this route, usually a reference to an authored authorizer's id (e.g. ${apiGuard.spec.authorizerId}) or a literal id for an authorizer defined outside the blueprint. When set, the route is created with this authorizer; when absent the route is open. The link only stamps this onto the route -- it does not create or manage authorizers."
+        - name: aws.apigatewayv2.lambda.authorizationType
+          valueType: enum
+          description: "The authorization type when an authorizerId is set: 'CUSTOM' for a Lambda (REQUEST) authorizer or 'JWT' for a JWT authorizer."
+          default: "CUSTOM"
+          allowedValues:
+            - "CUSTOM"
+            - "JWT"
+        - name: aws.apigatewayv2.lambda.websocketTwoWay
+          valueType: boolean
+          description: "For a WebSocket API route, when true the link also manages a $default route response and integration response so the route can reply synchronously to the sender. Ignored for HTTP APIs."
+          default: false
+        - name: aws.apigatewayv2.lambda.manageConnections
+          valueType: boolean
+          description: "For a WebSocket API route handler, whether to grant the function's execution role execute-api:ManageConnections so it can push messages to clients via the @connections management API. Defaults to true (most WebSocket handlers push, including $connect/$disconnect handlers that broadcast to others); set false for a handler that only receives. Ignored for HTTP APIs."
+          default: true
+        - name: aws.apigatewayv2.lambda.manageConnectionsStage
+          valueType: string
+          description: "The stage scoped in the execute-api:ManageConnections grant. Defaults to '$default'; set to '*' to allow pushing across all stages."
+          default: "$default"
+    operations:
+      updateResourceA: {}
+      updateResourceB: {}
+      # The link performs all of its work in the intermediary phase, the only phase with access
+      # to the resource service (for deploying the managed integration, route and permission).
+      # Order matters: the integration is deployed first (the route targets it by id), then the
+      # route, and the Lambda permission is granted so API Gateway can invoke the function.
+      updateIntermediaryResources:
+        # The AWS_PROXY integration binding the route to the function (IntegrationUri = the
+        # function's invoke ARN, read from resourceB.state.arn).
+        aws/apigatewayv2/integration:
+          create:
+            - CreateIntegration
+          update:
+            - UpdateIntegration
+          destroy:
+            - DeleteIntegration
+          config:
+            intermediaryType: managed
+            config:
+              apiId: resourceA.state.apiId
+              integrationUri: resourceB.state.arn
+        # The route mapping the route key to the integration (Target = integrations/<integrationId>).
+        aws/apigatewayv2/route:
+          create:
+            - CreateRoute
+          update:
+            - UpdateRoute
+          destroy:
+            - DeleteRoute
+          config:
+            intermediaryType: managed
+            config:
+              apiId: resourceA.state.apiId
+        # The Lambda permission allowing apigateway.amazonaws.com to invoke the function, scoped
+        # to the API's execute-api source ARN (constructed from the API id, region and account).
+        aws/lambda/permission:
+          create:
+            - AddPermission
+          update:
+            - AddPermission
+          destroy:
+            - RemovePermission
+          config:
+            intermediaryType: managed
+            config:
+              functionName: resourceB.state.arn
+        # WebSocket only (manageConnections = true): grants the handler's execution role
+        # execute-api:ManageConnections so it can push messages to clients via the @connections API.
+        aws/iam/role:
+          create:
+            - PutRolePolicy
+          update:
+            - PutRolePolicy
+          destroy:
+            - DeleteRolePolicy
+          config:
+            intermediaryType: existing
+            intermediaryExternalIdSource: resourceB.spec.role
+        # WebSocket two-way only (websocketTwoWay = true): a $default integration response and route
+        # response so the route can reply synchronously to the sender.
+        aws/apigatewayv2/integrationResponse:
+          create:
+            - CreateIntegrationResponse
+          update:
+            - UpdateIntegrationResponse
+          destroy:
+            - DeleteIntegrationResponse
+          config:
+            intermediaryType: managed
+            config:
+              apiId: resourceA.state.apiId
+        aws/apigatewayv2/routeResponse:
+          create:
+            - CreateRouteResponse
+          update:
+            - UpdateRouteResponse
+          destroy:
+            - DeleteRouteResponse
+          config:
+            intermediaryType: managed
+            config:
+              apiId: resourceA.state.apiId
+    docLinks:
+      - https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-develop-integrations-lambda.html
+      - https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-websocket-api-integrations.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/services-apigateway.html
+    notes: |
+      This link routes API Gateway v2 requests to a Lambda function by managing three
+      intermediary resources:
+
+      1. An AWS_PROXY integration whose IntegrationUri is the function's invoke ARN and whose
+         PayloadFormatVersion comes from the resourceB annotation (default 2.0).
+      2. A route whose RouteKey comes from the resourceB annotation (default $default) and whose
+         Target is integrations/<integrationId> of the integration above.
+      3. A Lambda permission allowing apigateway.amazonaws.com to invoke the function, scoped to
+         the API's execute-api source ARN (arn:aws:execute-api:<region>:<account>:<apiId>/*/*).
+
+      The API Gateway v2 Api resource exposes no ARN attribute, so the execute-api source ARN is
+      constructed from the API id (resourceA state), the region and the account (from the function
+      ARN). The integration is deployed before the route because the route targets the integration
+      by its generated id.
+
+      Authorization: this link does not create or manage authorizers. When a route function sets the
+      authorizerId and authorizationType annotations, the link only stamps them onto the route it
+      creates. Authorizers are authored aws/apigatewayv2/authorizer resources (JWT or REQUEST), and
+      a REQUEST authorizer's invoke permission is granted by the aws/apigatewayv2/authorizer ->
+      aws/lambda/function link.
+
+  # API Gateway v2 Lambda authorizer to its backing Lambda function.
+  # The authorizer (A) selects its backing function (B); the link grants API Gateway permission to
+  # invoke the authorizer function. JWT authorizers have no backing function and do not use this link.
+  # Semantics: "API Gateway may invoke this function as a request authorizer"
+  - resourceTypeA: aws/apigatewayv2/authorizer
+    resourceTypeB: aws/lambda/function
+    kind: soft
+    priorityResource: A
+    summary: A link that grants API Gateway permission to invoke a Lambda authorizer's backing function.
+    annotations:
+      resourceA: []
+      resourceB: []
+    operations:
+      updateResourceA: {}
+      updateResourceB: {}
+      updateIntermediaryResources:
+        # The Lambda permission allowing apigateway.amazonaws.com to invoke the authorizer function,
+        # scoped to the authorizer's execute-api source ARN.
+        aws/lambda/permission:
+          create:
+            - AddPermission
+          update:
+            - AddPermission
+          destroy:
+            - RemovePermission
+          config:
+            intermediaryType: managed
+            config:
+              functionName: resourceB.state.arn
+    docLinks:
+      - https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-lambda-authorizer.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/services-apigateway.html
+    notes: |
+      This link grants a managed Lambda permission allowing apigateway.amazonaws.com to invoke the
+      authorizer's backing function, scoped to the authorizer's execute-api source ARN
+      (arn:aws:execute-api:<region>:<account>:<apiId>/authorizers/<authorizerId>). The authorizer is
+      an authored resource, so its apiId and generated authorizerId are read from its state; the
+      account is taken from the function ARN. JWT authorizers have no backing function and do not use
+      this link.
