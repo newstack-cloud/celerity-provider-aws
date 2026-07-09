@@ -87,14 +87,18 @@ jobs:
           cache: true
       - name: Install svu binary
         if: ${{ steps.check-merge.outputs.release_merged == 'false' }}
-        run: go install github.com/caarlos0/svu@latest
+        # Pinned to the last v1 tag. svu v2/v3 live at .../svu/v2 and /v3 and
+        # changed the CLI (v3 drops `prerelease --pre-release=<id>` in favour
+        # of `next --prerelease=<id>`), so upgrading requires reworking the
+        # "Determine version" step below.
+        run: go install github.com/caarlos0/svu@v1.12.0
 
       - name: Determine version
         if: ${{ steps.check-merge.outputs.release_merged == 'false' }}
         id: version
+        env:
+          PRERELEASE: ${{ steps.config.outputs.prerelease }}
         run: |
-          PRERELEASE="${{ steps.config.outputs.prerelease }}"
-
           if [ "$PRERELEASE" = "true" ]; then
             NEXT=$(svu prerelease --pre-release=next)
           else
@@ -193,8 +197,9 @@ jobs:
 
       - name: Create tag for merged release
         if: ${{ steps.check-merge.outputs.release_merged == 'true' }}
+        env:
+          TAG: ${{ steps.check-merge.outputs.tag }}
         run: |
-          TAG="${{ steps.check-merge.outputs.tag }}"
           git tag "$TAG"
           git push origin "$TAG"
 
@@ -216,33 +221,48 @@ jobs:
           fetch-depth: 0
       - name: Resolve Version
         id: version
+        # User-controlled and derived values are passed via env so they are
+        # never interpolated into the script text (script injection).
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          PREPARED_TAG: ${{ needs.prepare-release.outputs.tag }}
+          PREPARED_VERSION: ${{ needs.prepare-release.outputs.version }}
+          PREPARED_PRERELEASE: ${{ needs.prepare-release.outputs.prerelease }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=v${{ inputs.version }}" >> "$GITHUB_OUTPUT"
-            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if ! echo "$INPUT_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$'; then
+              echo "Invalid version input: must be a semver version without the v prefix" >&2
+              exit 1
+            fi
+            echo "tag=v$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+            echo "version=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
             # Detect pre-release from version string
-            if echo "${{ inputs.version }}" | grep -qE '\-'; then
+            if echo "$INPUT_VERSION" | grep -qE '\-'; then
               echo "prerelease=true" >> "$GITHUB_OUTPUT"
             else
               echo "prerelease=false" >> "$GITHUB_OUTPUT"
             fi
           else
-            echo "tag=${{ needs.prepare-release.outputs.tag }}" >> "$GITHUB_OUTPUT"
-            echo "version=${{ needs.prepare-release.outputs.version }}" >> "$GITHUB_OUTPUT"
-            echo "prerelease=${{ needs.prepare-release.outputs.prerelease }}" >> "$GITHUB_OUTPUT"
+            echo "tag=$PREPARED_TAG" >> "$GITHUB_OUTPUT"
+            echo "version=$PREPARED_VERSION" >> "$GITHUB_OUTPUT"
+            echo "prerelease=$PREPARED_PRERELEASE" >> "$GITHUB_OUTPUT"
           fi
       - name: Checkout release tag
-        run: git checkout "${{ steps.version.outputs.tag }}"
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: git checkout "$TAG"
       - uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
           cache: true
       - name: Install Plugin Docgen Tool
         run: |
-          go install github.com/newstack-cloud/bluelink/tools/plugin-docgen/cmd/bluelink-plugin-docgen@latest
+          go install github.com/newstack-cloud/bluelink/tools/plugin-docgen/cmd/bluelink-plugin-docgen@v0.3.0
       - name: Build Provider for Docgen
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           mkdir -p /tmp/bluelink/plugins/providers/newstack-cloud/aws/$VERSION
           go build -ldflags "-X main.version=$VERSION" -o /tmp/bluelink/plugins/providers/newstack-cloud/aws/$VERSION/plugin .
       - name: Generate Plugin JSON Docs
