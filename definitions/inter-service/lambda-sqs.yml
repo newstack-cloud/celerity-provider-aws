@@ -1,0 +1,80 @@
+version: "1.0.0"
+resourceDefinitions: []
+dataSourceDefinitions: []
+
+linkDefinitions:
+  # Lambda function with producer access to an SQS queue.
+  # The function (A) links to the queue (B) to send messages to it at runtime.
+  # Semantics: "My Lambda function sends messages to this queue".
+  #
+  # This is the producer side of a queue. For event-driven consumption (a function triggered by
+  # messages arriving), use the aws/sqs/queue -> aws/lambda/function link (an event source mapping)
+  # instead.
+  - resourceTypeA: aws/lambda/function
+    resourceTypeB: aws/sqs/queue
+    kind: soft
+    priorityResource: none
+    summary: A link that grants a Lambda function permission to send messages to an SQS queue.
+    annotations:
+      resourceA:
+        - name: aws.lambda.sqs.populateEnvVars
+          valueType: boolean
+          description: "When true, populates environment variables for all linked queues."
+          default: true
+        - name: aws.lambda.sqs.<targetQueue>.populateEnvVars
+          valueType: boolean
+          description: "When true, populates environment variables for the specific target queue. Overrides the global setting."
+        - name: aws.lambda.sqs.<targetQueue>.envVarName
+          valueType: string
+          description: "Custom environment variable name for the target queue URL. Defaults to SQS_QUEUE_<targetQueue>."
+        - name: aws.lambda.sqs.<targetQueue>.accessLevel
+          valueType: enum
+          description: "The access the function is granted to the queue: 'send' (sqs:SendMessage), 'receive' (sqs:ReceiveMessage/DeleteMessage) or 'sendReceive' (both). Defaults to 'send'."
+          default: send
+          allowedValues:
+            - send
+            - receive
+            - sendReceive
+      resourceB: []
+    operations:
+      updateResourceA:
+        create:
+          - UpdateFunctionConfiguration
+        update:
+          - UpdateFunctionConfiguration
+        destroy:
+          - UpdateFunctionConfiguration
+      updateResourceB: {}
+      updateIntermediaryResources:
+        # Grants the execution role the SQS actions for the access level, scoped to the queue ARN.
+        aws/iam/role:
+          create:
+            - PutRolePolicy
+          update:
+            - PutRolePolicy
+          destroy:
+            - DeleteRolePolicy
+          config:
+            intermediaryType: existing
+            intermediaryExternalIdSource: resourceA.spec.role
+    docLinks:
+      - https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-lambda-tutorial.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_UpdateFunctionConfiguration.html
+    notes: |
+      This link configures the Lambda function to send to (and optionally receive from) the SQS
+      queue by:
+
+      1. Adding an inline policy to the function's execution role granting the SQS actions for the
+         configured access level, scoped to the queue ARN. 'send' grants sqs:SendMessage; 'receive'
+         grants sqs:ReceiveMessage and sqs:DeleteMessage; 'sendReceive' grants both. sqs:GetQueueUrl
+         and sqs:GetQueueAttributes are always included so the SDK can resolve and inspect the queue.
+
+      2. Populating an environment variable on the function (unless disabled) with the queue URL,
+         named SQS_QUEUE_<targetQueue> by default.
+
+      3. Activating an SQS interface VPC endpoint when the function is VPC-isolated; a no-op for
+         functions that are not attached to a VPC.
+
+      For event-driven consumption of a queue, use the aws/sqs/queue -> aws/lambda/function link (an
+      event source mapping) instead of this producer link.
