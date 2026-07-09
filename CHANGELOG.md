@@ -2,6 +2,54 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2026-07-09
+
+### Bug Fixes
+
+- Correct field path in iam policy link utils([667c137](https://github.com/newstack-cloud/bluelink-provider-aws/commit/667c13758e17d87ed3d1115b8459553674c68761))
+- Make sure flex vpc is registered as a stablised dependency of other resource types([d17c62a](https://github.com/newstack-cloud/bluelink-provider-aws/commit/d17c62a74f0f22f78485c3a5c56a5b2761e46e8c))
+- Add fix for qualifier bug in lambda function data source([f1d4cf1](https://github.com/newstack-cloud/bluelink-provider-aws/commit/f1d4cf134eed3a08d8d66dece026c5f9f09ae868))
+
+### Dependencies
+
+- Bump up bluelink libs([12c34f6](https://github.com/newstack-cloud/bluelink-provider-aws/commit/12c34f6e98b71f46359c8e818d7dd55173a1ef46))
+
+### Features
+
+- Add cardinality constraint to function signing config link([4aeccf8](https://github.com/newstack-cloud/bluelink-provider-aws/commit/4aeccf81306c983fde4fc7b8efa29adcc5797c2b))
+- Add cardinality constraint to source queue to dlq link([807d799](https://github.com/newstack-cloud/bluelink-provider-aws/commit/807d7999ffaeb6dba9b879f9f1ec0c8d88e01681))
+- Update example docs for iam resources([3b76b8a](https://github.com/newstack-cloud/bluelink-provider-aws/commit/3b76b8a4c6247e3b1ebc24a6d31ec3804648ff98))
+- Add support for event bridge and wire up missing resources([faa25a3](https://github.com/newstack-cloud/bluelink-provider-aws/commit/faa25a366a6d3a98d6c994358ffdcda6f4bbaf64))
+- Add initial generated output from cloud control resource and ds generation([0d9a918](https://github.com/newstack-cloud/bluelink-provider-aws/commit/0d9a9185f2f18792dc0535ca57c2e3604a9a563a))
+- Add cloud control resource and data source implementation([4da2194](https://github.com/newstack-cloud/bluelink-provider-aws/commit/4da219417bc4a731a451823d60d48e3552666e08))
+- Add code gen tool for cloud control backed resources and data sources([bf732df](https://github.com/newstack-cloud/bluelink-provider-aws/commit/bf732df5b1a550cc166bca8696ace5bb640906c6))
+- Add and update helpers for link-managed resources and permissions([8efbe0d](https://github.com/newstack-cloud/bluelink-provider-aws/commit/8efbe0dac72a149f6a6803d816dd2a11652861fd))
+- Wire up cloud control resources and new links in the provider([2c501c7](https://github.com/newstack-cloud/bluelink-provider-aws/commit/2c501c7a903549bef40c70f7919c06bce63a10d4))
+- Add link implementation for event bridge with sqs and lambda([f544029](https://github.com/newstack-cloud/bluelink-provider-aws/commit/f5440290ab4123148ccbd701d38448831cd2caf1))
+- Update permission allocation logic for lambda dynamodb links along with other improvements([8f841b3](https://github.com/newstack-cloud/bluelink-provider-aws/commit/8f841b31c3bfd6b14bab12b886ba4f77fd074053))
+- Add network link activation helper and vpc lambda function link([0bf0158](https://github.com/newstack-cloud/bluelink-provider-aws/commit/0bf0158a776a8d164a88c2425c8da93b4f7e6ca0))
+- Add support for sns resources and links([0352279](https://github.com/newstack-cloud/bluelink-provider-aws/commit/03522792af8290fdeb115d8919abefe7734623ee))
+- Update ddb stream lambda link to use new index-based filter keys([1cebdee](https://github.com/newstack-cloud/bluelink-provider-aws/commit/1cebdeefa6bc66cc3524222277a671d76b695e2e))
+- Add kinesis streams along with stream/queue to lambda links([bdbc4c8](https://github.com/newstack-cloud/bluelink-provider-aws/commit/bdbc4c8f6514f0e2fddd51eed480baecf120142d))
+- Add bucket resource and links for bucket access and notifications([fee46ed](https://github.com/newstack-cloud/bluelink-provider-aws/commit/fee46edad31471d14125e9858ca824b870cebed8))
+- Add ssm, kms and secrets manager support with links from lambda functions([adca847](https://github.com/newstack-cloud/bluelink-provider-aws/commit/adca847c8f62131620daebccd8607cea00f16258))
+- Add first phase of support for rds focused on rds proxy and networking([f5e18e7](https://github.com/newstack-cloud/bluelink-provider-aws/commit/f5e18e71cd1e90d9d1d0914b3b596db4fd246926))
+- Add support for aurora cluster with function cluster link support([0b26c16](https://github.com/newstack-cloud/bluelink-provider-aws/commit/0b26c16df6a61fcb8e0ecbaf340dddecfefcd5ac))
+- Add support for elasticache and add lambda cache links([db3279c](https://github.com/newstack-cloud/bluelink-provider-aws/commit/db3279ca453716d6c3c601e5145225c0dc98f07b))
+- Add api gateway v2 support with lambda links([6f1509b](https://github.com/newstack-cloud/bluelink-provider-aws/commit/6f1509b10930db5e75834a0bb5312a8ccf3e4e1e))
+- Add lambda function to sqs queue link implementation([00cca31](https://github.com/newstack-cloud/bluelink-provider-aws/commit/00cca310b2b92357fb59c0c57539f7b487943462))
+
+### Refactoring
+
+- Clean up old manual implementation, update docs and test script([fad0052](https://github.com/newstack-cloud/bluelink-provider-aws/commit/fad0052c311b760ac0c1fce5677a2a76e9120186))
+
+### Testing
+
+- Add e2e/integration test harness and initial test suites([a83f602](https://github.com/newstack-cloud/bluelink-provider-aws/commit/a83f6020c5be98142bd96a9a71cc17ea19613ab6))
+- Add direct call integration test harness([bf707fc](https://github.com/newstack-cloud/bluelink-provider-aws/commit/bf707fc05d44658a3548d2f5240dd0bdd960de22))
+- Add service mocks for unit tests([6bec4fd](https://github.com/newstack-cloud/bluelink-provider-aws/commit/6bec4fd1a239132a9a3de7669f7a71f66f5993ba))
+- Add integration test for lambda layer versions([40dce2d](https://github.com/newstack-cloud/bluelink-provider-aws/commit/40dce2dea0b1b1c68adcc84fd4e83b4f00b47985))
+- Add missing tests for link implementations([9983972](https://github.com/newstack-cloud/bluelink-provider-aws/commit/9983972a25694e6a65cebbf091515aeb6a11a53b))
 ## [0.1.1] - 2026-04-08
 
 ### Bug Fixes
