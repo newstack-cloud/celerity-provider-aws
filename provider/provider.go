@@ -78,6 +78,10 @@ func NewProvider(
 					ssmServiceFactory,
 					awsConfigStore,
 				),
+				"aws/ssm/parameterPath": ssm.ParameterPathResource(
+					ssmServiceFactory,
+					awsConfigStore,
+				),
 			},
 			cloudcontrolgen.GeneratedResources(
 				cloudControlServiceFactory,
@@ -368,6 +372,22 @@ func NewProvider(
 			),
 			// Inter-service link: Lambda -> SSM parameter (config access)
 			"aws/lambda/function::aws/ssm/parameter": lambdassm.FunctionParameterLink(
+				iamServiceFactory,
+				ec2ServiceFactory,
+			)(
+				lambdassm.FunctionToParameterLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
+						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, ssmservice.Service]{
+						ServiceFactory: ssmServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
+			// Inter-service link: Lambda -> SSM parameter path (config namespace access)
+			"aws/lambda/function::aws/ssm/parameterPath": lambdassm.FunctionParameterPathLink(
 				iamServiceFactory,
 				ec2ServiceFactory,
 			)(

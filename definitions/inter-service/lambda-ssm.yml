@@ -74,6 +74,97 @@ linkDefinitions:
       function can reach Parameter Store over the private network. With NAT egress present this
       is a no-op.
 
-      NOTE: aws/ssm/parameter models only plaintext String/StringList parameters -- CloudFormation
-      (and Cloud Control) do not support SecureString. Use aws/secretsmanager/secret for encrypted
-      values. Consequently no KMS decrypt grant is required for parameters read through this link.
+      NOTE: aws/ssm/parameter supports SecureString parameters (via the sensitive "secureValue"
+      field). SecureString parameters encrypted with the default AWS-managed alias/aws/ssm key
+      need no extra grant. When a parameter uses a customer-managed KMS key ("keyId"), the
+      function additionally needs kms:Decrypt on that key, declare a separate
+      aws/lambda/function::aws/kms/key link for it.
+
+  # Lambda function with access to a whole SSM parameter hierarchy (path prefix).
+  # The function (A) links to the parameter path (B) to enumerate and read every
+  # parameter beneath the prefix at runtime via ssm:GetParametersByPath.
+  # Semantics: "My Lambda function needs to read this configuration namespace".
+  - resourceTypeA: aws/lambda/function
+    resourceTypeB: aws/ssm/parameterPath
+    kind: soft
+    priorityResource: none
+    summary: >-
+      A link that grants a Lambda function access to all SSM parameters beneath a path
+      prefix and injects the prefix as an environment variable.
+    annotations:
+      resourceA:
+        - name: aws.lambda.ssm.populateEnvVars
+          valueType: boolean
+          description: "When true, populates environment variables for all linked SSM resources. Shared fallback with the aws/lambda/function::aws/ssm/parameter link."
+          default: true
+        - name: aws.lambda.ssm.<targetParameterPath>.populateEnvVars
+          valueType: boolean
+          description: "When true, populates the path prefix environment variable for the specific target parameter path. Overrides the global setting."
+        - name: aws.lambda.ssm.<targetParameterPath>.envVarName
+          valueType: string
+          description: "Custom environment variable name for the target path prefix. Defaults to an auto-generated name based on the parameter path resource name."
+        - name: aws.lambda.ssm.<targetParameterPath>.accessLevel
+          valueType: enum
+          description: "The level of access to grant over the path prefix and everything beneath it."
+          default: read
+          allowedValues:
+            - read
+            - write
+            - readwrite
+      resourceB: []
+    operations:
+      updateResourceA:
+        create:
+          - UpdateFunctionConfiguration
+        update:
+          - UpdateFunctionConfiguration
+        destroy:
+          - UpdateFunctionConfiguration
+      updateResourceB: {}
+      updateIntermediaryResources:
+        aws/iam/role:
+          create:
+            - PutRolePolicy
+          update:
+            - PutRolePolicy
+          destroy:
+            - DeleteRolePolicy
+          config:
+            intermediaryType: existing
+            intermediaryExternalIdSource: resourceA.spec.role
+    docLinks:
+      - https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store-hierarchies.html
+      - https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-paramstore-access.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_UpdateFunctionConfiguration.html
+    notes: |
+      This link configures the Lambda function to access every SSM parameter beneath a
+      path prefix by:
+      1. Optionally populating a single environment variable with the path prefix
+         (controlled by annotations)
+      2. Adding one statement to the function's execution role scoped to the path ARN
+         and everything beneath it:
+         ["arn:...:parameter<path>", "arn:...:parameter<path>/*"]
+         The path ARN authorises ssm:GetParametersByPath over the hierarchy; the wildcard
+         ARN authorises reads of individual parameters beneath it.
+
+      The accessLevel annotation controls the permissions granted:
+      - "read" (default): ssm:GetParameter, ssm:GetParameters, ssm:GetParametersByPath
+      - "write": ssm:PutParameter
+      - "readwrite": Both read and write permissions
+
+      Exactly one statement and one environment variable are produced per linked path,
+      regardless of how many parameters live beneath the prefix. Destroying the link
+      revokes both; individual parameters beneath the path can come and go freely.
+
+      The IAM role is an intermediary resource that must be defined in the same blueprint.
+      The implementation sources the role from resourceA.spec.role.
+
+      When the function runs inside a VPC without NAT egress, the link activates the SSM
+      interface VPC endpoint (com.amazonaws.<region>.ssm) on the linked aws/flex/vpc so the
+      function can reach Parameter Store over the private network. With NAT egress present this
+      is a no-op.
+
+      SecureString parameters beneath the path encrypted with the default AWS-managed
+      alias/aws/ssm key need no extra grant. When any parameter uses a customer-managed KMS
+      key, the function additionally needs kms:Decrypt on that key -- declare a separate
+      aws/lambda/function::aws/kms/key link for it.

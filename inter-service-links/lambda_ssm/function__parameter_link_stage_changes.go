@@ -22,10 +22,16 @@ func (l *functionParameterLinkActions) StageChanges(
 	)
 
 	currentLinkData := linkhelpers.GetLinkDataFromState(input.CurrentLinkState)
+	// Apply the same default the deploy path uses so the staged field path matches the
+	// env var that is actually written when no custom name annotation is set.
+	finalEnvVarName := parameterEnvVarName(
+		annotations.envVarName,
+		&input.ResourceBChanges.AppliedResourceInfo,
+	)
 	envVarFieldPath := fmt.Sprintf(
 		"%s.environmentVariables[\"%s\"]",
 		pluginutils.GetResourceName(&input.ResourceAChanges.AppliedResourceInfo),
-		annotations.envVarName,
+		finalEnvVarName,
 	)
 	_, linkDataHasEnvVar := pluginutils.GetValueByPath(
 		fmt.Sprintf("$.%s", envVarFieldPath),

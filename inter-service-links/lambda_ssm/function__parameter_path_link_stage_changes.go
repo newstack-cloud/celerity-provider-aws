@@ -1,4 +1,4 @@
-package lambdasecretsmanager
+package lambdassm
 
 import (
 	"context"
@@ -10,21 +10,19 @@ import (
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 )
 
-func (l *functionSecretLinkActions) StageChanges(
+func (l *functionParameterPathLinkActions) StageChanges(
 	ctx context.Context,
 	input *provider.LinkStageChangesInput,
 ) (*provider.LinkStageChangesOutput, error) {
 	changes := &provider.LinkChanges{}
 
-	annotations := getSecretLinkAnnotations(
+	annotations := getParameterLinkAnnotations(
 		&input.ResourceAChanges.AppliedResourceInfo,
 		&input.ResourceBChanges.AppliedResourceInfo,
 	)
 
 	currentLinkData := linkhelpers.GetLinkDataFromState(input.CurrentLinkState)
-	// Apply the same default the deploy path uses so the staged field path matches the
-	// env var that is actually written when no custom name annotation is set.
-	finalEnvVarName := secretEnvVarName(
+	finalEnvVarName := parameterPathEnvVarName(
 		annotations.envVarName,
 		&input.ResourceBChanges.AppliedResourceInfo,
 	)
@@ -41,12 +39,12 @@ func (l *functionSecretLinkActions) StageChanges(
 	if !annotations.populateEnvVars && linkDataHasEnvVar {
 		changes.RemovedFields = append(changes.RemovedFields, envVarFieldPath)
 	} else if annotations.populateEnvVars {
-		targetSecretFieldPath := fmt.Sprintf("$.%s", envVarFieldPath)
-		// The secret ARN is the secret's primary identifier ("id").
+		targetPathFieldPath := fmt.Sprintf("$.%s", envVarFieldPath)
+		// The environment variable holds the path prefix.
 		err := linkhelpers.CollectChanges(
-			"$.spec.id",
-			targetSecretFieldPath,
-			linkhelpers.GetLinkDataFromState(input.CurrentLinkState),
+			"$.spec.path",
+			targetPathFieldPath,
+			currentLinkData,
 			input.ResourceBChanges,
 			changes,
 		)
@@ -59,7 +57,7 @@ func (l *functionSecretLinkActions) StageChanges(
 		pluginutils.IsResourceNew(input.ResourceBChanges) {
 		// When either resource will be (re)created, the execution-role permission data
 		// specific to this link will change but the value will not be known until
-		// deployment, as the granted secret ARN derives from the secret resource.
+		// deployment, as the granted path ARN derives from the function's ARN.
 		changes.FieldChangesKnownOnDeploy = append(
 			changes.FieldChangesKnownOnDeploy,
 			createLinkDataExecutionRoleName(&input.ResourceAChanges.AppliedResourceInfo),

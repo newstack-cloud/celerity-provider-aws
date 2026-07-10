@@ -56,15 +56,17 @@ func (l *functionParameterLinkActions) UpdateResourceA(
 		)
 	}
 
+	finalEnvVarName := parameterEnvVarName(annotations.envVarName, input.OtherResourceInfo)
+
 	if input.LinkUpdateType == provider.LinkUpdateTypeDestroy {
 		return l.removeParameterEnvVars(
-			ctx, input, setupCtx.FunctionARN, annotations.envVarName,
+			ctx, input, setupCtx.FunctionARN, finalEnvVarName,
 			setupCtx.LambdaOutput, lambdaService,
 		)
 	}
 
 	return l.addParameterEnvVars(
-		ctx, input, setupCtx.FunctionARN, parameterName, annotations.envVarName,
+		ctx, input, setupCtx.FunctionARN, parameterName, finalEnvVarName,
 		setupCtx.LambdaOutput, lambdaService,
 	)
 }
@@ -72,11 +74,10 @@ func (l *functionParameterLinkActions) UpdateResourceA(
 func (l *functionParameterLinkActions) addParameterEnvVars(
 	ctx context.Context,
 	input *provider.LinkUpdateResourceInput,
-	functionARN, parameterName, envVarName string,
+	functionARN, envVarValue, finalEnvVarName string,
 	currentFunctionConfig *types.FunctionConfiguration,
 	lambdaService lambdaservice.Service,
 ) (*provider.LinkUpdateResourceOutput, error) {
-	finalEnvVarName := parameterEnvVarName(envVarName, input.OtherResourceInfo)
 	dataMappingKey := fmt.Sprintf(
 		"%s::spec.environment.variables[\"%s\"]",
 		input.ResourceInfo.ResourceName, finalEnvVarName,
@@ -88,7 +89,7 @@ func (l *functionParameterLinkActions) addParameterEnvVars(
 
 	err := linkutils.UpdateLambdaEnvironmentVariables(
 		ctx, lambdaService, functionARN, currentFunctionConfig,
-		map[string]string{finalEnvVarName: parameterName},
+		map[string]string{finalEnvVarName: envVarValue},
 	)
 	if err != nil {
 		return nil, err
@@ -99,7 +100,7 @@ func (l *functionParameterLinkActions) addParameterEnvVars(
 			pluginutils.GetResourceName(input.ResourceInfo),
 			core.MappingNodeFields(
 				"environmentVariables",
-				core.MappingNodeFields(finalEnvVarName, core.MappingNodeFromString(parameterName)),
+				core.MappingNodeFields(finalEnvVarName, core.MappingNodeFromString(envVarValue)),
 			),
 		),
 		ResourceDataMappings: map[string]string{dataMappingKey: linkDataFieldPath},
@@ -109,11 +110,10 @@ func (l *functionParameterLinkActions) addParameterEnvVars(
 func (l *functionParameterLinkActions) removeParameterEnvVars(
 	ctx context.Context,
 	input *provider.LinkUpdateResourceInput,
-	functionARN, envVarName string,
+	functionARN, finalEnvVarName string,
 	currentFunctionConfig *types.FunctionConfiguration,
 	lambdaService lambdaservice.Service,
 ) (*provider.LinkUpdateResourceOutput, error) {
-	finalEnvVarName := parameterEnvVarName(envVarName, input.OtherResourceInfo)
 	err := linkutils.RemoveLambdaEnvironmentVariables(
 		ctx, lambdaService, functionARN, currentFunctionConfig, []string{finalEnvVarName},
 	)
@@ -224,7 +224,12 @@ func (l *functionParameterLinkActions) UpdateIntermediaryResources(
 		return nil, err
 	}
 
-	output := accessLinkOutput(input, setupCtx.RoleResourceName, sid, parameterARN, annotations.accessLevel, result)
+	statementNode := specAccessStatementNode(
+		sid,
+		parameterActionsForAccessLevel(annotations.accessLevel),
+		[]string{parameterARN},
+	)
+	output := accessLinkOutput(input, setupCtx.RoleResourceName, sid, statementNode, result)
 
 	ec2Service, err := l.getEC2Service(ctx, providerCtx)
 	if err != nil {
@@ -258,13 +263,14 @@ func parameterAccessStatement(sid, parameterARN, accessLevel string) map[string]
 
 func accessLinkOutput(
 	input *provider.LinkUpdateIntermediaryResourcesInput,
-	roleResourceName, sid, parameterARN, accessLevel string,
+	roleResourceName, sid string,
+	statementNode *core.MappingNode,
 	result linkutils.RoleAccessResult,
 ) *provider.LinkUpdateIntermediaryResourcesOutput {
 	linkDataKey := createLinkDataExecutionRoleName(input.ResourceAInfo)
 	roleLinkData := core.MappingNodeFields(
 		linkutils.PermissionFieldName,
-		specParameterAccessStatementNode(sid, parameterARN, accessLevel),
+		statementNode,
 	)
 
 	// Attribute the grant to this link so the role's drift/deploy does not strip it: inline
@@ -286,19 +292,20 @@ func accessLinkOutput(
 	}
 }
 
-func specParameterAccessStatementNode(sid, parameterARN, accessLevel string) *core.MappingNode {
-	actions := parameterActionsForAccessLevel(accessLevel)
+func specAccessStatementNode(sid string, actions, resources []string) *core.MappingNode {
 	actionItems := make([]*core.MappingNode, len(actions))
 	for i, action := range actions {
 		actionItems[i] = core.MappingNodeFromString(action)
+	}
+	resourceItems := make([]*core.MappingNode, len(resources))
+	for i, resource := range resources {
+		resourceItems[i] = core.MappingNodeFromString(resource)
 	}
 	return core.MappingNodeFields(
 		"sid", core.MappingNodeFromString(sid),
 		"effect", core.MappingNodeFromString("Allow"),
 		"action", &core.MappingNode{Items: actionItems},
-		"resource", &core.MappingNode{Items: []*core.MappingNode{
-			core.MappingNodeFromString(parameterARN),
-		}},
+		"resource", &core.MappingNode{Items: resourceItems},
 	)
 }
 

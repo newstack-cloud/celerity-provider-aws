@@ -83,6 +83,7 @@ func (s *FunctionSecretLinkStageChangesSuite) Test_stage_changes() {
 		*aws.Config, lambdaservice.Service, *aws.Config, cloudcontrolservice.Service,
 	]{
 		stageFunctionSecretEnvVarChangeTestCase(),
+		stageFunctionSecretDefaultEnvVarNameTestCase(),
 		stageFunctionSecretNoChangesTestCase(),
 		stageFunctionSecretDisableEnvVarsTestCase(),
 	}
@@ -116,6 +117,41 @@ func stageFunctionSecretEnvVarChangeTestCase() plugintestutils.LinkChangeStaging
 				NewFields: []*provider.FieldChange{
 					{
 						FieldPath: "apiFunction.environmentVariables[\"" + fsStageEnvVarName + "\"]",
+						NewValue:  core.MappingNodeFromString(testSecretARN),
+					},
+				},
+				FieldChangesKnownOnDeploy: []string{"apiFunctionExecutionRole"},
+			},
+		},
+	}
+}
+
+// Regression: when no envVarName annotation is set, the staged field path must use the
+// same default name the deploy path writes, not an empty name.
+func stageFunctionSecretDefaultEnvVarNameTestCase() plugintestutils.LinkChangeStagingTestCase[
+	*aws.Config, lambdaservice.Service, *aws.Config, cloudcontrolservice.Service,
+] {
+	return plugintestutils.LinkChangeStagingTestCase[
+		*aws.Config, lambdaservice.Service, *aws.Config, cloudcontrolservice.Service,
+	]{
+		Name: "stages env var change using the default name when no annotation is set",
+		Input: &provider.LinkStageChangesInput{
+			ResourceAChanges: &provider.Changes{
+				AppliedResourceInfo: provider.ResourceInfo{
+					ResourceName: "apiFunction",
+				},
+			},
+			ResourceBChanges: secretResourceBChanges(true),
+			CurrentLinkState: &state.LinkState{
+				LinkID: "test-link",
+				Data:   map[string]*core.MappingNode{},
+			},
+		},
+		ExpectedOutput: &provider.LinkStageChangesOutput{
+			Changes: &provider.LinkChanges{
+				NewFields: []*provider.FieldChange{
+					{
+						FieldPath: "apiFunction.environmentVariables[\"SECRET_dbCredentials\"]",
 						NewValue:  core.MappingNodeFromString(testSecretARN),
 					},
 				},

@@ -66,6 +66,34 @@ resourceDefinitions:
       "keyId" and "policies" is ignored: AWS resolves the default key and returns policies as
       structured metadata that does not round-trip byte-for-byte to the submitted JSON.
 
+  - type: aws/ssm/parameterPath
+    label: AWS SSM Parameter Path
+    requiredFields:
+      - path
+    computedFields: []
+    operations:
+      # Synthetic resource: no AWS API object exists for a parameter hierarchy itself,
+      # so every lifecycle phase is a no-op against AWS.
+      create: []
+      update: []
+      destroy: []
+      getExternalState: []
+      stabilised: []
+    docLinks:
+      - https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store-hierarchies.html
+    propertyDocLinks:
+      path: https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store-hierarchies.html
+    notes: |
+      aws/ssm/parameterPath is a synthetic Bluelink resource with no AWS API object behind
+      it. It represents an SSM parameter hierarchy (a path prefix such as "/my-app/config")
+      as a whole, so that links can grant IAM access and inject configuration for the
+      entire namespace rather than per parameter. Individual aws/ssm/parameter resources
+      live beneath the path (e.g. "/my-app/config/db-host").
+
+      The primary consumer is the aws/lambda/function::aws/ssm/parameterPath link, which
+      grants ssm:GetParametersByPath over the prefix and injects the prefix as a single
+      environment variable, regardless of how many parameters live beneath it.
+
 dataSourceDefinitions:
   - type: aws/ssm/parameter
     filterableFields:

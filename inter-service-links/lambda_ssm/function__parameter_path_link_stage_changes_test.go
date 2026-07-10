@@ -19,16 +19,14 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-type FunctionParameterLinkStageChangesSuite struct {
+type FunctionParameterPathLinkStageChangesSuite struct {
 	suite.Suite
 }
 
-const fpStageEnvVarName = "DB_HOST_PARAM"
-
-func functionParameterStageLinkFactory() func(
+func functionParameterPathStageLinkFactory() func(
 	pluginutils.LinkServiceDeps[*aws.Config, lambdaservice.Service, *aws.Config, ssmservice.Service],
 ) provider.Link {
-	build := FunctionParameterLink(
+	build := FunctionParameterPathLink(
 		func(c *aws.Config, pc provider.Context) iamservice.Service { return iammock.CreateIamServiceMock() },
 		ec2mock.CreateEc2ServiceMockFactory(),
 	)
@@ -39,30 +37,25 @@ func functionParameterStageLinkFactory() func(
 	}
 }
 
-func callerFunctionWithEnvVarAnnotation() provider.ResourceInfo {
+func callerFunctionWithPathAnnotations(annotations map[string]*core.MappingNode) provider.ResourceInfo {
 	return provider.ResourceInfo{
 		ResourceName: "apiFunction",
 		ResourceWithResolvedSubs: &provider.ResolvedResource{
 			Metadata: &provider.ResolvedResourceMetadata{
-				Annotations: &core.MappingNode{
-					Fields: map[string]*core.MappingNode{
-						"aws.lambda.ssm.dbHost.envVarName": core.MappingNodeFromString(fpStageEnvVarName),
-					},
-				},
+				Annotations: &core.MappingNode{Fields: annotations},
 			},
 		},
 	}
 }
 
-func parameterResourceBChanges(withNewField bool) *provider.Changes {
+func parameterPathResourceBChanges(withNewField bool) *provider.Changes {
 	changes := &provider.Changes{
 		AppliedResourceInfo: provider.ResourceInfo{
-			ResourceName: "dbHost",
+			ResourceName: "app-config",
 			ResourceWithResolvedSubs: &provider.ResolvedResource{
 				Spec: &core.MappingNode{
 					Fields: map[string]*core.MappingNode{
-						"name": core.MappingNodeFromString(testParameterName),
-						"arn":  core.MappingNodeFromString(testParameterARN),
+						"path": core.MappingNodeFromString(fppPath),
 					},
 				},
 			},
@@ -71,43 +64,44 @@ func parameterResourceBChanges(withNewField bool) *provider.Changes {
 	if withNewField {
 		changes.NewFields = []provider.FieldChange{
 			{
-				FieldPath: "spec.name",
-				NewValue:  core.MappingNodeFromString(testParameterName),
+				FieldPath: "spec.path",
+				NewValue:  core.MappingNodeFromString(fppPath),
 			},
 		}
 	}
 	return changes
 }
 
-func (s *FunctionParameterLinkStageChangesSuite) Test_stage_changes() {
+func (s *FunctionParameterPathLinkStageChangesSuite) Test_stage_changes() {
 	testCases := []plugintestutils.LinkChangeStagingTestCase[
 		*aws.Config, lambdaservice.Service, *aws.Config, ssmservice.Service,
 	]{
-		stageFunctionParameterEnvVarChangeTestCase(),
-		stageFunctionParameterDefaultEnvVarNameTestCase(),
-		stageFunctionParameterNoChangesTestCase(),
-		stageFunctionParameterDisableEnvVarsTestCase(),
+		stageParameterPathEnvVarChangeTestCase(),
+		stageParameterPathDefaultEnvVarNameTestCase(),
+		stageParameterPathDisableEnvVarsTestCase(),
 	}
 
 	plugintestutils.RunLinkChangeStagingTestCases(
 		testCases,
-		functionParameterStageLinkFactory(),
+		functionParameterPathStageLinkFactory(),
 		&s.Suite,
 	)
 }
 
-func stageFunctionParameterEnvVarChangeTestCase() plugintestutils.LinkChangeStagingTestCase[
+func stageParameterPathEnvVarChangeTestCase() plugintestutils.LinkChangeStagingTestCase[
 	*aws.Config, lambdaservice.Service, *aws.Config, ssmservice.Service,
 ] {
 	return plugintestutils.LinkChangeStagingTestCase[
 		*aws.Config, lambdaservice.Service, *aws.Config, ssmservice.Service,
 	]{
-		Name: "stages env var change for the linked parameter",
+		Name: "stages env var change for the linked parameter path with a custom name",
 		Input: &provider.LinkStageChangesInput{
 			ResourceAChanges: &provider.Changes{
-				AppliedResourceInfo: callerFunctionWithEnvVarAnnotation(),
+				AppliedResourceInfo: callerFunctionWithPathAnnotations(map[string]*core.MappingNode{
+					"aws.lambda.ssm.app-config.envVarName": core.MappingNodeFromString(fppCustomEnvVarName),
+				}),
 			},
-			ResourceBChanges: parameterResourceBChanges(true),
+			ResourceBChanges: parameterPathResourceBChanges(true),
 			CurrentLinkState: &state.LinkState{
 				LinkID: "test-link",
 				Data:   map[string]*core.MappingNode{},
@@ -117,8 +111,8 @@ func stageFunctionParameterEnvVarChangeTestCase() plugintestutils.LinkChangeStag
 			Changes: &provider.LinkChanges{
 				NewFields: []*provider.FieldChange{
 					{
-						FieldPath: "apiFunction.environmentVariables[\"" + fpStageEnvVarName + "\"]",
-						NewValue:  core.MappingNodeFromString(testParameterName),
+						FieldPath: "apiFunction.environmentVariables[\"" + fppCustomEnvVarName + "\"]",
+						NewValue:  core.MappingNodeFromString(fppPath),
 					},
 				},
 				FieldChangesKnownOnDeploy: []string{"apiFunctionExecutionRole"},
@@ -128,8 +122,8 @@ func stageFunctionParameterEnvVarChangeTestCase() plugintestutils.LinkChangeStag
 }
 
 // Regression: when no envVarName annotation is set, the staged field path must use the
-// same default name the deploy path writes, not an empty name.
-func stageFunctionParameterDefaultEnvVarNameTestCase() plugintestutils.LinkChangeStagingTestCase[
+// same sanitised default name the deploy path writes.
+func stageParameterPathDefaultEnvVarNameTestCase() plugintestutils.LinkChangeStagingTestCase[
 	*aws.Config, lambdaservice.Service, *aws.Config, ssmservice.Service,
 ] {
 	return plugintestutils.LinkChangeStagingTestCase[
@@ -138,11 +132,9 @@ func stageFunctionParameterDefaultEnvVarNameTestCase() plugintestutils.LinkChang
 		Name: "stages env var change using the default name when no annotation is set",
 		Input: &provider.LinkStageChangesInput{
 			ResourceAChanges: &provider.Changes{
-				AppliedResourceInfo: provider.ResourceInfo{
-					ResourceName: "apiFunction",
-				},
+				AppliedResourceInfo: callerFunctionWithPathAnnotations(map[string]*core.MappingNode{}),
 			},
-			ResourceBChanges: parameterResourceBChanges(true),
+			ResourceBChanges: parameterPathResourceBChanges(true),
 			CurrentLinkState: &state.LinkState{
 				LinkID: "test-link",
 				Data:   map[string]*core.MappingNode{},
@@ -152,8 +144,8 @@ func stageFunctionParameterDefaultEnvVarNameTestCase() plugintestutils.LinkChang
 			Changes: &provider.LinkChanges{
 				NewFields: []*provider.FieldChange{
 					{
-						FieldPath: "apiFunction.environmentVariables[\"SSM_PARAMETER_dbHost\"]",
-						NewValue:  core.MappingNodeFromString(testParameterName),
+						FieldPath: "apiFunction.environmentVariables[\"" + fppDefaultEnvVarName + "\"]",
+						NewValue:  core.MappingNodeFromString(fppPath),
 					},
 				},
 				FieldChangesKnownOnDeploy: []string{"apiFunctionExecutionRole"},
@@ -162,69 +154,21 @@ func stageFunctionParameterDefaultEnvVarNameTestCase() plugintestutils.LinkChang
 	}
 }
 
-func stageFunctionParameterNoChangesTestCase() plugintestutils.LinkChangeStagingTestCase[
+func stageParameterPathDisableEnvVarsTestCase() plugintestutils.LinkChangeStagingTestCase[
 	*aws.Config, lambdaservice.Service, *aws.Config, ssmservice.Service,
 ] {
-	return plugintestutils.LinkChangeStagingTestCase[
-		*aws.Config, lambdaservice.Service, *aws.Config, ssmservice.Service,
-	]{
-		Name: "stages no changes when the env var already matches",
-		Input: &provider.LinkStageChangesInput{
-			ResourceAChanges: &provider.Changes{
-				AppliedResourceInfo: callerFunctionWithEnvVarAnnotation(),
-			},
-			ResourceBChanges: parameterResourceBChanges(false),
-			CurrentLinkState: &state.LinkState{
-				LinkID: "test-link",
-				Data: map[string]*core.MappingNode{
-					"apiFunction": {
-						Fields: map[string]*core.MappingNode{
-							"environmentVariables": {
-								Fields: map[string]*core.MappingNode{
-									fpStageEnvVarName: core.MappingNodeFromString(testParameterName),
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		ExpectedOutput: &provider.LinkStageChangesOutput{
-			Changes: &provider.LinkChanges{
-				UnchangedFields: []string{
-					"apiFunction.environmentVariables[\"" + fpStageEnvVarName + "\"]",
-				},
-			},
-		},
-	}
-}
-
-func stageFunctionParameterDisableEnvVarsTestCase() plugintestutils.LinkChangeStagingTestCase[
-	*aws.Config, lambdaservice.Service, *aws.Config, ssmservice.Service,
-] {
-	callerInfo := provider.ResourceInfo{
-		ResourceName: "apiFunction",
-		ResourceWithResolvedSubs: &provider.ResolvedResource{
-			Metadata: &provider.ResolvedResourceMetadata{
-				Annotations: &core.MappingNode{
-					Fields: map[string]*core.MappingNode{
-						"aws.lambda.ssm.dbHost.envVarName":      core.MappingNodeFromString(fpStageEnvVarName),
-						"aws.lambda.ssm.dbHost.populateEnvVars": core.MappingNodeFromBool(false),
-					},
-				},
-			},
-		},
-	}
-
 	return plugintestutils.LinkChangeStagingTestCase[
 		*aws.Config, lambdaservice.Service, *aws.Config, ssmservice.Service,
 	]{
 		Name: "removes the env var when env var population is disabled",
 		Input: &provider.LinkStageChangesInput{
 			ResourceAChanges: &provider.Changes{
-				AppliedResourceInfo: callerInfo,
+				AppliedResourceInfo: callerFunctionWithPathAnnotations(map[string]*core.MappingNode{
+					"aws.lambda.ssm.app-config.envVarName":      core.MappingNodeFromString(fppCustomEnvVarName),
+					"aws.lambda.ssm.app-config.populateEnvVars": core.MappingNodeFromBool(false),
+				}),
 			},
-			ResourceBChanges: parameterResourceBChanges(false),
+			ResourceBChanges: parameterPathResourceBChanges(false),
 			CurrentLinkState: &state.LinkState{
 				LinkID: "test-link",
 				Data: map[string]*core.MappingNode{
@@ -232,7 +176,7 @@ func stageFunctionParameterDisableEnvVarsTestCase() plugintestutils.LinkChangeSt
 						Fields: map[string]*core.MappingNode{
 							"environmentVariables": {
 								Fields: map[string]*core.MappingNode{
-									fpStageEnvVarName: core.MappingNodeFromString(testParameterName),
+									fppCustomEnvVarName: core.MappingNodeFromString(fppPath),
 								},
 							},
 						},
@@ -243,13 +187,13 @@ func stageFunctionParameterDisableEnvVarsTestCase() plugintestutils.LinkChangeSt
 		ExpectedOutput: &provider.LinkStageChangesOutput{
 			Changes: &provider.LinkChanges{
 				RemovedFields: []string{
-					"apiFunction.environmentVariables[\"" + fpStageEnvVarName + "\"]",
+					"apiFunction.environmentVariables[\"" + fppCustomEnvVarName + "\"]",
 				},
 			},
 		},
 	}
 }
 
-func TestFunctionParameterLinkStageChangesSuite(t *testing.T) {
-	suite.Run(t, new(FunctionParameterLinkStageChangesSuite))
+func TestFunctionParameterPathLinkStageChangesSuite(t *testing.T) {
+	suite.Run(t, new(FunctionParameterPathLinkStageChangesSuite))
 }
