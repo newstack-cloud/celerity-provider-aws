@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-07-10
+
+### Features
+
+- Add support for scoping links to ssm parameter path prefixes([e497bbf](https://github.com/newstack-cloud/bluelink-provider-aws/commit/e497bbf56751555c4271c42415ad7eeac6098eb7))
 ## [0.2.0] - 2026-07-09
 
 ### Bug Fixes
