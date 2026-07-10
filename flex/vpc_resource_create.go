@@ -243,13 +243,16 @@ func (l *vpcResourceActions) createFlexVPCResources(
 		return nil, err
 	}
 
+	specSubnets := toSpecComputedSubnets(subnets)
 	return &provider.ResourceDeployOutput{
 		ComputedFieldValues: map[string]*core.MappingNode{
 			"spec.vpcId": core.MappingNodeFromString(
 				aws.ToString(createVPCOutput.Vpc.VpcId),
 			),
-			"spec.subnets":     toSpecComputedSubnets(subnets),
-			"spec.routeTables": toSpecComputedRouteTables(routingInfo.routeTables),
+			"spec.subnets":          specSubnets,
+			"spec.privateSubnetIds": specSubnetIdsByTier(specSubnets, "private"),
+			"spec.publicSubnetIds":  specSubnetIdsByTier(specSubnets, "public"),
+			"spec.routeTables":      toSpecComputedRouteTables(routingInfo.routeTables),
 			"spec.securityGroups": toSpecComputedSecurityGroups(
 				[]*ec2.CreateSecurityGroupOutput{securityGroupOutput},
 			),
@@ -1721,6 +1724,47 @@ func toSpecComputedSubnet(subnet *types.Subnet, subnetType string) *core.Mapping
 	)
 }
 
+// Derives a directly-referenceable list of subnet IDs in the
+// given tier from the computed `subnets` map node, sorted by availability zone
+// (then by ID) so the output is stable between plans.
+func specSubnetIdsByTier(subnetsNode *core.MappingNode, tier string) *core.MappingNode {
+	type subnetEntry struct {
+		id               string
+		availabilityZone string
+	}
+
+	entries := []subnetEntry{}
+	if subnetsNode != nil {
+		for _, subnet := range subnetsNode.Fields {
+			typeNode, _ := pluginutils.GetValueByPath("$.subnetType", subnet)
+			if core.StringValue(typeNode) != tier {
+				continue
+			}
+			idNode, _ := pluginutils.GetValueByPath("$.id", subnet)
+			azNode, _ := pluginutils.GetValueByPath("$.availabilityZone", subnet)
+			if id := core.StringValue(idNode); id != "" {
+				entries = append(entries, subnetEntry{
+					id:               id,
+					availabilityZone: core.StringValue(azNode),
+				})
+			}
+		}
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].availabilityZone != entries[j].availabilityZone {
+			return entries[i].availabilityZone < entries[j].availabilityZone
+		}
+		return entries[i].id < entries[j].id
+	})
+
+	items := []*core.MappingNode{}
+	for _, entry := range entries {
+		items = append(items, core.MappingNodeFromString(entry.id))
+	}
+	return core.MappingNodeItems(items...)
+}
+
 func toSpecComputedRouteTables(routeTables []*routeTableInfo) *core.MappingNode {
 	specRouteTables := core.MappingNodeItems()
 	for _, routeTable := range routeTables {
@@ -1802,18 +1846,22 @@ func extractComputedFieldsFromExternalState(
 ) map[string]*core.MappingNode {
 	vpcID, _ := pluginutils.GetValueByPath("$.vpcId", externalState)
 	subnets, _ := pluginutils.GetValueByPath("$.subnets", externalState)
+	privateSubnetIds, _ := pluginutils.GetValueByPath("$.privateSubnetIds", externalState)
+	publicSubnetIds, _ := pluginutils.GetValueByPath("$.publicSubnetIds", externalState)
 	routeTables, _ := pluginutils.GetValueByPath("$.routeTables", externalState)
 	securityGroups, _ := pluginutils.GetValueByPath("$.securityGroups", externalState)
 	networkACLs, _ := pluginutils.GetValueByPath("$.networkAcls", externalState)
 	gateways, _ := pluginutils.GetValueByPath("$.gateways", externalState)
 
 	return map[string]*core.MappingNode{
-		"spec.vpcId":          vpcID,
-		"spec.subnets":        subnets,
-		"spec.routeTables":    routeTables,
-		"spec.securityGroups": securityGroups,
-		"spec.networkAcls":    networkACLs,
-		"spec.gateways":       gateways,
+		"spec.vpcId":            vpcID,
+		"spec.subnets":          subnets,
+		"spec.privateSubnetIds": privateSubnetIds,
+		"spec.publicSubnetIds":  publicSubnetIds,
+		"spec.routeTables":      routeTables,
+		"spec.securityGroups":   securityGroups,
+		"spec.networkAcls":      networkACLs,
+		"spec.gateways":         gateways,
 	}
 }
 

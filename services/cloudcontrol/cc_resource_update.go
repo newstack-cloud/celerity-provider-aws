@@ -32,6 +32,10 @@ func (a *ccResourceActions) Update(
 		)
 	}
 
+	if err := a.validateResolvedSpec(input); err != nil {
+		return nil, err
+	}
+
 	currentProperties, err := a.fetchCurrentProperties(ctx, service, identifier)
 	if err != nil {
 		return nil, err

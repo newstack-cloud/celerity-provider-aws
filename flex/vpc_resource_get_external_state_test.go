@@ -89,6 +89,10 @@ func createVPCStateTestCase(
 					"subnetType", core.MappingNodeFromString("private"),
 				),
 			),
+			"privateSubnetIds": core.MappingNodeItems(
+				core.MappingNodeFromString("subnet-12345678"),
+			),
+			"publicSubnetIds": core.MappingNodeItems(),
 			"routeTables": core.MappingNodeItems(
 				core.MappingNodeFields(
 					"id", core.MappingNodeFromString("rtb-12345678"),
@@ -893,6 +897,8 @@ func createVPCWithPresetTestCase(
 			"tags":               nil,
 			"vpcId":              core.MappingNodeFromString("vpc-12345678"),
 			"subnets":            core.MappingNodeFields(),
+			"privateSubnetIds":   core.MappingNodeItems(),
+			"publicSubnetIds":    core.MappingNodeItems(),
 			"routeTables":        {},
 			"securityGroups":     {},
 			"networkAcls":        {},

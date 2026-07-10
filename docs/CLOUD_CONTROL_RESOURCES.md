@@ -108,8 +108,10 @@ re-applied on every regeneration. Overlays live in
   property names a first-character flip cannot recover (e.g. `principal.aws` becomes `AWS`).
   These are expressed in primitives to avoid importing the `cloudcontrol` package (cycle).
 - **Behaviour overlays:** `RegisterBehaviour(type, ...)` carries code-level behaviour the
-  engine cannot infer: `CustomValidate`, unique-name generation (`Name`), and spec transforms
-  (`BeforeCreate`, `AfterReadExternalState`).
+  engine cannot infer: `CustomValidate` (plan-time, literal values only), `ValidateResolvedSpec`
+  (deploy-time, runs before both create and update on the fully resolved spec, the guard for
+  constraints on reference-wired values, e.g. minimum subnet counts; see `overlays/subnet_groups.go`),
+  unique-name generation (`Name`), and spec transforms (`BeforeCreate`, `AfterReadExternalState`).
 - **Stabilise-required:** `RegisterStabiliseRequired(type)` marks a slow resource (see below).
 
 ### Example overlays: two layers, applied during generation

@@ -33,9 +33,23 @@ func resolvedSpec(input *provider.ResourceDeployInput) *core.MappingNode {
 	return resolved.Spec
 }
 
+// Runs the ValidateResolvedSpec behaviour overlay against the raw resolved spec,
+// before any engine transforms, so create and update validate the same view of
+// the user's declared intent.
+func (a *ccResourceActions) validateResolvedSpec(input *provider.ResourceDeployInput) error {
+	if a.behaviour == nil || a.behaviour.ValidateResolvedSpec == nil {
+		return nil
+	}
+	return a.behaviour.ValidateResolvedSpec(resolvedSpec(input))
+}
+
 func (a *ccResourceActions) buildDesiredCFNNode(
 	input *provider.ResourceDeployInput,
 ) (*core.MappingNode, error) {
+	if err := a.validateResolvedSpec(input); err != nil {
+		return nil, err
+	}
+
 	desired := stripComputedFields(resolvedSpec(input), a.config.Schema)
 	if desired == nil {
 		desired = &core.MappingNode{Fields: map[string]*core.MappingNode{}}

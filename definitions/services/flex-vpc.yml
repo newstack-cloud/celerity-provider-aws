@@ -10,6 +10,8 @@ resourceDefinitions:
     computedFields:
       - vpcId
       - subnets
+      - privateSubnetIds
+      - publicSubnetIds
       - routeTables
       - securityGroups
       - networkAcls

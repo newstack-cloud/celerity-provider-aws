@@ -335,11 +335,15 @@ func computedFieldsFromCurrentState(currentStateSpecData *core.MappingNode) map[
 	gateways, _ := pluginutils.GetValueByPath("$.gateways", currentStateSpecData)
 
 	return map[string]*core.MappingNode{
-		"spec.vpcId":          core.MappingNodeFromString(core.StringValue(vpcID)),
-		"spec.subnets":        subnets,
-		"spec.routeTables":    routeTables,
-		"spec.securityGroups": securityGroups,
-		"spec.networkAcls":    networkACLs,
-		"spec.gateways":       gateways,
+		"spec.vpcId":   core.MappingNodeFromString(core.StringValue(vpcID)),
+		"spec.subnets": subnets,
+		// Derived from the subnets map rather than carried forward so that state
+		// saved before these fields existed is populated on the next update.
+		"spec.privateSubnetIds": specSubnetIdsByTier(subnets, "private"),
+		"spec.publicSubnetIds":  specSubnetIdsByTier(subnets, "public"),
+		"spec.routeTables":      routeTables,
+		"spec.securityGroups":   securityGroups,
+		"spec.networkAcls":      networkACLs,
+		"spec.gateways":         gateways,
 	}
 }

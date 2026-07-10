@@ -195,6 +195,38 @@ func vpcResourceSchema() *provider.ResourceDefinitionsSchema {
 					},
 				},
 			},
+			"privateSubnetIds": {
+				Type: provider.ResourceDefinitionsSchemaTypeArray,
+				Description: "The IDs of the private-tier subnets, ordered by availability zone. " +
+					"Directly referenceable for placing resources in the private tier, such as the " +
+					"subnetIds of an ElastiCache or RDS subnet group. " +
+					"The \"standard\" and \"isolated\" presets provide 3 private subnets across 3 distinct " +
+					"availability zones, satisfying services that require subnets in at least 2 zones " +
+					"(such as RDS subnet groups and RDS Proxy). " +
+					"For presets without private subnets (\"public\", \"light\", \"light-public\"), this is an empty list. " +
+					"In \"reference\" mode, this reflects the referenced VPC's private-tagged subnets with no guaranteed minimum.",
+				Computed:   true,
+				TrackDrift: true,
+				Items: &provider.ResourceDefinitionsSchema{
+					Type:        provider.ResourceDefinitionsSchemaTypeString,
+					Description: "The ID of a private-tier subnet.",
+				},
+			},
+			"publicSubnetIds": {
+				Type: provider.ResourceDefinitionsSchemaTypeArray,
+				Description: "The IDs of the public-tier subnets, ordered by availability zone. " +
+					"Directly referenceable for placing resources in the public tier. " +
+					"The \"standard\" and \"public\" presets provide 3 public subnets across 3 distinct " +
+					"availability zones; the \"light\" and \"light-public\" presets provide a single public subnet. " +
+					"For the \"isolated\" preset, this is an empty list. " +
+					"In \"reference\" mode, this reflects the referenced VPC's public-tagged subnets with no guaranteed minimum.",
+				Computed:   true,
+				TrackDrift: true,
+				Items: &provider.ResourceDefinitionsSchema{
+					Type:        provider.ResourceDefinitionsSchemaTypeString,
+					Description: "The ID of a public-tier subnet.",
+				},
+			},
 			"routeTables": {
 				Type:        provider.ResourceDefinitionsSchemaTypeArray,
 				Description: "A list of the route tables that will be created or referenced.",

@@ -42,6 +42,7 @@ func (s *FlexVPCResourceUpdateSuite) Test_update() {
 	testCases := []plugintestutils.ResourceDeployTestCase[*aws.Config, ec2service.Service]{
 		createReferenceModeUpdateTestCase(providerCtx, loader),
 		createVPCNoChangesTestCase(providerCtx, loader),
+		createVPCTierListDerivationUpdateTestCase(providerCtx, loader),
 		createVPCEnableDNSSupportUpdateTestCase(providerCtx, loader),
 		createVPCEnableDNSHostnamesUpdateTestCase(providerCtx, loader),
 		createVPCBothDNSAttributesUpdateTestCase(providerCtx, loader),
@@ -142,12 +143,14 @@ func createReferenceModeUpdateTestCase(
 		},
 		ExpectedOutput: &provider.ResourceDeployOutput{
 			ComputedFieldValues: map[string]*core.MappingNode{
-				"spec.gateways":       nil,
-				"spec.networkAcls":    nil,
-				"spec.routeTables":    nil,
-				"spec.securityGroups": nil,
-				"spec.subnets":        nil,
-				"spec.vpcId":          core.MappingNodeFromString("vpc-12345678"),
+				"spec.gateways":         nil,
+				"spec.networkAcls":      nil,
+				"spec.routeTables":      nil,
+				"spec.securityGroups":   nil,
+				"spec.subnets":          nil,
+				"spec.privateSubnetIds": core.MappingNodeItems(),
+				"spec.publicSubnetIds":  core.MappingNodeItems(),
+				"spec.vpcId":            core.MappingNodeFromString("vpc-12345678"),
 			},
 		},
 		SaveActionsNotCalled: []string{
@@ -211,12 +214,115 @@ func createVPCNoChangesTestCase(
 		},
 		ExpectedOutput: &provider.ResourceDeployOutput{
 			ComputedFieldValues: map[string]*core.MappingNode{
+				"spec.gateways":         nil,
+				"spec.networkAcls":      nil,
+				"spec.routeTables":      nil,
+				"spec.securityGroups":   nil,
+				"spec.subnets":          nil,
+				"spec.privateSubnetIds": core.MappingNodeItems(),
+				"spec.publicSubnetIds":  core.MappingNodeItems(),
+				"spec.vpcId":            core.MappingNodeFromString("vpc-12345678"),
+			},
+		},
+		SaveActionsNotCalled: []string{
+			"ModifyVpcAttribute",
+			"CreateTags",
+			"DeleteTags",
+		},
+		ExpectError: false,
+	}
+}
+
+// Covers deriving the per-tier subnet ID lists from the subnets map in the
+// current state, including for state saved before the tier list fields existed.
+// Subnet IDs are chosen so lexical ID order conflicts with availability zone
+// order to assert that the lists are ordered by availability zone.
+func createVPCTierListDerivationUpdateTestCase(
+	providerCtx provider.Context,
+	loader *testutils.MockAWSConfigLoader,
+) plugintestutils.ResourceDeployTestCase[*aws.Config, ec2service.Service] {
+	service := ec2mock.CreateEc2ServiceMock()
+
+	subnets := core.MappingNodeFields(
+		"private-az-1",
+		core.MappingNodeFields(
+			"id",
+			core.MappingNodeFromString("subnet-priv-z"),
+			"availabilityZone",
+			core.MappingNodeFromString("us-west-2a"),
+			"subnetType",
+			core.MappingNodeFromString("private"),
+		),
+		"private-az-2",
+		core.MappingNodeFields(
+			"id",
+			core.MappingNodeFromString("subnet-priv-a"),
+			"availabilityZone",
+			core.MappingNodeFromString("us-west-2b"),
+			"subnetType",
+			core.MappingNodeFromString("private"),
+		),
+	)
+
+	currentStateSpecData := &core.MappingNode{
+		Fields: map[string]*core.MappingNode{
+			"vpcId":   core.MappingNodeFromString("vpc-12345678"),
+			"mode":    core.MappingNodeFromString("create"),
+			"subnets": subnets,
+		},
+	}
+
+	return plugintestutils.ResourceDeployTestCase[*aws.Config, ec2service.Service]{
+		Name: "derives per-tier subnet ID lists from current state subnets",
+		ServiceFactory: func(awsConfig *aws.Config, providerContext provider.Context) ec2service.Service {
+			return service
+		},
+		ServiceMockCalls: &service.MockCalls,
+		ConfigStore: utils.NewAWSConfigStore(
+			[]string{},
+			utils.AWSConfigFromProviderContext,
+			loader,
+			utils.AWSConfigCacheKey,
+		),
+		Input: &provider.ResourceDeployInput{
+			InstanceID: "test-instance-id",
+			ResourceID: "vpc-12345678",
+			Changes: &provider.Changes{
+				AppliedResourceInfo: provider.ResourceInfo{
+					ResourceID:   "vpc-12345678",
+					ResourceName: "TestVPC",
+					InstanceID:   "test-instance-id",
+					CurrentResourceState: &state.ResourceState{
+						ResourceID: "vpc-12345678",
+						Name:       "TestVPC",
+						InstanceID: "test-instance-id",
+						SpecData:   currentStateSpecData,
+					},
+					ResourceWithResolvedSubs: &provider.ResolvedResource{
+						Type: &schema.ResourceTypeWrapper{
+							Value: "aws/ec2/vpc",
+						},
+						Spec: currentStateSpecData,
+					},
+				},
+				ModifiedFields: []provider.FieldChange{},
+			},
+			ProviderContext: providerCtx,
+		},
+		ExpectedOutput: &provider.ResourceDeployOutput{
+			ComputedFieldValues: map[string]*core.MappingNode{
 				"spec.gateways":       nil,
 				"spec.networkAcls":    nil,
 				"spec.routeTables":    nil,
 				"spec.securityGroups": nil,
-				"spec.subnets":        nil,
-				"spec.vpcId":          core.MappingNodeFromString("vpc-12345678"),
+				"spec.subnets":        subnets,
+				// Ordered by availability zone, not lexically by ID.
+				"spec.privateSubnetIds": core.MappingNodeItems(
+					core.MappingNodeFromString("subnet-priv-z"),
+					core.MappingNodeFromString("subnet-priv-a"),
+				),
+				"spec.publicSubnetIds": core.MappingNodeItems(),
+				"spec.vpcId":           core.MappingNodeFromString("vpc-12345678"),
 			},
 		},
 		SaveActionsNotCalled: []string{
@@ -294,12 +400,14 @@ func createVPCEnableDNSSupportUpdateTestCase(
 		},
 		ExpectedOutput: &provider.ResourceDeployOutput{
 			ComputedFieldValues: map[string]*core.MappingNode{
-				"spec.gateways":       nil,
-				"spec.networkAcls":    nil,
-				"spec.routeTables":    nil,
-				"spec.securityGroups": nil,
-				"spec.subnets":        nil,
-				"spec.vpcId":          core.MappingNodeFromString("vpc-12345678"),
+				"spec.gateways":         nil,
+				"spec.networkAcls":      nil,
+				"spec.routeTables":      nil,
+				"spec.securityGroups":   nil,
+				"spec.subnets":          nil,
+				"spec.privateSubnetIds": core.MappingNodeItems(),
+				"spec.publicSubnetIds":  core.MappingNodeItems(),
+				"spec.vpcId":            core.MappingNodeFromString("vpc-12345678"),
 			},
 		},
 		SaveActionsCalled: map[string]any{
@@ -380,12 +488,14 @@ func createVPCEnableDNSHostnamesUpdateTestCase(
 		},
 		ExpectedOutput: &provider.ResourceDeployOutput{
 			ComputedFieldValues: map[string]*core.MappingNode{
-				"spec.gateways":       nil,
-				"spec.networkAcls":    nil,
-				"spec.routeTables":    nil,
-				"spec.securityGroups": nil,
-				"spec.subnets":        nil,
-				"spec.vpcId":          core.MappingNodeFromString("vpc-12345678"),
+				"spec.gateways":         nil,
+				"spec.networkAcls":      nil,
+				"spec.routeTables":      nil,
+				"spec.securityGroups":   nil,
+				"spec.subnets":          nil,
+				"spec.privateSubnetIds": core.MappingNodeItems(),
+				"spec.publicSubnetIds":  core.MappingNodeItems(),
+				"spec.vpcId":            core.MappingNodeFromString("vpc-12345678"),
 			},
 		},
 		SaveActionsCalled: map[string]any{
@@ -470,12 +580,14 @@ func createVPCBothDNSAttributesUpdateTestCase(
 		},
 		ExpectedOutput: &provider.ResourceDeployOutput{
 			ComputedFieldValues: map[string]*core.MappingNode{
-				"spec.gateways":       nil,
-				"spec.networkAcls":    nil,
-				"spec.routeTables":    nil,
-				"spec.securityGroups": nil,
-				"spec.subnets":        nil,
-				"spec.vpcId":          core.MappingNodeFromString("vpc-12345678"),
+				"spec.gateways":         nil,
+				"spec.networkAcls":      nil,
+				"spec.routeTables":      nil,
+				"spec.securityGroups":   nil,
+				"spec.subnets":          nil,
+				"spec.privateSubnetIds": core.MappingNodeItems(),
+				"spec.publicSubnetIds":  core.MappingNodeItems(),
+				"spec.vpcId":            core.MappingNodeFromString("vpc-12345678"),
 			},
 		},
 		SaveActionsCalled: map[string]any{
@@ -567,12 +679,14 @@ func createVPCTagsUpdateTestCase(
 		},
 		ExpectedOutput: &provider.ResourceDeployOutput{
 			ComputedFieldValues: map[string]*core.MappingNode{
-				"spec.gateways":       nil,
-				"spec.networkAcls":    nil,
-				"spec.routeTables":    nil,
-				"spec.securityGroups": nil,
-				"spec.subnets":        nil,
-				"spec.vpcId":          core.MappingNodeFromString("vpc-12345678"),
+				"spec.gateways":         nil,
+				"spec.networkAcls":      nil,
+				"spec.routeTables":      nil,
+				"spec.securityGroups":   nil,
+				"spec.subnets":          nil,
+				"spec.privateSubnetIds": core.MappingNodeItems(),
+				"spec.publicSubnetIds":  core.MappingNodeItems(),
+				"spec.vpcId":            core.MappingNodeFromString("vpc-12345678"),
 			},
 		},
 		SaveActionsCalled: map[string]any{
@@ -661,12 +775,14 @@ func createVPCTagsAddTestCase(
 		},
 		ExpectedOutput: &provider.ResourceDeployOutput{
 			ComputedFieldValues: map[string]*core.MappingNode{
-				"spec.gateways":       nil,
-				"spec.networkAcls":    nil,
-				"spec.routeTables":    nil,
-				"spec.securityGroups": nil,
-				"spec.subnets":        nil,
-				"spec.vpcId":          core.MappingNodeFromString("vpc-12345678"),
+				"spec.gateways":         nil,
+				"spec.networkAcls":      nil,
+				"spec.routeTables":      nil,
+				"spec.securityGroups":   nil,
+				"spec.subnets":          nil,
+				"spec.privateSubnetIds": core.MappingNodeItems(),
+				"spec.publicSubnetIds":  core.MappingNodeItems(),
+				"spec.vpcId":            core.MappingNodeFromString("vpc-12345678"),
 			},
 		},
 		SaveActionsCalled: map[string]any{
@@ -755,12 +871,14 @@ func createVPCTagsRemoveTestCase(
 		},
 		ExpectedOutput: &provider.ResourceDeployOutput{
 			ComputedFieldValues: map[string]*core.MappingNode{
-				"spec.gateways":       nil,
-				"spec.networkAcls":    nil,
-				"spec.routeTables":    nil,
-				"spec.securityGroups": nil,
-				"spec.subnets":        nil,
-				"spec.vpcId":          core.MappingNodeFromString("vpc-12345678"),
+				"spec.gateways":         nil,
+				"spec.networkAcls":      nil,
+				"spec.routeTables":      nil,
+				"spec.securityGroups":   nil,
+				"spec.subnets":          nil,
+				"spec.privateSubnetIds": core.MappingNodeItems(),
+				"spec.publicSubnetIds":  core.MappingNodeItems(),
+				"spec.vpcId":            core.MappingNodeFromString("vpc-12345678"),
 			},
 		},
 		SaveActionsCalled: map[string]any{
@@ -855,12 +973,14 @@ func createVPCTagsModifyTestCase(
 		},
 		ExpectedOutput: &provider.ResourceDeployOutput{
 			ComputedFieldValues: map[string]*core.MappingNode{
-				"spec.gateways":       nil,
-				"spec.networkAcls":    nil,
-				"spec.routeTables":    nil,
-				"spec.securityGroups": nil,
-				"spec.subnets":        nil,
-				"spec.vpcId":          core.MappingNodeFromString("vpc-12345678"),
+				"spec.gateways":         nil,
+				"spec.networkAcls":      nil,
+				"spec.routeTables":      nil,
+				"spec.securityGroups":   nil,
+				"spec.subnets":          nil,
+				"spec.privateSubnetIds": core.MappingNodeItems(),
+				"spec.publicSubnetIds":  core.MappingNodeItems(),
+				"spec.vpcId":            core.MappingNodeFromString("vpc-12345678"),
 			},
 		},
 		SaveActionsCalled: map[string]any{

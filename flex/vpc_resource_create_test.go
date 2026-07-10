@@ -44,6 +44,7 @@ func (s *FlexVPCResourceCreateSuite) Test_create() {
 
 	testCases := []plugintestutils.ResourceDeployTestCase[*aws.Config, ec2service.Service]{
 		createVPCCreateWithStandardPresetTestCase(providerCtx, loader),
+		createVPCCreateReferenceModeTestCase(providerCtx, loader),
 		createVPCCreateWithMissingModeTestCase(providerCtx, loader),
 		createVPCCreateWithMissingNameTestCase(providerCtx, loader),
 		createVPCCreateWithMissingCIDRBlockTestCase(providerCtx, loader),
@@ -165,6 +166,265 @@ func createVPCCreateWithStandardPresetTestCase(
 		// are provisioned correctly for a flex VPC.
 		ExpectedOutput: standardPresetExpectedOutput(),
 		ExpectError:    false,
+	}
+}
+
+func createVPCCreateReferenceModeTestCase(
+	providerCtx provider.Context,
+	loader *testutils.MockAWSConfigLoader,
+) plugintestutils.ResourceDeployTestCase[*aws.Config, ec2service.Service] {
+	// Subnet IDs are chosen so that lexical ID order conflicts with
+	// availability zone order to assert that the per-tier subnet ID lists
+	// are ordered by availability zone.
+	ec2Service := ec2mock.CreateEc2ServiceMock(
+		ec2mock.WithDescribeVpcsOutputs([]*ec2.DescribeVpcsOutput{
+			{
+				Vpcs: []types.Vpc{
+					{
+						VpcId:     aws.String("vpc-12345678"),
+						CidrBlock: aws.String("10.0.0.0/16"),
+						Tags: []types.Tag{
+							{
+								Key:   aws.String(TagFlexVPCName),
+								Value: aws.String("TestVPC"),
+							},
+						},
+					},
+				},
+			},
+		}),
+		ec2mock.WithDescribeVpcAttributeOutput(&ec2.DescribeVpcAttributeOutput{
+			EnableDnsSupport: &types.AttributeBooleanValue{
+				Value: aws.Bool(true),
+			},
+			EnableDnsHostnames: &types.AttributeBooleanValue{
+				Value: aws.Bool(true),
+			},
+		}),
+		ec2mock.WithDescribeSubnetsOutput(&ec2.DescribeSubnetsOutput{
+			Subnets: []types.Subnet{
+				{
+					SubnetId:         aws.String("subnet-priv-z"),
+					AvailabilityZone: aws.String("us-west-2a"),
+					Tags: []types.Tag{
+						{
+							Key:   aws.String(TagFlexVPCSubnetName),
+							Value: aws.String("private-az-1"),
+						},
+						{
+							Key:   aws.String(TagFlexVPCSubnetType),
+							Value: aws.String("private"),
+						},
+					},
+				},
+				{
+					SubnetId:         aws.String("subnet-priv-a"),
+					AvailabilityZone: aws.String("us-west-2b"),
+					Tags: []types.Tag{
+						{
+							Key:   aws.String(TagFlexVPCSubnetName),
+							Value: aws.String("private-az-2"),
+						},
+						{
+							Key:   aws.String(TagFlexVPCSubnetType),
+							Value: aws.String("private"),
+						},
+					},
+				},
+				{
+					SubnetId:         aws.String("subnet-pub-1"),
+					AvailabilityZone: aws.String("us-west-2a"),
+					Tags: []types.Tag{
+						{
+							Key:   aws.String(TagFlexVPCSubnetName),
+							Value: aws.String("public-az-1"),
+						},
+						{
+							Key:   aws.String(TagFlexVPCSubnetType),
+							Value: aws.String("public"),
+						},
+					},
+				},
+			},
+		}),
+		ec2mock.WithDescribeRouteTablesOutput(&ec2.DescribeRouteTablesOutput{
+			RouteTables: []types.RouteTable{
+				{
+					RouteTableId: aws.String("rtb-12345678"),
+					Associations: []types.RouteTableAssociation{
+						{
+							SubnetId: aws.String("subnet-priv-z"),
+						},
+					},
+					Routes: []types.Route{
+						{
+							NatGatewayId: aws.String("nat-12345678"),
+						},
+					},
+				},
+			},
+		}),
+		ec2mock.WithDescribeSecurityGroupsOutput(&ec2.DescribeSecurityGroupsOutput{
+			SecurityGroups: []types.SecurityGroup{
+				{
+					GroupId: aws.String("sg-12345678"),
+				},
+			},
+		}),
+		ec2mock.WithDescribeNetworkAclsOutput(&ec2.DescribeNetworkAclsOutput{
+			NetworkAcls: []types.NetworkAcl{
+				{
+					NetworkAclId: aws.String("acl-12345678"),
+					Associations: []types.NetworkAclAssociation{
+						{
+							SubnetId: aws.String("subnet-priv-z"),
+						},
+					},
+				},
+			},
+		}),
+		ec2mock.WithDescribeInternetGatewaysOutput(&ec2.DescribeInternetGatewaysOutput{
+			InternetGateways: []types.InternetGateway{
+				{
+					InternetGatewayId: aws.String("igw-12345678"),
+				},
+			},
+		}),
+		ec2mock.WithDescribeNatGatewaysOutput(&ec2.DescribeNatGatewaysOutput{
+			NatGateways: []types.NatGateway{
+				{
+					NatGatewayId: aws.String("nat-12345678"),
+					SubnetId:     aws.String("subnet-pub-1"),
+					NatGatewayAddresses: []types.NatGatewayAddress{
+						{
+							AllocationId: aws.String("eip-12345678"),
+						},
+					},
+				},
+			},
+		}),
+	)
+
+	resourceSpecData := &core.MappingNode{
+		Fields: map[string]*core.MappingNode{
+			"mode": core.MappingNodeFromString("reference"),
+			"name": core.MappingNodeFromString("TestVPC"),
+		},
+	}
+
+	return plugintestutils.ResourceDeployTestCase[*aws.Config, ec2service.Service]{
+		Name: "create VPC in reference mode populates computed fields from external state",
+		ServiceFactory: func(awsConfig *aws.Config, providerContext provider.Context) ec2service.Service {
+			return ec2Service
+		},
+		ServiceMockCalls: &ec2Service.MockCalls,
+		ConfigStore: utils.NewAWSConfigStore(
+			[]string{},
+			utils.AWSConfigFromProviderContext,
+			loader,
+			utils.AWSConfigCacheKey,
+		),
+		Input: &provider.ResourceDeployInput{
+			InstanceID: "test-instance-id",
+			ResourceID: "test-resource-id",
+			Changes: &provider.Changes{
+				AppliedResourceInfo: provider.ResourceInfo{
+					ResourceID:   "test-resource-id",
+					ResourceName: "TestVPC",
+					InstanceID:   "test-instance-id",
+					ResourceWithResolvedSubs: &provider.ResolvedResource{
+						Type: &schema.ResourceTypeWrapper{
+							Value: "aws/flex/vpc",
+						},
+						Spec: resourceSpecData,
+					},
+				},
+			},
+			ProviderContext: providerCtx,
+		},
+		ExpectedOutput: &provider.ResourceDeployOutput{
+			ComputedFieldValues: map[string]*core.MappingNode{
+				"spec.vpcId": core.MappingNodeFromString("vpc-12345678"),
+				"spec.subnets": core.MappingNodeFields(
+					"private-az-1",
+					core.MappingNodeFields(
+						"id",
+						core.MappingNodeFromString("subnet-priv-z"),
+						"availabilityZone",
+						core.MappingNodeFromString("us-west-2a"),
+						"subnetType",
+						core.MappingNodeFromString("private"),
+					),
+					"private-az-2",
+					core.MappingNodeFields(
+						"id",
+						core.MappingNodeFromString("subnet-priv-a"),
+						"availabilityZone",
+						core.MappingNodeFromString("us-west-2b"),
+						"subnetType",
+						core.MappingNodeFromString("private"),
+					),
+					"public-az-1",
+					core.MappingNodeFields(
+						"id",
+						core.MappingNodeFromString("subnet-pub-1"),
+						"availabilityZone",
+						core.MappingNodeFromString("us-west-2a"),
+						"subnetType",
+						core.MappingNodeFromString("public"),
+					),
+				),
+				// Ordered by availability zone, not lexically by ID.
+				"spec.privateSubnetIds": core.MappingNodeItems(
+					core.MappingNodeFromString("subnet-priv-z"),
+					core.MappingNodeFromString("subnet-priv-a"),
+				),
+				"spec.publicSubnetIds": core.MappingNodeItems(
+					core.MappingNodeFromString("subnet-pub-1"),
+				),
+				"spec.routeTables": core.MappingNodeItems(
+					core.MappingNodeFields(
+						"id",
+						core.MappingNodeFromString("rtb-12345678"),
+						"subnetIds",
+						core.MappingNodeItems(
+							core.MappingNodeFromString("subnet-priv-z"),
+						),
+					),
+				),
+				"spec.securityGroups": core.MappingNodeItems(
+					core.MappingNodeFromString("sg-12345678"),
+				),
+				"spec.networkAcls": core.MappingNodeItems(
+					core.MappingNodeFields(
+						"id",
+						core.MappingNodeFromString("acl-12345678"),
+						"subnetIds",
+						core.MappingNodeItems(
+							core.MappingNodeFromString("subnet-priv-z"),
+						),
+					),
+				),
+				"spec.gateways": core.MappingNodeFields(
+					"internetGatewayId",
+					core.MappingNodeFromString("igw-12345678"),
+					"natGateways",
+					core.MappingNodeItems(
+						core.MappingNodeFields(
+							"id",
+							core.MappingNodeFromString("nat-12345678"),
+							"elasticIpId",
+							core.MappingNodeFromString("eip-12345678"),
+							"inPublicSubnetId",
+							core.MappingNodeFromString("subnet-pub-1"),
+							"forPrivateSubnetId",
+							core.MappingNodeFromString("subnet-priv-z"),
+						),
+					),
+				),
+			},
+		},
+		ExpectError: false,
 	}
 }
 
@@ -774,6 +1034,16 @@ func standardPresetExpectedOutput() *provider.ResourceDeployOutput {
 					"subnetType",
 					core.MappingNodeFromString("public"),
 				),
+			),
+			"spec.privateSubnetIds": core.MappingNodeItems(
+				core.MappingNodeFromString("subnet-1"),
+				core.MappingNodeFromString("subnet-2"),
+				core.MappingNodeFromString("subnet-3"),
+			),
+			"spec.publicSubnetIds": core.MappingNodeItems(
+				core.MappingNodeFromString("subnet-4"),
+				core.MappingNodeFromString("subnet-5"),
+				core.MappingNodeFromString("subnet-6"),
 			),
 			"spec.routeTables": core.MappingNodeItems(
 				// Route tables are created for public subnets

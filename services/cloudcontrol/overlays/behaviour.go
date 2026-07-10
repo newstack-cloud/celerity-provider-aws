@@ -34,6 +34,12 @@ type Behaviour struct {
 	Name                   *NameGeneration
 	BeforeCreate           SpecTransform
 	AfterReadExternalState SpecTransform
+	// ValidateResolvedSpec runs against the fully resolved spec before both create
+	// and update, for constraints on values that are only known once references are
+	// resolved at deploy time (e.g. lists wired from another resource's computed
+	// fields). Returning an error aborts the deployment with that message, giving
+	// an actionable diagnostic in place of an opaque downstream AWS error.
+	ValidateResolvedSpec SpecTransform
 }
 
 var behaviours = map[string]*Behaviour{}
