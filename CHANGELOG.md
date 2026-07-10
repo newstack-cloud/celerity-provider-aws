@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.1] - 2026-07-10
+
+### Bug Fixes
+
+- Add per-tier subnet outputs and add subnet group validation([01742ad](https://github.com/newstack-cloud/bluelink-provider-aws/commit/01742ad267d9239d7147e2af9e6c171e81a19cab))
 ## [0.3.0] - 2026-07-10
 
 ### Features
