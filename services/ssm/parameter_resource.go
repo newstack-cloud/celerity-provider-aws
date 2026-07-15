@@ -27,6 +27,7 @@ func ParameterResource(
 
 	basicExample, _ := examples.ReadFile("examples/resources/parameter_basic.md")
 	secureExample, _ := examples.ReadFile("examples/resources/parameter_secure.md")
+	replicaExample, _ := examples.ReadFile("examples/resources/parameter_replica.md")
 
 	return &providerv1.ResourceDefinition{
 		Type:  "aws/ssm/parameter",
@@ -42,6 +43,7 @@ func ParameterResource(
 		FormattedExamples: []string{
 			string(basicExample),
 			string(secureExample),
+			string(replicaExample),
 		},
 		// A parameter is a leaf configuration value that other resources link to; it does
 		// not link out to other resources.
@@ -70,4 +72,12 @@ func (a *parameterResourceActions) getSSMServiceWithRegion(
 	}
 
 	return a.ssmServiceFactory(awsConfig, providerContext), awsConfig.Region, nil
+}
+
+func parameterRegionMeta(specData *core.MappingNode) map[string]*core.MappingNode {
+	region, hasRegion := pluginutils.GetValueByPath("$.region", specData)
+	if !hasRegion || core.StringValue(region) == "" {
+		return nil
+	}
+	return map[string]*core.MappingNode{"region": region}
 }

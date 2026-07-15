@@ -2,6 +2,7 @@ package ssm
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
@@ -27,6 +28,25 @@ func parameterResourceSchema() *provider.ResourceDefinitionsSchema {
 				Examples: []*core.MappingNode{
 					core.MappingNodeFromString("/my-app/prod/db-host"),
 				},
+			},
+			"region": {
+				Type: provider.ResourceDefinitionsSchemaTypeString,
+				Description: "The AWS region to store the parameter in, overriding the provider-configured " +
+					"region. Parameter Store has no built-in cross-region replication, so replicas are " +
+					"provisioned as separate parameter resources that each set a target region. Changing " +
+					"the region replaces the parameter.",
+				FormattedDescription: "The AWS region to store the parameter in, overriding the " +
+					"provider-configured region. Parameter Store has no built-in cross-region replication, " +
+					"so replicas are provisioned as separate parameter resources that each set a target " +
+					"region. Changing the region replaces the parameter.",
+				MustRecreate: true,
+				Examples: []*core.MappingNode{
+					core.MappingNodeFromString("eu-west-1"),
+				},
+				ValidateFunc: validateParameterRegion,
+				// When omitted, the provider-level region applies and is reported back in
+				// external state, which would otherwise read as drift against an unset region.
+				IgnoreDrift: true,
 			},
 			"type": {
 				Type: provider.ResourceDefinitionsSchemaTypeString,
@@ -154,6 +174,23 @@ func parameterResourceSchema() *provider.ResourceDefinitionsSchema {
 			},
 		},
 	}
+}
+
+// Matches region identifiers across standard, GovCloud, ISO and sovereign-cloud
+// partitions (e.g. "us-east-1", "us-gov-west-1", "eusc-de-east-1").
+var awsRegionPattern = regexp.MustCompile(`^[a-z]+(-[a-z]+)+-\d+$`)
+
+func validateParameterRegion(
+	_ string,
+	value *core.MappingNode,
+	_ *schema.Resource,
+) []*core.Diagnostic {
+	if !awsRegionPattern.MatchString(core.StringValue(value)) {
+		return []*core.Diagnostic{errorDiagnostic(
+			"\"region\" must be an AWS region identifier such as \"us-east-1\" or \"eu-west-2\".",
+		)}
+	}
+	return nil
 }
 
 func validateParameterTypeAndValue(

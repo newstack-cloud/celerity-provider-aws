@@ -15,7 +15,13 @@ func (a *parameterResourceActions) Destroy(
 	ctx context.Context,
 	input *provider.ResourceDestroyInput,
 ) error {
-	service, _, err := a.getSSMServiceWithRegion(ctx, input.ProviderContext, nil)
+	// The parameter must be deleted from the region it was created in, so the region
+	// recorded in the resource state (when set) re-targets the client.
+	service, _, err := a.getSSMServiceWithRegion(
+		ctx,
+		input.ProviderContext,
+		parameterRegionMeta(input.ResourceState.SpecData),
+	)
 	if err != nil {
 		return err
 	}

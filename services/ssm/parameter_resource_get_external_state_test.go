@@ -100,6 +100,9 @@ func getStringParameterExternalStateTestCase(
 					"value":       core.MappingNodeFromString("db.internal.example.com"),
 					"arn":         core.MappingNodeFromString(testParameterARN),
 					"version":     core.MappingNodeFromInt(5),
+					// The effective region the parameter was looked up in, reported back
+					// from the provider-configured region when the spec leaves it unset.
+					"region":      core.MappingNodeFromString("us-west-2"),
 					"dataType":    core.MappingNodeFromString("text"),
 					"description": core.MappingNodeFromString("database host"),
 					"tier":        core.MappingNodeFromString("Standard"),
@@ -157,6 +160,7 @@ func getSecureStringParameterExternalStateTestCase(
 					"secureValue": core.MappingNodeFromString("decrypted-secret"),
 					"arn":         core.MappingNodeFromString(testParameterARN),
 					"version":     core.MappingNodeFromInt(2),
+					"region":      core.MappingNodeFromString("us-west-2"),
 					"tier":        core.MappingNodeFromString("Standard"),
 					"keyId":       core.MappingNodeFromString("alias/my-key"),
 				},

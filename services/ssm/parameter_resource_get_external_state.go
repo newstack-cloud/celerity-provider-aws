@@ -18,7 +18,11 @@ func (a *parameterResourceActions) GetExternalState(
 	ctx context.Context,
 	input *provider.ResourceGetExternalStateInput,
 ) (*provider.ResourceGetExternalStateOutput, error) {
-	service, _, err := a.getSSMServiceWithRegion(ctx, input.ProviderContext, nil)
+	service, region, err := a.getSSMServiceWithRegion(
+		ctx,
+		input.ProviderContext,
+		parameterRegionMeta(input.CurrentResourceSpec),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -62,6 +66,10 @@ func (a *parameterResourceActions) GetExternalState(
 		"type":    core.MappingNodeFromString(string(parameter.Type)),
 		"arn":     core.MappingNodeFromString(aws.ToString(parameter.ARN)),
 		"version": core.MappingNodeFromInt(int(parameter.Version)),
+	}
+
+	if region != "" {
+		fields["region"] = core.MappingNodeFromString(region)
 	}
 
 	if parameter.Type == ssmtypes.ParameterTypeSecureString {

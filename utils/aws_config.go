@@ -90,8 +90,11 @@ func RegionOptions(
 		opts = append(opts, config.WithRegion(core.StringValueFromScalar(region)))
 	}
 
+	// A nil or empty region in the metadata (e.g. a data source fetch without a region
+	// filter) must not override the provider-configured region above.
 	if len(meta) > 0 {
-		if region, hasRegion := meta["region"]; hasRegion {
+		if region, hasRegion := meta["region"]; hasRegion &&
+			core.StringValue(region) != "" {
 			opts = append(opts, config.WithRegion(core.StringValue(region)))
 		}
 	}

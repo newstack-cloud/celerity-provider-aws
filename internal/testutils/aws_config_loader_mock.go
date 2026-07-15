@@ -16,6 +16,9 @@ type MockAWSConfigLoader struct {
 	) (aws.Config, error)
 }
 
+// LoadDefaultConfig delegates to LoadDefaultConfigFunc when set. Otherwise it resolves
+// the given load options in memory the same way the real loader does (e.g. region from
+// config.WithRegion), without touching the filesystem, environment or network.
 func (m *MockAWSConfigLoader) LoadDefaultConfig(
 	ctx context.Context,
 	optFns ...func(*config.LoadOptions) error,
@@ -23,5 +26,12 @@ func (m *MockAWSConfigLoader) LoadDefaultConfig(
 	if m.LoadDefaultConfigFunc != nil {
 		return m.LoadDefaultConfigFunc(ctx, optFns...)
 	}
-	return aws.Config{}, nil
+
+	opts := &config.LoadOptions{}
+	for _, fn := range optFns {
+		if err := fn(opts); err != nil {
+			return aws.Config{}, err
+		}
+	}
+	return aws.Config{Region: opts.Region}, nil
 }

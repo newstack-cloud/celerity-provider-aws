@@ -18,12 +18,16 @@ func (a *parameterResourceActions) Update(
 	ctx context.Context,
 	input *provider.ResourceDeployInput,
 ) (*provider.ResourceDeployOutput, error) {
-	service, _, err := a.getSSMServiceWithRegion(ctx, input.ProviderContext, nil)
+	specData := pluginutils.GetResolvedResourceSpecData(input.Changes)
+
+	service, _, err := a.getSSMServiceWithRegion(
+		ctx,
+		input.ProviderContext,
+		parameterRegionMeta(specData),
+	)
 	if err != nil {
 		return nil, err
 	}
-
-	specData := pluginutils.GetResolvedResourceSpecData(input.Changes)
 
 	putInput, name, err := parameterPutInputFromSpec(specData)
 	if err != nil {

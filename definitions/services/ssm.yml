@@ -66,6 +66,15 @@ resourceDefinitions:
       "keyId" and "policies" is ignored: AWS resolves the default key and returns policies as
       structured metadata that does not round-trip byte-for-byte to the submitted JSON.
 
+      Cross-region replication:
+      - Parameter Store has no built-in cross-region replication, so replicas are provisioned
+        as separate aws/ssm/parameter resources that each set the optional "region" field.
+      - When "region" is set, all lifecycle operations (create, update, destroy, drift checks)
+        target that region instead of the provider-configured region. Changing the region
+        replaces the parameter.
+      - Drift on "region" is ignored: when the field is unset, the provider-level region is
+        applied and reported back in external state, which would otherwise read as drift.
+
   - type: aws/ssm/parameterPath
     label: AWS SSM Parameter Path
     requiredFields:

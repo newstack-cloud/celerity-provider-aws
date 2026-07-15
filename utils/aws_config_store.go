@@ -52,6 +52,7 @@ func NewAWSConfigStore(
 		env:                 envMap,
 		createAWSConfig:     createAWSConfig,
 		configStoreCacheKey: configStoreCacheKey,
+		loader:              loader,
 		cache:               make(map[string]*aws.Config),
 		mu:                  sync.RWMutex{},
 	}
