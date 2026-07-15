@@ -103,6 +103,102 @@ resourceDefinitions:
       grants ssm:GetParametersByPath over the prefix and injects the prefix as a single
       environment variable, regardless of how many parameters live beneath it.
 
+  - type: aws/ssm/parameterTree
+    label: AWS SSM Parameter Tree
+    requiredFields:
+      - path
+    computedFields:
+      - parameters
+    operations:
+      create:
+        # One PutParameter per entry (with tags, since Overwrite is false). On a
+        # ParameterAlreadyExists conflict the existing value is preserved and only tags
+        # are synced (ListTags/AddTags/RemoveTags). DescribeParameters reads back the
+        # per-entry structural metadata (ARN, type) that PutParameter does not return.
+        - PutParameter
+        - ListTagsForResource
+        - AddTagsToResource
+        - RemoveTagsFromResource
+        - DescribeParameters
+      update:
+        # PutParameter re-puts only entries whose blueprint value changed (hash diff vs
+        # the last applied state); DeleteParameter removes entries dropped from the spec.
+        # GetParameter is used only on a keyId/tier/description change, to transiently
+        # fetch and preserve the current cloud value of unchanged entries (a re-put
+        # requires a value, and sending the blueprint value would clobber runtime
+        # overrides); the fetched value is never stored or reported.
+        - PutParameter
+        - GetParameter
+        - DeleteParameter
+        - ListTagsForResource
+        - AddTagsToResource
+        - RemoveTagsFromResource
+        - DescribeParameters
+      destroy:
+        - DeleteParameter
+      getExternalState:
+        # Structural metadata only: DescribeParameters returns no parameter values by
+        # design, and GetParameter is never called, so stored values are never read back.
+        - DescribeParameters
+        - ListTagsForResource
+      # No stabilisation operations: PutParameter provisions synchronously, so the tree
+      # is stable as soon as its parameters are created.
+      stabilised: []
+    tags:
+      saveTags: AddTagsToResource
+      removeTags: RemoveTagsFromResource
+    docLinks:
+      - https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store-hierarchies.html
+      - https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_PutParameter.html
+      - https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_DeleteParameter.html
+      - https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_DescribeParameters.html
+    propertyDocLinks:
+      path: https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store-hierarchies.html
+      secureValues: https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-paramstore-securestring.html
+      keyId: https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#key-id
+      tier: https://docs.aws.amazon.com/systems-manager/latest/userguide/parameter-store-advanced-parameters.html
+    notes: |
+      aws/ssm/parameterTree is a hand-written resource that manages every parameter beneath
+      a path prefix as a single store: one String parameter per entry in "values" and one
+      SecureString parameter per entry in "secureValues", each at "<path>/<key>".
+
+      Drift semantics (write-only blob posture):
+      - "values" and "secureValues" are marked IgnoreDrift, and GetExternalState never reads
+        parameter values back (no GetParameter, no decryption; DescribeParameters returns
+        metadata only). Stored values therefore behave like Secrets Manager's secretString:
+        applied on create and on explicit blueprint change, but never reported or reverted
+        as drift. Out-of-band writes (runtime configuration updates via a CLI or console)
+        survive redeploys, and out-of-band entry deletion is likewise invisible to drift by
+        design. Use aws/ssm/parameter for individual parameters whose values should stay
+        drift-tracked.
+      - Update diffs against the last applied state, never against the cloud: a per-entry
+        SHA-256 hash of the applied value is recorded in the computed "parameters" map, and
+        an entry is re-put only when its desired hash differs (or it is new / moved between
+        "values" and "secureValues"). The hash is a fingerprint of the value in state;
+        state already persists resolved sensitive spec values, so this adds no new
+        exposure, but low-entropy secrets are dictionary-attackable from a state leak.
+      - On a create conflict (parameter already exists at "<path>/<key>") the existing
+        value is preserved and only tags are synced, so pre-existing user-set values are
+        never overwritten.
+      - Parameters beneath the prefix that are not entries in the spec are foreign: they
+        are never updated, deleted, or reported.
+
+      Entry keys:
+      - Keys are one or more segments of [a-zA-Z0-9_.-] separated by forward slashes (no
+        leading/trailing slash), enabling structural namespacing within the store (for
+        example "db/host"). The path levels plus key segments must fit SSM's 15-level
+        maximum for a parameter name.
+      - A key cannot appear in both "values" and "secureValues", and the tree must have at
+        least one entry.
+
+      "keyId", "tier", "description", and "tags" are shared by every parameter in the tree.
+      The optional "region" field re-targets all lifecycle operations, mirroring
+      aws/ssm/parameter's replication approach.
+
+      The primary consumer is the aws/lambda/function::aws/ssm/parameterTree link, which
+      grants access over the prefix and injects it as a single environment variable using
+      the same SSM_PARAMETER_PATH_<name> convention as the parameterPath link.
+
 dataSourceDefinitions:
   - type: aws/ssm/parameter
     filterableFields:

@@ -68,6 +68,18 @@ func (a *parameterResourceActions) reconcileParameterTags(
 	specData *core.MappingNode,
 	name string,
 ) error {
+	return reconcileParameterTagsForName(ctx, service, input, specData, name)
+}
+
+// Package-level form shared with the parameter tree resource, which reconciles
+// tags for many parameter names against a single desired set.
+func reconcileParameterTagsForName(
+	ctx context.Context,
+	service ssmservice.Service,
+	input *provider.ResourceDeployInput,
+	specData *core.MappingNode,
+	name string,
+) error {
 	desired := utils.MergeBluelinkTagsWithUserTags(input, userTagsFromSpec(specData))
 
 	listOutput, err := service.ListTagsForResource(ctx, &ssm.ListTagsForResourceInput{

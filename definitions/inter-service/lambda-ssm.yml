@@ -168,3 +168,99 @@ linkDefinitions:
       alias/aws/ssm key need no extra grant. When any parameter uses a customer-managed KMS
       key, the function additionally needs kms:Decrypt on that key -- declare a separate
       aws/lambda/function::aws/kms/key link for it.
+
+  # Lambda function with access to an SSM parameter tree (a prefix-scoped store of
+  # parameters managed as one resource). The function (A) links to the tree (B) to
+  # enumerate and read every entry at runtime via ssm:GetParametersByPath.
+  # Semantics: "My Lambda function needs to read this configuration store".
+  - resourceTypeA: aws/lambda/function
+    resourceTypeB: aws/ssm/parameterTree
+    kind: soft
+    priorityResource: none
+    summary: >-
+      A link that grants a Lambda function access to all SSM parameters in a parameter
+      tree and injects the tree's path prefix as an environment variable.
+    annotations:
+      resourceA:
+        - name: aws.lambda.ssm.populateEnvVars
+          valueType: boolean
+          description: "When true, populates environment variables for all linked SSM resources. Shared fallback with the other aws/lambda/function::aws/ssm/* links."
+          default: true
+        - name: aws.lambda.ssm.<targetParameterTree>.populateEnvVars
+          valueType: boolean
+          description: "When true, populates the path prefix environment variable for the specific target parameter tree. Overrides the global setting."
+        - name: aws.lambda.ssm.<targetParameterTree>.envVarName
+          valueType: string
+          description: "Custom environment variable name for the target tree's path prefix. Defaults to an auto-generated name based on the parameter tree resource name."
+        - name: aws.lambda.ssm.<targetParameterTree>.accessLevel
+          valueType: enum
+          description: "The level of access to grant over the tree's path prefix and everything beneath it."
+          default: read
+          allowedValues:
+            - read
+            - write
+            - readwrite
+      resourceB: []
+    operations:
+      updateResourceA:
+        create:
+          - UpdateFunctionConfiguration
+        update:
+          - UpdateFunctionConfiguration
+        destroy:
+          - UpdateFunctionConfiguration
+      updateResourceB: {}
+      updateIntermediaryResources:
+        aws/iam/role:
+          create:
+            - PutRolePolicy
+          update:
+            - PutRolePolicy
+          destroy:
+            - DeleteRolePolicy
+          config:
+            intermediaryType: existing
+            intermediaryExternalIdSource: resourceA.spec.role
+    docLinks:
+      - https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store-hierarchies.html
+      - https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-paramstore-access.html
+      - https://docs.aws.amazon.com/lambda/latest/dg/API_UpdateFunctionConfiguration.html
+    notes: |
+      This link is identical in effect to aws/lambda/function::aws/ssm/parameterPath -- the
+      difference is only that the tree also owns and provisions the parameters beneath the
+      prefix, whereas a parameter path is a pure namespace handle for parameters managed
+      elsewhere. It configures the Lambda function by:
+      1. Optionally populating a single environment variable with the tree's path prefix
+         (controlled by annotations). The default environment variable name keeps the
+         SSM_PARAMETER_PATH_<name> convention shared with the parameterPath link, so
+         runtime code consuming a path prefix works unchanged with either resource type.
+      2. Adding one statement to the function's execution role scoped to the path ARN
+         and everything beneath it:
+         ["arn:...:parameter<path>", "arn:...:parameter<path>/*"]
+         The path ARN authorises ssm:GetParametersByPath over the hierarchy; the wildcard
+         ARN authorises actions on the individual parameters beneath it.
+
+      The accessLevel annotation controls the permissions granted:
+      - "read" (default): ssm:GetParameter, ssm:GetParameters, ssm:GetParametersByPath
+      - "write": ssm:PutParameter
+      - "readwrite": Both read and write permissions
+      Grant "write" or "readwrite" when the function (or tooling running with its role)
+      updates stored values at runtime; the tree treats stored values as an opaque blob
+      for drift purposes, so runtime writes are never reverted by a redeploy.
+
+      Exactly one statement and one environment variable are produced per linked tree,
+      regardless of how many entries it holds. Destroying the link revokes both; entries
+      in the tree can come and go freely without touching the link or the role.
+
+      The IAM role is an intermediary resource that must be defined in the same blueprint.
+      The implementation sources the role from resourceA.spec.role.
+
+      When the function runs inside a VPC without NAT egress, the link activates the SSM
+      interface VPC endpoint (com.amazonaws.<region>.ssm) on the linked aws/flex/vpc so the
+      function can reach Parameter Store over the private network. With NAT egress present this
+      is a no-op.
+
+      Entries in "secureValues" encrypted with the default AWS-managed alias/aws/ssm key
+      need no extra grant. When the tree uses a customer-managed KMS key ("keyId"), the
+      function additionally needs kms:Decrypt on that key -- declare a separate
+      aws/lambda/function::aws/kms/key link for it.

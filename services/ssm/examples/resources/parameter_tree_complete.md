@@ -1,4 +1,4 @@
-A parameter path namespace with plaintext and encrypted parameters beneath it, read by a Lambda function through a single link.
+A parameter tree combining plaintext and encrypted entries (with hierarchical keys, a customer managed KMS key, tags, and a target region), read by a Lambda function through a single link.
 
 ```blueprintlang
 version "2025-11-02"
@@ -30,31 +30,29 @@ resource apiFunction: aws/lambda/function {
     }
 }
 
-resource appConfig: aws/ssm/parameterPath {
+resource appConfig: aws/ssm/parameterTree {
     metadata {
-        displayName = "Application configuration namespace"
+        displayName = "Application configuration store"
         labels = {
             configStore = "app-config"
         }
     }
     spec {
         path = "/my-app/config"
-    }
-}
-
-resource dbHost: aws/ssm/parameter {
-    spec {
-        name = "/my-app/config/db-host"
-        type = "String"
-        value = "db.internal.example.com"
-    }
-}
-
-resource dbPassword: aws/ssm/parameter {
-    spec {
-        name = "/my-app/config/db-password"
-        type = "SecureString"
-        secureValue = "${variables.dbPassword}"
+        values = {
+            logLevel = "info"
+            "db/host" = "db.internal.example.com"
+            "db/port" = "5432"
+        }
+        secureValues = {
+            "db/password" = "${variables.dbPassword}"
+        }
+        keyId = "alias/my-app-config"
+        tier = "Standard"
+        region = "us-east-1"
+        tags = {
+            Environment = "production"
+        }
     }
 }
 
@@ -91,25 +89,24 @@ resources:
             functionName: api
             role: "${apiFunctionRole.spec.arn}"
     appConfig:
-        type: aws/ssm/parameterPath
+        type: aws/ssm/parameterTree
         metadata:
-            displayName: Application configuration namespace
+            displayName: Application configuration store
             labels:
                 configStore: app-config
         spec:
             path: /my-app/config
-    dbHost:
-        type: aws/ssm/parameter
-        spec:
-            name: /my-app/config/db-host
-            type: String
-            value: db.internal.example.com
-    dbPassword:
-        type: aws/ssm/parameter
-        spec:
-            name: /my-app/config/db-password
-            type: SecureString
-            secureValue: "${variables.dbPassword}"
+            values:
+                logLevel: info
+                db/host: db.internal.example.com
+                db/port: "5432"
+            secureValues:
+                db/password: "${variables.dbPassword}"
+            keyId: alias/my-app-config
+            tier: Standard
+            region: us-east-1
+            tags:
+                Environment: production
     apiFunctionRole:
         type: aws/iam/role
         spec:
@@ -151,31 +148,29 @@ exports:
       }
     },
     "appConfig": {
-      "type": "aws/ssm/parameterPath",
+      "type": "aws/ssm/parameterTree",
       "metadata": {
-        "displayName": "Application configuration namespace",
+        "displayName": "Application configuration store",
         "labels": {
           "configStore": "app-config"
         }
       },
       "spec": {
-        "path": "/my-app/config"
-      }
-    },
-    "dbHost": {
-      "type": "aws/ssm/parameter",
-      "spec": {
-        "name": "/my-app/config/db-host",
-        "type": "String",
-        "value": "db.internal.example.com"
-      }
-    },
-    "dbPassword": {
-      "type": "aws/ssm/parameter",
-      "spec": {
-        "name": "/my-app/config/db-password",
-        "type": "SecureString",
-        "secureValue": "${variables.dbPassword}"
+        "path": "/my-app/config",
+        "values": {
+          "logLevel": "info",
+          "db/host": "db.internal.example.com",
+          "db/port": "5432"
+        },
+        "secureValues": {
+          "db/password": "${variables.dbPassword}"
+        },
+        "keyId": "alias/my-app-config",
+        "tier": "Standard",
+        "region": "us-east-1",
+        "tags": {
+          "Environment": "production"
+        }
       }
     },
     "apiFunctionRole": {
