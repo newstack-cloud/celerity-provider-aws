@@ -3,6 +3,7 @@ package elasticachesecretsmanager
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/elasticache"
@@ -119,7 +120,50 @@ func (l *replicationGroupSecretLinkActions) readAuthToken(
 		)
 	}
 
+	if err := validateAuthToken(authToken, secretARN); err != nil {
+		return "", err
+	}
+
 	return authToken, nil
+}
+
+const (
+	minAuthTokenLength = 16
+	maxAuthTokenLength = 128
+)
+
+// Enforces the ElastiCache AUTH token constraints before the value is sent to
+// ModifyReplicationGroup, so an invalid secret value fails with a clear error instead of an
+// opaque API rejection. Error messages never include the secret value itself.
+func validateAuthToken(authToken string, secretARN string) error {
+	if len(authToken) < minAuthTokenLength || len(authToken) > maxAuthTokenLength {
+		return fmt.Errorf(
+			"the value of Secrets Manager secret %q is not a valid Redis AUTH token: "+
+				"it must be between %d and %d characters in length",
+			secretARN,
+			minAuthTokenLength,
+			maxAuthTokenLength,
+		)
+	}
+
+	for _, char := range authToken {
+		if char < ' ' || char > '~' {
+			return fmt.Errorf(
+				"the value of Secrets Manager secret %q is not a valid Redis AUTH token: "+
+					"it must contain only printable ASCII characters",
+				secretARN,
+			)
+		}
+		if strings.ContainsRune(`/"@%`, char) {
+			return fmt.Errorf(
+				"the value of Secrets Manager secret %q is not a valid Redis AUTH token: "+
+					"it must not contain the characters '/', '\"', '@' or '%%'",
+				secretARN,
+			)
+		}
+	}
+
+	return nil
 }
 
 // UpdateResourceB is a no-op: the secret is not modified by this link, it is only read.
