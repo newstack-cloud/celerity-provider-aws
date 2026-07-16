@@ -179,18 +179,18 @@ func (s *ReplicationGroupSecretLinkUpdateSuite) Test_annotation_overrides_update
 	)
 }
 
-func (s *ReplicationGroupSecretLinkUpdateSuite) Test_rejects_set_strategy_on_first_configuration() {
+// A SET annotation is safe as a static value: on first configuration there is no previous
+// token to retire, so the link falls back to ROTATE instead of failing.
+func (s *ReplicationGroupSecretLinkUpdateSuite) Test_set_strategy_falls_back_to_rotate_on_first_configuration() {
 	annotations := map[string]*core.MappingNode{
 		"aws.elasticache.secretsmanager.authTokenUpdateStrategy": core.MappingNodeFromString("SET"),
 	}
 
-	strategy, err := resolveAuthTokenUpdateStrategy(&provider.LinkUpdateResourceInput{
+	strategy := resolveAuthTokenUpdateStrategy(&provider.LinkUpdateResourceInput{
 		LinkUpdateType: provider.LinkUpdateTypeCreate,
 		ResourceInfo:   replicationGroupInfo(annotations),
 	})
-	s.Require().Error(err)
-	s.Contains(err.Error(), "cannot be used on first configuration")
-	s.Empty(strategy)
+	s.Equal(elasticachetypes.AuthTokenUpdateStrategyTypeRotate, strategy)
 }
 
 func (s *ReplicationGroupSecretLinkUpdateSuite) Test_destroy_is_a_no_op() {

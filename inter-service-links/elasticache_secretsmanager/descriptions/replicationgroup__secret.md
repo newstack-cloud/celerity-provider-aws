@@ -19,9 +19,10 @@ When a replication group (resource A) links to a secret (resource B), the link:
    The strategy is `ROTATE` on both first configuration and subsequent updates (for example
    when the secret is rotated), keeping the previous token valid for a rotation window. The
    strategy can be overridden with the
-   `aws.elasticache.secretsmanager.authTokenUpdateStrategy` annotation; `SET` is only
-   accepted by ElastiCache after a previous `ROTATE`, so it is rejected on first
-   configuration.
+   `aws.elasticache.secretsmanager.authTokenUpdateStrategy` annotation; `SET` retires the
+   previous tokens on an update, and since ElastiCache only accepts it after a previous
+   `ROTATE`, the link falls back to `ROTATE` on first configuration where there is nothing
+   to retire.
 
 The AUTH token value is **never** written into blueprint state or exposed as a computed field;
 only the secret ARN and a boolean marker recording that the token was applied are retained in
