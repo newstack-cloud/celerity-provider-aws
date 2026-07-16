@@ -15,9 +15,10 @@ func replicationGroupSecretLinkAnnotations() map[string]*provider.LinkAnnotation
 			Label: "Auth Token Update Strategy",
 			Type:  core.ScalarTypeString,
 			Description: "The strategy ElastiCache uses when applying the AUTH token via ModifyReplicationGroup. " +
-				"SET replaces the token immediately. ROTATE adds the new token while keeping the previous one " +
-				"valid for a rotation window, which is safer for live clients. When unset, the link uses SET on " +
-				"first configuration and ROTATE on subsequent updates.",
+				"ROTATE adds the new token while keeping the previous one valid for a rotation window, which is " +
+				"safer for live clients. SET replaces the previous tokens with a single token and is only " +
+				"accepted by ElastiCache after a previous ROTATE, so it is rejected on first configuration. " +
+				"When unset, the link uses ROTATE for both first configuration and subsequent updates.",
 			AllowedValues: []*core.ScalarValue{
 				core.ScalarFromString("SET"),
 				core.ScalarFromString("ROTATE"),

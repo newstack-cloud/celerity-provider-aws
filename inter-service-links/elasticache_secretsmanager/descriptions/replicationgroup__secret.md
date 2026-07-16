@@ -16,10 +16,12 @@ When a replication group (resource A) links to a secret (resource B), the link:
 
 2. **Applies the value as the replication group's AUTH token** via ElastiCache
    `ModifyReplicationGroup`, setting `AuthToken` together with an `AuthTokenUpdateStrategy`.
-   On first configuration the strategy is `SET`; on subsequent updates (for example when the
-   secret is rotated) the strategy is `ROTATE`, so an out-of-band secret change is reapplied
-   without drift thrash. The strategy can be overridden with the
-   `aws.elasticache.secretsmanager.authTokenUpdateStrategy` annotation.
+   The strategy is `ROTATE` on both first configuration and subsequent updates (for example
+   when the secret is rotated), keeping the previous token valid for a rotation window. The
+   strategy can be overridden with the
+   `aws.elasticache.secretsmanager.authTokenUpdateStrategy` annotation; `SET` is only
+   accepted by ElastiCache after a previous `ROTATE`, so it is rejected on first
+   configuration.
 
 The AUTH token value is **never** written into blueprint state or exposed as a computed field;
 only the secret ARN and a boolean marker recording that the token was applied are retained in

@@ -54,7 +54,10 @@ func (l *replicationGroupSecretLinkActions) UpdateResourceA(
 		return nil, err
 	}
 
-	strategy := resolveAuthTokenUpdateStrategy(input)
+	strategy, err := resolveAuthTokenUpdateStrategy(input)
+	if err != nil {
+		return nil, err
+	}
 
 	elastiCacheService, err := l.getElastiCacheService(ctx, providerCtx)
 	if err != nil {
@@ -188,26 +191,32 @@ func (l *replicationGroupSecretLinkActions) UpdateIntermediaryResources(
 	}, nil
 }
 
-// Determines the AuthTokenUpdateStrategy for ModifyReplicationGroup. An explicit annotation wins;
-// otherwise the strategy is SET on first configuration (create) and ROTATE on subsequent updates,
-// so a rotated secret is reapplied without drift thrash.
+// Determines the AuthTokenUpdateStrategy for ModifyReplicationGroup. ElastiCache only accepts
+// SET after a previous ROTATE, so ROTATE is the default for both first configuration and
+// subsequent updates, and an explicit SET annotation is rejected on first configuration.
 func resolveAuthTokenUpdateStrategy(
 	input *provider.LinkUpdateResourceInput,
-) elasticachetypes.AuthTokenUpdateStrategyType {
+) (elasticachetypes.AuthTokenUpdateStrategyType, error) {
 	strategy, hasStrategy := pluginutils.GetStringAnnotation(
 		input.ResourceInfo,
 		&pluginutils.AnnotationQuery[string]{
 			Key: "aws.elasticache.secretsmanager.authTokenUpdateStrategy",
 		},
 	)
-	if hasStrategy && strategy != "" {
-		return elasticachetypes.AuthTokenUpdateStrategyType(strategy)
+	if !hasStrategy || strategy == "" {
+		return elasticachetypes.AuthTokenUpdateStrategyTypeRotate, nil
 	}
 
-	if input.LinkUpdateType == provider.LinkUpdateTypeUpdate {
-		return elasticachetypes.AuthTokenUpdateStrategyTypeRotate
+	selected := elasticachetypes.AuthTokenUpdateStrategyType(strategy)
+	if selected == elasticachetypes.AuthTokenUpdateStrategyTypeSet &&
+		input.LinkUpdateType == provider.LinkUpdateTypeCreate {
+		return "", fmt.Errorf(
+			"the SET auth token update strategy cannot be used on first configuration: " +
+				"ElastiCache only accepts SET after a previous ROTATE, use ROTATE first and " +
+				"then SET on a subsequent update to retire the previous token",
+		)
 	}
-	return elasticachetypes.AuthTokenUpdateStrategyTypeSet
+	return selected, nil
 }
 
 func extractReplicationGroupID(resourceInfo *provider.ResourceInfo) (string, bool) {
