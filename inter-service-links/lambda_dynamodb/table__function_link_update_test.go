@@ -124,15 +124,16 @@ func streamFunctionResourceInfoWithFilters() *provider.ResourceInfo {
 	return info
 }
 
-// Carries the reportBatchItemFailures annotation set to true, so the link sets
-// the ReportBatchItemFailures function response type on the event source mapping.
-func streamFunctionResourceInfoWithReportBatchItemFailures() *provider.ResourceInfo {
+// Carries the reportBatchItemFailures annotation with the given value, controlling
+// whether the link sets the ReportBatchItemFailures function response type on the
+// event source mapping.
+func streamFunctionResourceInfoWithReportBatchItemFailures(enabled bool) *provider.ResourceInfo {
 	info := streamFunctionResourceInfo()
 	info.ResourceWithResolvedSubs = &provider.ResolvedResource{
 		Metadata: &provider.ResolvedResourceMetadata{
 			Annotations: core.MappingNodeFields(
 				"aws.dynamodb.lambda.stream.reportBatchItemFailures",
-				core.MappingNodeFromBool(true),
+				core.MappingNodeFromBool(enabled),
 			),
 		},
 	}
@@ -188,7 +189,7 @@ func (s *TableFunctionLinkUpdateSuite) Test_report_batch_item_failures_annotatio
 			LinkUpdateType:   provider.LinkUpdateTypeCreate,
 			InstanceName:     "test-instance",
 			ResourceAInfo:    tableResourceInfoStreamsEnabled(),
-			ResourceBInfo:    streamFunctionResourceInfoWithReportBatchItemFailures(),
+			ResourceBInfo:    streamFunctionResourceInfoWithReportBatchItemFailures(true),
 			LinkContext:      testLinkContext(),
 			ResourceService:  resourceservicemock.Create(resourceservicemock.WithLookupResourceInState(tflRoleState())),
 			CurrentLinkState: &state.LinkState{},
@@ -284,6 +285,100 @@ func (s *TableFunctionLinkUpdateSuite) Test_absent_report_batch_item_failures_an
 		func(arg any) bool {
 			input, ok := arg.(*lambda.CreateEventSourceMappingInput)
 			return ok && len(input.FunctionResponseTypes) == 0
+		},
+	)
+}
+
+// Regression: when reportBatchItemFailures flips from true to false, the update must
+// send an empty (non-nil) FunctionResponseTypes so the previously enabled
+// ReportBatchItemFailures setting is cleared; a nil field would leave it in place.
+func (s *TableFunctionLinkUpdateSuite) Test_update_clears_function_response_types_when_report_batch_item_failures_disabled() {
+	loader := &testutils.MockAWSConfigLoader{}
+
+	existing := fmt.Sprintf(
+		`{"Version":"2012-10-17","Statement":[{"Sid":%q,"Effect":"Allow","Action":["dynamodb:GetRecords"],"Resource":%q}]}`,
+		tflStreamSID,
+		tflStreamARN,
+	)
+	iamSvc := iammock.CreateIamServiceMock(
+		iammock.WithListRolePoliciesOutput(&iam.ListRolePoliciesOutput{PolicyNames: []string{linkutils.InlineAccessPolicyName()}}),
+		iammock.WithGetRolePolicyOutput(&iam.GetRolePolicyOutput{PolicyDocument: aws.String(existing)}),
+		iammock.WithListAttachedRolePoliciesOutput(&iam.ListAttachedRolePoliciesOutput{}),
+		iammock.WithPutRolePolicyOutput(&iam.PutRolePolicyOutput{}),
+	)
+	lambdaSvc := lambdamock.CreateLambdaServiceMock(
+		lambdamock.WithGetFunctionOutput(&lambda.GetFunctionOutput{
+			Configuration: &lambdatypes.FunctionConfiguration{
+				FunctionArn: aws.String(tflFuncARN),
+				Role:        aws.String(tflRoleARN),
+				Environment: &lambdatypes.EnvironmentResponse{Variables: map[string]string{}},
+			},
+		}),
+		lambdamock.WithUpdateEventSourceMappingOutput(&lambda.UpdateEventSourceMappingOutput{
+			UUID:                  aws.String(tflESMUUID),
+			EventSourceMappingArn: aws.String("arn:aws:lambda:us-west-2:123456789012:event-source-mapping:" + tflESMUUID),
+		}),
+	)
+
+	currentLinkState := &state.LinkState{
+		Data: map[string]*core.MappingNode{
+			"intermediaries": {
+				Fields: map[string]*core.MappingNode{
+					tableFunctionESMID: {
+						Fields: map[string]*core.MappingNode{
+							"uuid": core.MappingNodeFromString(tflESMUUID),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	testCase := plugintestutils.LinkUpdateIntermediaryResourcesTestCase[
+		*aws.Config,
+		dynamodbservice.Service,
+		*aws.Config,
+		lambdaservice.Service,
+	]{
+		Name:                           "update clears function response types when reportBatchItemFailures is disabled",
+		ServiceFactoryA:                dynamodbmock.CreateDynamoDBServiceMockFactory(),
+		ConfigStoreA:                   testConfigStore(loader),
+		ServiceFactoryB:                func(c *aws.Config, pc provider.Context) lambdaservice.Service { return lambdaSvc },
+		ConfigStoreB:                   testConfigStore(loader),
+		IntermediariesServiceMockCalls: &iamSvc.MockCalls,
+		Input: &provider.LinkUpdateIntermediaryResourcesInput{
+			LinkUpdateType:   provider.LinkUpdateTypeUpdate,
+			InstanceName:     "test-instance",
+			ResourceAInfo:    tableResourceInfoStreamsEnabled(),
+			ResourceBInfo:    streamFunctionResourceInfoWithReportBatchItemFailures(false),
+			LinkContext:      testLinkContext(),
+			ResourceService:  resourceservicemock.Create(resourceservicemock.WithLookupResourceInState(tflRoleState())),
+			CurrentLinkState: currentLinkState,
+		},
+		ExpectedOutputMatcher: matchStreamGrantOutput,
+	}
+
+	plugintestutils.RunLinkUpdateIntermediaryResourcesTestCases(
+		[]plugintestutils.LinkUpdateIntermediaryResourcesTestCase[
+			*aws.Config,
+			dynamodbservice.Service,
+			*aws.Config,
+			lambdaservice.Service,
+		]{testCase},
+		tableFunctionLinkFactory(iamSvc),
+		&s.Suite,
+	)
+
+	lambdaSvc.AssertCalledWith(
+		&s.Suite,
+		"UpdateEventSourceMapping",
+		0,
+		plugintestutils.Any,
+		func(arg any) bool {
+			input, ok := arg.(*lambda.UpdateEventSourceMappingInput)
+			return ok &&
+				input.FunctionResponseTypes != nil &&
+				len(input.FunctionResponseTypes) == 0
 		},
 	)
 }

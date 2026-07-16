@@ -438,6 +438,10 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) updateEventSourceMapping(
 		updateInput.FunctionResponseTypes = []types.FunctionResponseType{
 			types.FunctionResponseTypeReportBatchItemFailures,
 		}
+	} else {
+		// A nil field leaves the existing setting in place on update; an empty
+		// slice explicitly clears a previously enabled ReportBatchItemFailures.
+		updateInput.FunctionResponseTypes = []types.FunctionResponseType{}
 	}
 	if len(annotations.filterPatterns) > 0 {
 		updateInput.FilterCriteria = buildFilterCriteria(annotations.filterPatterns)
