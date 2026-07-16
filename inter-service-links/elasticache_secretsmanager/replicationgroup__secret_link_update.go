@@ -54,10 +54,7 @@ func (l *replicationGroupSecretLinkActions) UpdateResourceA(
 		return nil, err
 	}
 
-	strategy, err := resolveAuthTokenUpdateStrategy(input)
-	if err != nil {
-		return nil, err
-	}
+	strategy := resolveAuthTokenUpdateStrategy(input)
 
 	elastiCacheService, err := l.getElastiCacheService(ctx, providerCtx)
 	if err != nil {
@@ -192,11 +189,14 @@ func (l *replicationGroupSecretLinkActions) UpdateIntermediaryResources(
 }
 
 // Determines the AuthTokenUpdateStrategy for ModifyReplicationGroup. ElastiCache only accepts
-// SET after a previous ROTATE, so ROTATE is the default for both first configuration and
-// subsequent updates, and an explicit SET annotation is rejected on first configuration.
+// SET after a previous ROTATE, so an explicit SET annotation is interpreted as "retire the
+// previous tokens when updating": on first configuration there is nothing to retire and the
+// link falls back to ROTATE, which is also the default for both create and update. This keeps
+// the annotation safe as a static value regardless of whether a deployment creates or updates
+// the link.
 func resolveAuthTokenUpdateStrategy(
 	input *provider.LinkUpdateResourceInput,
-) (elasticachetypes.AuthTokenUpdateStrategyType, error) {
+) elasticachetypes.AuthTokenUpdateStrategyType {
 	strategy, hasStrategy := pluginutils.GetStringAnnotation(
 		input.ResourceInfo,
 		&pluginutils.AnnotationQuery[string]{
@@ -204,19 +204,15 @@ func resolveAuthTokenUpdateStrategy(
 		},
 	)
 	if !hasStrategy || strategy == "" {
-		return elasticachetypes.AuthTokenUpdateStrategyTypeRotate, nil
+		return elasticachetypes.AuthTokenUpdateStrategyTypeRotate
 	}
 
 	selected := elasticachetypes.AuthTokenUpdateStrategyType(strategy)
 	if selected == elasticachetypes.AuthTokenUpdateStrategyTypeSet &&
 		input.LinkUpdateType == provider.LinkUpdateTypeCreate {
-		return "", fmt.Errorf(
-			"the SET auth token update strategy cannot be used on first configuration: " +
-				"ElastiCache only accepts SET after a previous ROTATE, use ROTATE first and " +
-				"then SET on a subsequent update to retire the previous token",
-		)
+		return elasticachetypes.AuthTokenUpdateStrategyTypeRotate
 	}
-	return selected, nil
+	return selected
 }
 
 func extractReplicationGroupID(resourceInfo *provider.ResourceInfo) (string, bool) {
