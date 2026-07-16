@@ -97,6 +97,15 @@ func dynamoDBTableLambdaFunctionLinkAnnotations() map[string]*provider.LinkAnnot
 			DefaultValue: core.ScalarFromBool(false),
 			Required:     false,
 		},
+		"aws/lambda/function::aws.dynamodb.lambda.stream.reportBatchItemFailures": {
+			Name:  "aws.dynamodb.lambda.stream.reportBatchItemFailures",
+			Label: "Report Batch Item Failures",
+			Type:  core.ScalarTypeBool,
+			Description: "When true, allows the function to report partial batch failures (sets the " +
+				"ReportBatchItemFailures function response type) so only failed records are retried. Default: false.",
+			DefaultValue: core.ScalarFromBool(false),
+			Required:     false,
+		},
 		"aws/lambda/function::aws.dynamodb.lambda.stream.filter.<index>": {
 			Name:  "aws.dynamodb.lambda.stream.filter.<index>",
 			Label: "Filter Pattern",

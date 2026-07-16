@@ -383,6 +383,11 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) createEventSourceMapping(
 	if annotations.bisectBatchOnFunctionError {
 		createInput.BisectBatchOnFunctionError = aws.Bool(true)
 	}
+	if annotations.reportBatchItemFailures {
+		createInput.FunctionResponseTypes = []types.FunctionResponseType{
+			types.FunctionResponseTypeReportBatchItemFailures,
+		}
+	}
 	if len(annotations.filterPatterns) > 0 {
 		createInput.FilterCriteria = buildFilterCriteria(annotations.filterPatterns)
 	}
@@ -442,6 +447,11 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) updateEventSourceMapping(
 	}
 	updateInput.BisectBatchOnFunctionError = aws.Bool(annotations.bisectBatchOnFunctionError)
 
+	if annotations.reportBatchItemFailures {
+		updateInput.FunctionResponseTypes = []types.FunctionResponseType{
+			types.FunctionResponseTypeReportBatchItemFailures,
+		}
+	}
 	if len(annotations.filterPatterns) > 0 {
 		updateInput.FilterCriteria = buildFilterCriteria(annotations.filterPatterns)
 	}
@@ -614,6 +624,7 @@ type streamTriggerAnnotations struct {
 	maximumRetryAttempts       int
 	maximumRecordAgeInSeconds  int
 	bisectBatchOnFunctionError bool
+	reportBatchItemFailures    bool
 	filterPatterns             []string
 	enabled                    bool
 }
@@ -679,6 +690,14 @@ func getStreamTriggerAnnotations(
 		},
 	)
 
+	reportBatchItemFailures, _ := pluginutils.GetBoolAnnotation(
+		resourceInfo,
+		&pluginutils.AnnotationQuery[bool]{
+			Key:     "aws.dynamodb.lambda.stream.reportBatchItemFailures",
+			Default: false,
+		},
+	)
+
 	filterPatterns := getStreamFilterPatterns(resourceInfo)
 
 	enabled, _ := pluginutils.GetBoolAnnotation(
@@ -697,6 +716,7 @@ func getStreamTriggerAnnotations(
 		maximumRetryAttempts:       maximumRetryAttempts,
 		maximumRecordAgeInSeconds:  maximumRecordAgeInSeconds,
 		bisectBatchOnFunctionError: bisectBatchOnFunctionError,
+		reportBatchItemFailures:    reportBatchItemFailures,
 		filterPatterns:             filterPatterns,
 		enabled:                    enabled,
 	}
