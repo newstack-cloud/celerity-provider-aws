@@ -102,7 +102,9 @@ func dynamoDBTableLambdaFunctionLinkAnnotations() map[string]*provider.LinkAnnot
 			Label: "Report Batch Item Failures",
 			Type:  core.ScalarTypeBool,
 			Description: "When true, allows the function to report partial batch failures (sets the " +
-				"ReportBatchItemFailures function response type) so only failed records are retried. Default: false.",
+				"ReportBatchItemFailures function response type). Retries resume from the earliest reported " +
+				"failed sequence number, so records after that point may be delivered again; handlers should " +
+				"be idempotent. Default: false.",
 			DefaultValue: core.ScalarFromBool(false),
 			Required:     false,
 		},

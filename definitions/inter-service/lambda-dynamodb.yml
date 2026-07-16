@@ -135,7 +135,7 @@ linkDefinitions:
           default: false
         - name: aws.dynamodb.lambda.stream.reportBatchItemFailures
           valueType: boolean
-          description: "When true, allows the function to report partial batch failures (sets the ReportBatchItemFailures function response type) so only failed records are retried."
+          description: "When true, allows the function to report partial batch failures (sets the ReportBatchItemFailures function response type). Retries resume from the earliest reported failed sequence number, so records after that point may be delivered again; handlers should be idempotent."
           default: false
         - name: aws.dynamodb.lambda.stream.filter.<index>
           valueType: string
