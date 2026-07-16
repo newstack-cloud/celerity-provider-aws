@@ -37,16 +37,13 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) UpdateResourceA(
 		"aws",
 	)
 
-	// Check if streams are already enabled
 	currentStreamEnabled := isStreamEnabled(input.ResourceInfo)
 	if currentStreamEnabled {
-		// Streams already enabled, nothing to do
 		return &provider.LinkUpdateResourceOutput{
 			LinkData: core.MappingNodeFields(),
 		}, nil
 	}
 
-	// Get the table name
 	tableName, hasTableName := extractTableNameFromResourceInfo(input.ResourceInfo)
 	if !hasTableName {
 		return nil, fmt.Errorf(
@@ -55,10 +52,8 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) UpdateResourceA(
 		)
 	}
 
-	// Get the desired stream view type from annotation
 	streamViewType := getStreamViewTypeAnnotation(input.ResourceInfo)
 
-	// Enable streams on the table
 	dynamodbService, err := l.getDynamoDBService(ctx, providerCtx)
 	if err != nil {
 		return nil, err
@@ -142,7 +137,6 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) UpdateIntermediaryResources(
 		return nil, err
 	}
 
-	// Get the stream ARN from the DynamoDB table
 	streamARN, hasStreamARN := extractStreamARNFromResourceInfo(input.ResourceAInfo)
 	if !hasStreamARN {
 		return nil, fmt.Errorf(
@@ -152,7 +146,6 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) UpdateIntermediaryResources(
 		)
 	}
 
-	// Get the function ARN from the Lambda function
 	functionARN, hasFunctionARN := utils.ExtractARNFromResourceInfo(input.ResourceBInfo)
 	if !hasFunctionARN {
 		return nil, fmt.Errorf(
@@ -166,7 +159,6 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) UpdateIntermediaryResources(
 	// functions with different configurations.
 	annotations := getStreamTriggerAnnotations(input.ResourceBInfo)
 
-	// Set up Lambda link context to get role info for stream permissions
 	setupCtx, err := linkutils.SetupLinkFromLambdaFunction(
 		ctx,
 		&linkutils.LambdaLinkSetupData{
@@ -211,7 +203,6 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) UpdateIntermediaryResources(
 		)
 	}
 
-	// Check if we have an existing event source mapping UUID in the link state
 	esmResourceID := tableFunctionESMResourceID(input.ResourceAInfo, input.ResourceBInfo)
 	existingUUID := getExistingEventSourceMappingUUID(input.CurrentLinkState, esmResourceID)
 
@@ -265,7 +256,6 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) createIntermediaryResources(
 		return nil, err
 	}
 
-	// Create the Event Source Mapping.
 	esmOutput, err := l.createEventSourceMapping(ctx, streamARN, functionARN, annotations, lambdaService)
 	if err != nil {
 		return nil, err
@@ -286,7 +276,6 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) updateIntermediaryResources(
 	lambdaService lambdaservice.Service,
 	iamService iamservice.Service,
 ) (*provider.LinkUpdateIntermediaryResourcesOutput, error) {
-	// Update the Event Source Mapping
 	esmOutput, err := l.updateEventSourceMapping(
 		ctx,
 		existingUUID,
@@ -299,8 +288,7 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) updateIntermediaryResources(
 		return nil, err
 	}
 
-	// Grant stream read permissions to the Lambda execution role
-	// (the allocator replaces the statement in place on update).
+	// The allocator replaces the statement in place on update.
 	permOutput, err := l.grantStreamPermissions(
 		ctx,
 		input,
@@ -323,7 +311,6 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) destroyIntermediaryResources(
 	lambdaService lambdaservice.Service,
 	iamService iamservice.Service,
 ) (*provider.LinkUpdateIntermediaryResourcesOutput, error) {
-	// Delete the Event Source Mapping
 	esmResourceID := tableFunctionESMResourceID(input.ResourceAInfo, input.ResourceBInfo)
 	uuid := getExistingEventSourceMappingUUID(input.CurrentLinkState, esmResourceID)
 	if uuid != "" {
@@ -476,9 +463,9 @@ type esmLinkData struct {
 	functionArn    string
 }
 
-// grantStreamPermissions packs the DynamoDB stream-read statement into the Lambda
-// execution role's allocator-managed policy set (a single shared inline policy,
-// with managed-policy overflow), replacing any prior statement with the same Sid.
+// Packs the DynamoDB stream-read statement into the Lambda execution role's
+// allocator-managed policy set (a single shared inline policy, with managed-policy
+// overflow), replacing any prior statement with the same Sid.
 func (l *dynamoDBTableLambdaFunctionLinkActions) grantStreamPermissions(
 	ctx context.Context,
 	input *provider.LinkUpdateIntermediaryResourcesInput,
@@ -514,8 +501,8 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) grantStreamPermissions(
 	}, nil
 }
 
-// dynamoDBStreamStatement builds the IAM policy statement (canonical PascalCase, as
-// the IAM API expects) granting read access to the table's stream.
+// Builds the IAM policy statement (canonical PascalCase, as the IAM API expects)
+// granting read access to the table's stream.
 func dynamoDBStreamStatement(sid, streamARN string) map[string]any {
 	return map[string]any{
 		"Sid":      sid,
@@ -533,9 +520,9 @@ type permissionLinkData struct {
 	result            linkutils.RoleAccessResult
 }
 
-// mergeIntermediaryOutputs combines the event source mapping link data with the
-// stream-read grant's link data and (for inline placements) drift mappings, so the
-// ESM outputs and the role-policy outputs are both preserved.
+// Combines the event source mapping link data with the stream-read grant's link data
+// and (for inline placements) drift mappings, so the ESM outputs and the role-policy
+// outputs are both preserved.
 func mergeIntermediaryOutputs(
 	esmIdentity linkutils.IntermediaryIdentity,
 	esmData *esmLinkData,
@@ -576,9 +563,9 @@ func mergeIntermediaryOutputs(
 	}
 }
 
-// specStreamStatementNode builds the statement in the camelCase spec form the
-// role's external state uses (after Cloud Control name translation), so the drift
-// comparison against link data matches.
+// Builds the statement in the camelCase spec form the role's external state uses
+// (after Cloud Control name translation), so the drift comparison against link data
+// matches.
 func specStreamStatementNode(sid, streamARN string) *core.MappingNode {
 	actions := dynamoDBStreamActions()
 	actionItems := make([]*core.MappingNode, len(actions))
