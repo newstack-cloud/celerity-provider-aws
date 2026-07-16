@@ -445,6 +445,10 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) updateEventSourceMapping(
 	}
 	if len(annotations.filterPatterns) > 0 {
 		updateInput.FilterCriteria = buildFilterCriteria(annotations.filterPatterns)
+	} else {
+		// A nil field leaves existing filters in place on update; an empty
+		// FilterCriteria object explicitly removes all filter criteria.
+		updateInput.FilterCriteria = &types.FilterCriteria{}
 	}
 
 	output, err := lambdaService.UpdateEventSourceMapping(ctx, updateInput)
