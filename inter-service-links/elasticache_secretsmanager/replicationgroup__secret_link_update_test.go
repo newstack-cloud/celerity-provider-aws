@@ -69,7 +69,7 @@ func (s *ReplicationGroupSecretLinkUpdateSuite) harnessCase(
 	}
 }
 
-func (s *ReplicationGroupSecretLinkUpdateSuite) Test_applies_auth_token_with_set_strategy_on_create() {
+func (s *ReplicationGroupSecretLinkUpdateSuite) Test_applies_auth_token_with_rotate_strategy_on_create() {
 	loader := &testutils.MockAWSConfigLoader{}
 	elastiCacheSvc := elasticachemock.CreateElastiCacheServiceMock(
 		elasticachemock.WithModifyReplicationGroupOutput(&elasticache.ModifyReplicationGroupOutput{}),
@@ -102,9 +102,11 @@ func (s *ReplicationGroupSecretLinkUpdateSuite) Test_applies_auth_token_with_set
 			return ok && aws.ToString(in.SecretId) == rgSecretARN
 		},
 	)
+	// ROTATE is the only strategy ElastiCache accepts for a server without an existing AUTH
+	// token, so it is the default on first configuration.
 	elastiCacheSvc.AssertCalledWith(
 		&s.Suite, "ModifyReplicationGroup", 0, plugintestutils.Any,
-		matchModifyReplicationGroup(elasticachetypes.AuthTokenUpdateStrategyTypeSet),
+		matchModifyReplicationGroup(elasticachetypes.AuthTokenUpdateStrategyTypeRotate),
 	)
 }
 
@@ -152,10 +154,10 @@ func (s *ReplicationGroupSecretLinkUpdateSuite) Test_annotation_overrides_update
 	)
 
 	annotations := map[string]*core.MappingNode{
-		"aws.elasticache.secretsmanager.authTokenUpdateStrategy": core.MappingNodeFromString("ROTATE"),
+		"aws.elasticache.secretsmanager.authTokenUpdateStrategy": core.MappingNodeFromString("SET"),
 	}
 	input := &provider.LinkUpdateResourceInput{
-		LinkUpdateType:    provider.LinkUpdateTypeCreate,
+		LinkUpdateType:    provider.LinkUpdateTypeUpdate,
 		ResourceInfo:      replicationGroupInfo(annotations),
 		OtherResourceInfo: secretInfo(),
 		LinkContext:       testLinkContext(),
@@ -169,11 +171,26 @@ func (s *ReplicationGroupSecretLinkUpdateSuite) Test_annotation_overrides_update
 		&s.Suite,
 	)
 
-	// The annotation forces ROTATE even on create (which would otherwise default to SET).
+	// The annotation forces SET on an update (which would otherwise default to ROTATE),
+	// retiring the previous token after a rotation window.
 	elastiCacheSvc.AssertCalledWith(
 		&s.Suite, "ModifyReplicationGroup", 0, plugintestutils.Any,
-		matchModifyReplicationGroup(elasticachetypes.AuthTokenUpdateStrategyTypeRotate),
+		matchModifyReplicationGroup(elasticachetypes.AuthTokenUpdateStrategyTypeSet),
 	)
+}
+
+func (s *ReplicationGroupSecretLinkUpdateSuite) Test_rejects_set_strategy_on_first_configuration() {
+	annotations := map[string]*core.MappingNode{
+		"aws.elasticache.secretsmanager.authTokenUpdateStrategy": core.MappingNodeFromString("SET"),
+	}
+
+	strategy, err := resolveAuthTokenUpdateStrategy(&provider.LinkUpdateResourceInput{
+		LinkUpdateType: provider.LinkUpdateTypeCreate,
+		ResourceInfo:   replicationGroupInfo(annotations),
+	})
+	s.Require().Error(err)
+	s.Contains(err.Error(), "cannot be used on first configuration")
+	s.Empty(strategy)
 }
 
 func (s *ReplicationGroupSecretLinkUpdateSuite) Test_destroy_is_a_no_op() {
