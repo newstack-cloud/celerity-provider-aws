@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-07-16
+
+### Bug Fixes
+
+- **links:** Validate redis auth token before ModifyReplicationGroup([b8773c8](https://github.com/newstack-cloud/bluelink-provider-aws/commit/b8773c85591a77e29fff224734dde5fbc786b29d))
+- **links:** Default redis auth token strategy to ROTATE, reject initial SET([a24d766](https://github.com/newstack-cloud/bluelink-provider-aws/commit/a24d766ab64687d68f27ffbcab43bee3fee8f8cc))
+- **links:** Fall back to ROTATE when SET is selected on first configuration([cdd17ab](https://github.com/newstack-cloud/bluelink-provider-aws/commit/cdd17aba6d0d75fa620d74dbb89ba851c09b67a8))
+- **links:** Clear function response types when reportBatchItemFailures is false([34693c0](https://github.com/newstack-cloud/bluelink-provider-aws/commit/34693c0d1ecd4a95554178b62eac62bdc0be6098))
+- **links:** Clear esm filter criteria when filter annotations are removed([b46569c](https://github.com/newstack-cloud/bluelink-provider-aws/commit/b46569c7cb1a7552fa546ae0f83819cc2439f567))
+
+### Features
+
+- Add region to ssm parameter spec([4f6d654](https://github.com/newstack-cloud/bluelink-provider-aws/commit/4f6d6548a4265c2adaac1c1ff553352b0dd1d08d))
+- Add ssm parameter tree and lambda param tree link([1136c4a](https://github.com/newstack-cloud/bluelink-provider-aws/commit/1136c4a41b997d5504818ac2493e2034d48da432))
+- **links:** Dynamodb stream reportBatchItemFailures on lambda esm link([23b97fa](https://github.com/newstack-cloud/bluelink-provider-aws/commit/23b97faaafc92f50e444849e506ded10cd5c48d0))
+- **links:** Elasticache replicationGroup::secret auth-token link([a3cd2eb](https://github.com/newstack-cloud/bluelink-provider-aws/commit/a3cd2eb03d31b3078dcbbb5a9a3535c7ea9d474a))
+
+### Refactoring
+
+- **links:** Trim comments on dynamodb and elasticache links([bc6495f](https://github.com/newstack-cloud/bluelink-provider-aws/commit/bc6495fb97fc8873ef16e52faaf9b351dd92fcd2))
 ## [0.3.1] - 2026-07-10
 
 ### Bug Fixes
