@@ -383,6 +383,100 @@ func (s *TableFunctionLinkUpdateSuite) Test_update_clears_function_response_type
 	)
 }
 
+// Regression: when all filter annotations are removed, the update must send an
+// empty (non-nil) FilterCriteria so previously configured filters are removed;
+// a nil field would leave them in place.
+func (s *TableFunctionLinkUpdateSuite) Test_update_clears_filter_criteria_when_filter_annotations_removed() {
+	loader := &testutils.MockAWSConfigLoader{}
+
+	existing := fmt.Sprintf(
+		`{"Version":"2012-10-17","Statement":[{"Sid":%q,"Effect":"Allow","Action":["dynamodb:GetRecords"],"Resource":%q}]}`,
+		tflStreamSID,
+		tflStreamARN,
+	)
+	iamSvc := iammock.CreateIamServiceMock(
+		iammock.WithListRolePoliciesOutput(&iam.ListRolePoliciesOutput{PolicyNames: []string{linkutils.InlineAccessPolicyName()}}),
+		iammock.WithGetRolePolicyOutput(&iam.GetRolePolicyOutput{PolicyDocument: aws.String(existing)}),
+		iammock.WithListAttachedRolePoliciesOutput(&iam.ListAttachedRolePoliciesOutput{}),
+		iammock.WithPutRolePolicyOutput(&iam.PutRolePolicyOutput{}),
+	)
+	lambdaSvc := lambdamock.CreateLambdaServiceMock(
+		lambdamock.WithGetFunctionOutput(&lambda.GetFunctionOutput{
+			Configuration: &lambdatypes.FunctionConfiguration{
+				FunctionArn: aws.String(tflFuncARN),
+				Role:        aws.String(tflRoleARN),
+				Environment: &lambdatypes.EnvironmentResponse{Variables: map[string]string{}},
+			},
+		}),
+		lambdamock.WithUpdateEventSourceMappingOutput(&lambda.UpdateEventSourceMappingOutput{
+			UUID:                  aws.String(tflESMUUID),
+			EventSourceMappingArn: aws.String("arn:aws:lambda:us-west-2:123456789012:event-source-mapping:" + tflESMUUID),
+		}),
+	)
+
+	currentLinkState := &state.LinkState{
+		Data: map[string]*core.MappingNode{
+			"intermediaries": {
+				Fields: map[string]*core.MappingNode{
+					tableFunctionESMID: {
+						Fields: map[string]*core.MappingNode{
+							"uuid": core.MappingNodeFromString(tflESMUUID),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	testCase := plugintestutils.LinkUpdateIntermediaryResourcesTestCase[
+		*aws.Config,
+		dynamodbservice.Service,
+		*aws.Config,
+		lambdaservice.Service,
+	]{
+		Name:                           "update clears filter criteria when filter annotations are removed",
+		ServiceFactoryA:                dynamodbmock.CreateDynamoDBServiceMockFactory(),
+		ConfigStoreA:                   testConfigStore(loader),
+		ServiceFactoryB:                func(c *aws.Config, pc provider.Context) lambdaservice.Service { return lambdaSvc },
+		ConfigStoreB:                   testConfigStore(loader),
+		IntermediariesServiceMockCalls: &iamSvc.MockCalls,
+		Input: &provider.LinkUpdateIntermediaryResourcesInput{
+			LinkUpdateType:   provider.LinkUpdateTypeUpdate,
+			InstanceName:     "test-instance",
+			ResourceAInfo:    tableResourceInfoStreamsEnabled(),
+			ResourceBInfo:    streamFunctionResourceInfo(),
+			LinkContext:      testLinkContext(),
+			ResourceService:  resourceservicemock.Create(resourceservicemock.WithLookupResourceInState(tflRoleState())),
+			CurrentLinkState: currentLinkState,
+		},
+		ExpectedOutputMatcher: matchStreamGrantOutput,
+	}
+
+	plugintestutils.RunLinkUpdateIntermediaryResourcesTestCases(
+		[]plugintestutils.LinkUpdateIntermediaryResourcesTestCase[
+			*aws.Config,
+			dynamodbservice.Service,
+			*aws.Config,
+			lambdaservice.Service,
+		]{testCase},
+		tableFunctionLinkFactory(iamSvc),
+		&s.Suite,
+	)
+
+	lambdaSvc.AssertCalledWith(
+		&s.Suite,
+		"UpdateEventSourceMapping",
+		0,
+		plugintestutils.Any,
+		func(arg any) bool {
+			input, ok := arg.(*lambda.UpdateEventSourceMappingInput)
+			return ok &&
+				input.FilterCriteria != nil &&
+				len(input.FilterCriteria.Filters) == 0
+		},
+	)
+}
+
 func (s *TableFunctionLinkUpdateSuite) Test_indexed_filter_annotations_build_esm_filter_criteria() {
 	loader := &testutils.MockAWSConfigLoader{}
 
