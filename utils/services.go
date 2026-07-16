@@ -31,6 +31,8 @@ var Services = map[string][]string{
 	"sqs":             {},
 	"ssm":             {},
 	"kms":             {},
+	"elasticache":     {},
+	"secretsmanager":  {},
 	"events":          {"eventbridge"},
 	"cloudcontrolapi": {"cloudcontrol"},
 }

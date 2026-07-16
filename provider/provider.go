@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/newstack-cloud/bluelink-provider-aws/flex"
 	apigatewayv2lambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/apigatewayv2_lambda"
+	elasticachesecretsmanager "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/elasticache_secretsmanager"
 	eventslambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/events_lambda"
 	eventssqs "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/events_sqs"
 	flexlambda "github.com/newstack-cloud/bluelink-provider-aws/inter-service-links/flex_lambda"
@@ -29,6 +30,7 @@ import (
 	cloudcontrolservice "github.com/newstack-cloud/bluelink-provider-aws/services/cloudcontrol/service"
 	dynamodbservice "github.com/newstack-cloud/bluelink-provider-aws/services/dynamodb/service"
 	ec2service "github.com/newstack-cloud/bluelink-provider-aws/services/ec2/service"
+	elasticacheservice "github.com/newstack-cloud/bluelink-provider-aws/services/elasticache/service"
 	eventslinks "github.com/newstack-cloud/bluelink-provider-aws/services/events/links"
 	eventsservice "github.com/newstack-cloud/bluelink-provider-aws/services/events/service"
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
@@ -38,6 +40,7 @@ import (
 	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
 	resgrouptagservice "github.com/newstack-cloud/bluelink-provider-aws/services/resgrouptag/service"
 	s3service "github.com/newstack-cloud/bluelink-provider-aws/services/s3/service"
+	secretsmanagerservice "github.com/newstack-cloud/bluelink-provider-aws/services/secretsmanager/service"
 	sqslinks "github.com/newstack-cloud/bluelink-provider-aws/services/sqs/links"
 	sqsservice "github.com/newstack-cloud/bluelink-provider-aws/services/sqs/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/services/ssm"
@@ -62,6 +65,8 @@ func NewProvider(
 	s3ServiceFactory pluginutils.ServiceFactory[*aws.Config, s3service.Service],
 	ssmServiceFactory pluginutils.ServiceFactory[*aws.Config, ssmservice.Service],
 	kmsServiceFactory pluginutils.ServiceFactory[*aws.Config, kmsservice.Service],
+	elastiCacheServiceFactory pluginutils.ServiceFactory[*aws.Config, elasticacheservice.Service],
+	secretsManagerServiceFactory pluginutils.ServiceFactory[*aws.Config, secretsmanagerservice.Service],
 	awsConfigStore *utils.AWSConfigStore,
 ) provider.Provider {
 	return &providerv1.ProviderPluginDefinition{
@@ -333,6 +338,23 @@ func NewProvider(
 				lambdaelasticache.FunctionToCacheLinkDeps{
 					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
 						ServiceFactory: lambdaServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, cloudcontrolservice.Service]{
+						ServiceFactory: cloudControlServiceFactory,
+						ConfigStore:    awsConfigStore,
+					},
+				},
+			),
+			// Inter-service link: ElastiCache replication group -> Secrets Manager secret
+			// (applies a Redis AUTH token, read from the secret at deploy time, to the cache).
+			"aws/elasticache/replicationGroup::aws/secretsmanager/secret": elasticachesecretsmanager.ReplicationGroupSecretLink(
+				elastiCacheServiceFactory,
+				secretsManagerServiceFactory,
+			)(
+				elasticachesecretsmanager.ReplicationGroupToSecretLinkDeps{
+					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, cloudcontrolservice.Service]{
+						ServiceFactory: cloudControlServiceFactory,
 						ConfigStore:    awsConfigStore,
 					},
 					ResourceBService: pluginutils.ServiceWithConfigStore[*aws.Config, cloudcontrolservice.Service]{

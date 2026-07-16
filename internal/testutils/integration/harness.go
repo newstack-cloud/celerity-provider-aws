@@ -15,12 +15,14 @@ import (
 	cloudcontrolservice "github.com/newstack-cloud/bluelink-provider-aws/services/cloudcontrol/service"
 	dynamodbservice "github.com/newstack-cloud/bluelink-provider-aws/services/dynamodb/service"
 	ec2service "github.com/newstack-cloud/bluelink-provider-aws/services/ec2/service"
+	elasticacheservice "github.com/newstack-cloud/bluelink-provider-aws/services/elasticache/service"
 	eventsservice "github.com/newstack-cloud/bluelink-provider-aws/services/events/service"
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
 	kmsservice "github.com/newstack-cloud/bluelink-provider-aws/services/kms/service"
 	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
 	resgrouptagservice "github.com/newstack-cloud/bluelink-provider-aws/services/resgrouptag/service"
 	s3service "github.com/newstack-cloud/bluelink-provider-aws/services/s3/service"
+	secretsmanagerservice "github.com/newstack-cloud/bluelink-provider-aws/services/secretsmanager/service"
 	sqsservice "github.com/newstack-cloud/bluelink-provider-aws/services/sqs/service"
 	ssmservice "github.com/newstack-cloud/bluelink-provider-aws/services/ssm/service"
 	"github.com/newstack-cloud/bluelink-provider-aws/utils"
@@ -94,6 +96,8 @@ func Setup(t *testing.T) *Harness {
 		s3service.NewService,
 		ssmservice.NewService,
 		kmsservice.NewService,
+		elasticacheservice.NewService,
+		secretsmanagerservice.NewService,
 		configStore,
 	)
 
