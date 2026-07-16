@@ -88,9 +88,8 @@ func (l *replicationGroupSecretLinkActions) UpdateResourceA(
 	}, nil
 }
 
-// readAuthToken reads the secret's string value to use as the Redis AUTH token. The value is
-// held only in memory and passed straight to ModifyReplicationGroup; it is never returned in
-// link data.
+// Reads the secret's string value to use as the Redis AUTH token. The value is held only in
+// memory and passed straight to ModifyReplicationGroup; it is never returned in link data.
 func (l *replicationGroupSecretLinkActions) readAuthToken(
 	ctx context.Context,
 	providerCtx provider.Context,
@@ -145,9 +144,9 @@ func (l *replicationGroupSecretLinkActions) UpdateIntermediaryResources(
 	}, nil
 }
 
-// resolveAuthTokenUpdateStrategy determines the AuthTokenUpdateStrategy for ModifyReplicationGroup.
-// An explicit annotation wins; otherwise the strategy is SET on first configuration (create) and
-// ROTATE on subsequent updates, so a rotated secret is reapplied without drift thrash.
+// Determines the AuthTokenUpdateStrategy for ModifyReplicationGroup. An explicit annotation wins;
+// otherwise the strategy is SET on first configuration (create) and ROTATE on subsequent updates,
+// so a rotated secret is reapplied without drift thrash.
 func resolveAuthTokenUpdateStrategy(
 	input *provider.LinkUpdateResourceInput,
 ) elasticachetypes.AuthTokenUpdateStrategyType {

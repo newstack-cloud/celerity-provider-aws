@@ -38,8 +38,6 @@ func (l *replicationGroupSecretLinkActions) Validate(
 	}, nil
 }
 
-// transitEncryptionEnabled reports whether the replication group spec sets
-// transitEncryptionEnabled to true.
 func transitEncryptionEnabled(replicationGroupSpec *core.MappingNode) bool {
 	value, has := pluginutils.GetValueByPath(
 		"$.transitEncryptionEnabled",
