@@ -133,6 +133,10 @@ linkDefinitions:
           valueType: boolean
           description: "When true, splits the batch and retries on a smaller batch when a function returns an error."
           default: false
+        - name: aws.dynamodb.lambda.stream.reportBatchItemFailures
+          valueType: boolean
+          description: "When true, allows the function to report partial batch failures (sets the ReportBatchItemFailures function response type) so only failed records are retried."
+          default: false
         - name: aws.dynamodb.lambda.stream.filter.<index>
           valueType: string
           description: "An event filter pattern controlling which stream records are sent to the function. <index> is the zero-based position in the event source mapping's filter array; add multiple filters with successive indices (0, 1, ...). The value is the AWS event-filtering pattern string (e.g. {\"eventName\":[\"INSERT\"]})."

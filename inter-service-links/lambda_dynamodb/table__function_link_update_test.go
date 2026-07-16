@@ -124,6 +124,170 @@ func streamFunctionResourceInfoWithFilters() *provider.ResourceInfo {
 	return info
 }
 
+// Carries the reportBatchItemFailures annotation set to true, so the link sets
+// the ReportBatchItemFailures function response type on the event source mapping.
+func streamFunctionResourceInfoWithReportBatchItemFailures() *provider.ResourceInfo {
+	info := streamFunctionResourceInfo()
+	info.ResourceWithResolvedSubs = &provider.ResolvedResource{
+		Metadata: &provider.ResolvedResourceMetadata{
+			Annotations: core.MappingNodeFields(
+				"aws.dynamodb.lambda.stream.reportBatchItemFailures",
+				core.MappingNodeFromBool(true),
+			),
+		},
+	}
+	return info
+}
+
+// hasReportBatchItemFailures reports whether the create event source mapping input
+// requests the ReportBatchItemFailures function response type.
+func hasReportBatchItemFailures(input *lambda.CreateEventSourceMappingInput) bool {
+	for _, responseType := range input.FunctionResponseTypes {
+		if responseType == lambdatypes.FunctionResponseTypeReportBatchItemFailures {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *TableFunctionLinkUpdateSuite) Test_report_batch_item_failures_annotation_sets_function_response_type() {
+	loader := &testutils.MockAWSConfigLoader{}
+
+	iamSvc := iammock.CreateIamServiceMock(
+		iammock.WithListRolePoliciesOutput(&iam.ListRolePoliciesOutput{PolicyNames: []string{}}),
+		iammock.WithListAttachedRolePoliciesOutput(&iam.ListAttachedRolePoliciesOutput{}),
+		iammock.WithPutRolePolicyOutput(&iam.PutRolePolicyOutput{}),
+	)
+	lambdaSvc := lambdamock.CreateLambdaServiceMock(
+		lambdamock.WithGetFunctionOutput(&lambda.GetFunctionOutput{
+			Configuration: &lambdatypes.FunctionConfiguration{
+				FunctionArn: aws.String(tflFuncARN),
+				Role:        aws.String(tflRoleARN),
+				Environment: &lambdatypes.EnvironmentResponse{Variables: map[string]string{}},
+			},
+		}),
+		lambdamock.WithCreateEventSourceMappingOutput(&lambda.CreateEventSourceMappingOutput{
+			UUID:                  aws.String(tflESMUUID),
+			EventSourceMappingArn: aws.String("arn:aws:lambda:us-west-2:123456789012:event-source-mapping:" + tflESMUUID),
+		}),
+	)
+
+	testCase := plugintestutils.LinkUpdateIntermediaryResourcesTestCase[
+		*aws.Config,
+		dynamodbservice.Service,
+		*aws.Config,
+		lambdaservice.Service,
+	]{
+		Name:                           "reportBatchItemFailures annotation sets the ReportBatchItemFailures function response type",
+		ServiceFactoryA:                dynamodbmock.CreateDynamoDBServiceMockFactory(),
+		ConfigStoreA:                   testConfigStore(loader),
+		ServiceFactoryB:                func(c *aws.Config, pc provider.Context) lambdaservice.Service { return lambdaSvc },
+		ConfigStoreB:                   testConfigStore(loader),
+		IntermediariesServiceMockCalls: &iamSvc.MockCalls,
+		Input: &provider.LinkUpdateIntermediaryResourcesInput{
+			LinkUpdateType:   provider.LinkUpdateTypeCreate,
+			InstanceName:     "test-instance",
+			ResourceAInfo:    tableResourceInfoStreamsEnabled(),
+			ResourceBInfo:    streamFunctionResourceInfoWithReportBatchItemFailures(),
+			LinkContext:      testLinkContext(),
+			ResourceService:  resourceservicemock.Create(resourceservicemock.WithLookupResourceInState(tflRoleState())),
+			CurrentLinkState: &state.LinkState{},
+		},
+		ExpectedOutputMatcher: matchStreamGrantOutput,
+	}
+
+	plugintestutils.RunLinkUpdateIntermediaryResourcesTestCases(
+		[]plugintestutils.LinkUpdateIntermediaryResourcesTestCase[
+			*aws.Config,
+			dynamodbservice.Service,
+			*aws.Config,
+			lambdaservice.Service,
+		]{testCase},
+		tableFunctionLinkFactory(iamSvc),
+		&s.Suite,
+	)
+
+	lambdaSvc.AssertCalledWith(
+		&s.Suite,
+		"CreateEventSourceMapping",
+		0,
+		plugintestutils.Any,
+		func(arg any) bool {
+			input, ok := arg.(*lambda.CreateEventSourceMappingInput)
+			return ok && hasReportBatchItemFailures(input)
+		},
+	)
+}
+
+func (s *TableFunctionLinkUpdateSuite) Test_absent_report_batch_item_failures_annotation_leaves_response_types_unset() {
+	loader := &testutils.MockAWSConfigLoader{}
+
+	iamSvc := iammock.CreateIamServiceMock(
+		iammock.WithListRolePoliciesOutput(&iam.ListRolePoliciesOutput{PolicyNames: []string{}}),
+		iammock.WithListAttachedRolePoliciesOutput(&iam.ListAttachedRolePoliciesOutput{}),
+		iammock.WithPutRolePolicyOutput(&iam.PutRolePolicyOutput{}),
+	)
+	lambdaSvc := lambdamock.CreateLambdaServiceMock(
+		lambdamock.WithGetFunctionOutput(&lambda.GetFunctionOutput{
+			Configuration: &lambdatypes.FunctionConfiguration{
+				FunctionArn: aws.String(tflFuncARN),
+				Role:        aws.String(tflRoleARN),
+				Environment: &lambdatypes.EnvironmentResponse{Variables: map[string]string{}},
+			},
+		}),
+		lambdamock.WithCreateEventSourceMappingOutput(&lambda.CreateEventSourceMappingOutput{
+			UUID:                  aws.String(tflESMUUID),
+			EventSourceMappingArn: aws.String("arn:aws:lambda:us-west-2:123456789012:event-source-mapping:" + tflESMUUID),
+		}),
+	)
+
+	testCase := plugintestutils.LinkUpdateIntermediaryResourcesTestCase[
+		*aws.Config,
+		dynamodbservice.Service,
+		*aws.Config,
+		lambdaservice.Service,
+	]{
+		Name:                           "absent reportBatchItemFailures annotation leaves function response types unset",
+		ServiceFactoryA:                dynamodbmock.CreateDynamoDBServiceMockFactory(),
+		ConfigStoreA:                   testConfigStore(loader),
+		ServiceFactoryB:                func(c *aws.Config, pc provider.Context) lambdaservice.Service { return lambdaSvc },
+		ConfigStoreB:                   testConfigStore(loader),
+		IntermediariesServiceMockCalls: &iamSvc.MockCalls,
+		Input: &provider.LinkUpdateIntermediaryResourcesInput{
+			LinkUpdateType:   provider.LinkUpdateTypeCreate,
+			InstanceName:     "test-instance",
+			ResourceAInfo:    tableResourceInfoStreamsEnabled(),
+			ResourceBInfo:    streamFunctionResourceInfo(),
+			LinkContext:      testLinkContext(),
+			ResourceService:  resourceservicemock.Create(resourceservicemock.WithLookupResourceInState(tflRoleState())),
+			CurrentLinkState: &state.LinkState{},
+		},
+		ExpectedOutputMatcher: matchStreamGrantOutput,
+	}
+
+	plugintestutils.RunLinkUpdateIntermediaryResourcesTestCases(
+		[]plugintestutils.LinkUpdateIntermediaryResourcesTestCase[
+			*aws.Config,
+			dynamodbservice.Service,
+			*aws.Config,
+			lambdaservice.Service,
+		]{testCase},
+		tableFunctionLinkFactory(iamSvc),
+		&s.Suite,
+	)
+
+	lambdaSvc.AssertCalledWith(
+		&s.Suite,
+		"CreateEventSourceMapping",
+		0,
+		plugintestutils.Any,
+		func(arg any) bool {
+			input, ok := arg.(*lambda.CreateEventSourceMappingInput)
+			return ok && len(input.FunctionResponseTypes) == 0
+		},
+	)
+}
+
 func (s *TableFunctionLinkUpdateSuite) Test_indexed_filter_annotations_build_esm_filter_criteria() {
 	loader := &testutils.MockAWSConfigLoader{}
 
