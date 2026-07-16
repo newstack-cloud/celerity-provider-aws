@@ -4,6 +4,7 @@ package elasticachesecretsmanager
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -245,6 +246,53 @@ func assertNoTokenValue(s *suite.Suite, node *core.MappingNode) {
 	}
 	for _, item := range node.Items {
 		assertNoTokenValue(s, item)
+	}
+}
+
+func (s *ReplicationGroupSecretLinkUpdateSuite) Test_validate_auth_token() {
+	testCases := []struct {
+		name          string
+		token         string
+		errorContains string
+	}{
+		{
+			name:  "accepts a valid token",
+			token: rgAuthTokenValue,
+		},
+		{
+			name:          "rejects a token shorter than 16 characters",
+			token:         "too-short",
+			errorContains: "between 16 and 128 characters",
+		},
+		{
+			name:          "rejects a token longer than 128 characters",
+			token:         strings.Repeat("a", 129),
+			errorContains: "between 16 and 128 characters",
+		},
+		{
+			name:          "rejects non-printable-ASCII characters",
+			token:         "valid-length-token-with-é-in-it",
+			errorContains: "printable ASCII",
+		},
+		{
+			name:          "rejects forbidden special characters",
+			token:         "valid-length-token-with-@-in-it",
+			errorContains: `must not contain the characters '/', '"', '@' or '%'`,
+		},
+	}
+
+	for _, testCase := range testCases {
+		s.Run(testCase.name, func() {
+			err := validateAuthToken(testCase.token, rgSecretARN)
+			if testCase.errorContains == "" {
+				s.NoError(err)
+				return
+			}
+			s.Require().Error(err)
+			s.Contains(err.Error(), testCase.errorContains)
+			s.Contains(err.Error(), rgSecretARN)
+			s.NotContains(err.Error(), testCase.token)
+		})
 	}
 }
 
