@@ -19,7 +19,8 @@ import (
 // an aws/flex/vpc's privateSubnetIds), which only resolves at deploy time. For
 // a flex VPC in reference mode the topology is not knowable any earlier. The
 // deploy-time ValidateResolvedSpec hook is therefore the authoritative guard;
-// the plan-time CustomValidate only fires for literal subnet ID lists.
+// the plan-time CustomValidate only fires for non-empty literal subnet ID
+// lists, as anything else is not provably invalid before resolution.
 //
 // The check counts subnet IDs rather than distinct availability zones, as zone
 // membership would need an EC2 lookup. A count below the minimum can never span
@@ -74,6 +75,9 @@ func (c minSubnetIDsConstraint) validateResolvedSpec() SpecTransform {
 
 // Validates literal subnet ID lists at the earliest opportunity; a field wired
 // from a reference is not countable until deploy time and is skipped here.
+// The blueprint framework will in some cases rebuild a reference-valued list as an empty
+// (non-nil) Items slice, so an empty list at plan time is indistinguishable
+// from an unresolved reference and is left to the deploy-time hook too.
 func (c minSubnetIDsConstraint) customValidate() func(
 	context.Context,
 	*provider.ResourceValidateInput,
@@ -85,7 +89,7 @@ func (c minSubnetIDsConstraint) customValidate() func(
 		diagnostics := []*core.Diagnostic{}
 		if input != nil && input.SchemaResource != nil {
 			count, countable := c.countSubnetIDs(input.SchemaResource.Spec)
-			if countable && count < c.minimum {
+			if countable && count > 0 && count < c.minimum {
 				diagnostics = append(diagnostics, &core.Diagnostic{
 					Level:   core.DiagnosticLevelError,
 					Message: c.message(count),

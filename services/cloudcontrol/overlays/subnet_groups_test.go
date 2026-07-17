@@ -136,6 +136,27 @@ func (s *SubnetGroupsOverlaySuite) Test_plan_time_validation_skips_reference_wir
 	s.Empty(output.Diagnostics)
 }
 
+func (s *SubnetGroupsOverlaySuite) Test_plan_time_validation_skips_empty_lists() {
+	// The blueprint framework rebuilds reference-valued lists (e.g.
+	// ${resources.appVpc.spec.privateSubnetIds}) as empty non-nil Items slices,
+	// so an empty list at plan time may still resolve to enough subnets and
+	// must be left to the deploy-time hook.
+	for _, resourceType := range []string{"aws/rds/dbSubnetGroup", "aws/elasticache/subnetGroup"} {
+		s.Run(resourceType, func() {
+			behaviour := BehaviourFor(resourceType)
+			s.Require().NotNil(behaviour)
+
+			output, err := behaviour.CustomValidate(context.Background(), &provider.ResourceValidateInput{
+				SchemaResource: &schema.Resource{
+					Spec: subnetIDsSpec("subnetIds"),
+				},
+			})
+			s.Require().NoError(err)
+			s.Empty(output.Diagnostics)
+		})
+	}
+}
+
 func TestSubnetGroupsOverlaySuite(t *testing.T) {
 	suite.Run(t, new(SubnetGroupsOverlaySuite))
 }
