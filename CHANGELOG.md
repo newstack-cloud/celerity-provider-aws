@@ -2,7 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.4.0] - 2026-07-16
+## [0.4.1] - 2026-07-17
+
+### Bug Fixes
+
+- Drop patterns not compatible with re2 engine([70d74ae](https://github.com/newstack-cloud/bluelink-provider-aws/commit/70d74ae7d8e8c787a1a7e38a3e278a5dc720b886))
+- Correct overlays misreading reference nodes as empty lists([13ffee3](https://github.com/newstack-cloud/bluelink-provider-aws/commit/13ffee3a45798377e229d2a84b010dfa4284849f))
+
+### Dependencies
+
+- Bump blueprint lib to 0.51.1([1cc63b4](https://github.com/newstack-cloud/bluelink-provider-aws/commit/1cc63b4e5a0dc0650913b61f2f9f50b33f111c8a))
+## [0.4.0] - 2026-07-17
 
 ### Bug Fixes
 
