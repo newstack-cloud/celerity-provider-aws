@@ -120,9 +120,9 @@ func lambdaFunctionSchema() *provider.ResourceDefinitionsSchema {
 						Nullable:    true,
 						Sensitive:   true,
 						IgnoreDrift: true,
-						Pattern:     "^[0-9A-Za-z\\.\\-_]*(?<!\\.)$",
-						MinLength:   3,
-						MaxLength:   63,
+						// CloudFormation pattern "^[0-9A-Za-z\\.\\-_]*(?<!\\.)$" dropped: not compilable by Go's RE2 regexp.
+						MinLength: 3,
+						MaxLength: 63,
 					},
 					"s3Key": &provider.ResourceDefinitionsSchema{
 						Type:        provider.ResourceDefinitionsSchemaTypeString,

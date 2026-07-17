@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -57,10 +58,15 @@ type irSchema struct {
 	JSONString bool
 	Enum       []string
 	Pattern    string
-	Minimum    *float64
-	Maximum    *float64
-	MinLength  *int
-	MaxLength  *int
+	// DroppedPattern records a CloudFormation `pattern` that Go's RE2 regexp
+	// cannot compile (CloudFormation patterns are ECMA-flavoured and may use
+	// lookarounds). These are omitted from the emitted schema where it would
+	// hard-fail spec validation, and are surfaced as comments instead.
+	DroppedPattern string
+	Minimum        *float64
+	Maximum        *float64
+	MinLength      *int
+	MaxLength      *int
 }
 
 type irAttribute struct {
@@ -295,7 +301,7 @@ func (c *converter) convertProperty(prop *cfnProperty, name string) *irSchema {
 	}
 
 	schema := c.convertByType(prop, name)
-	applyConstraints(schema, prop)
+	c.applyConstraints(schema, prop, name)
 	if schema.Description == "" {
 		schema.Description = prop.Description
 	}
@@ -499,15 +505,27 @@ func (c *converter) convertRef(ref, name string) *irSchema {
 	return schema
 }
 
-func applyConstraints(schema *irSchema, prop *cfnProperty) {
-	if isScalarType(schema.Type) {
-		schema.Pattern = prop.Pattern
-		schema.Minimum = prop.Minimum
-		schema.Maximum = prop.Maximum
-		schema.MinLength = prop.MinLength
-		schema.MaxLength = prop.MaxLength
-		schema.Enum = stringEnum(prop.Enum)
+func (c *converter) applyConstraints(schema *irSchema, prop *cfnProperty, name string) {
+	if !isScalarType(schema.Type) {
+		return
 	}
+	schema.Pattern = prop.Pattern
+	// CloudFormation patterns are ECMA-flavoured; a pattern Go's RE2 regexp
+	// cannot compile (e.g. lookarounds) would hard-fail blueprint spec
+	// validation, so it is dropped. Length/enum/type constraints still apply
+	// and AWS remains the authoritative validator at deploy time.
+	if _, err := regexp.Compile(schema.Pattern); err != nil {
+		c.warnings = append(c.warnings, fmt.Sprintf(
+			"property %q pattern %q is not RE2-compatible; dropped", name, schema.Pattern,
+		))
+		schema.DroppedPattern = schema.Pattern
+		schema.Pattern = ""
+	}
+	schema.Minimum = prop.Minimum
+	schema.Maximum = prop.Maximum
+	schema.MinLength = prop.MinLength
+	schema.MaxLength = prop.MaxLength
+	schema.Enum = stringEnum(prop.Enum)
 }
 
 func resolveType(prop *cfnProperty) string {

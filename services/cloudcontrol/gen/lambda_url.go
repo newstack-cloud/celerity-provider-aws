@@ -113,7 +113,7 @@ func lambdaUrlSchema() *provider.ResourceDefinitionsSchema {
 				Description: "The full Amazon Resource Name (ARN) of the function associated with the Function URL.",
 				Nullable:    true,
 				Computed:    true,
-				Pattern:     "^(arn:(aws[a-zA-Z-]*)?:lambda:)?([a-z]{2}((-gov)|(-iso(b?)))?-[a-z]+-\\d{1}:)?(\\d{12}:)?(function:)?([a-zA-Z0-9-_]+)(:((?!\\d+)[0-9a-zA-Z-_]+))?$",
+				// CloudFormation pattern "^(arn:(aws[a-zA-Z-]*)?:lambda:)?([a-z]{2}((-gov)|(-iso(b?)))?-[a-z]+-\\d{1}:)?(\\d{12}:)?(function:)?([a-zA-Z0-9-_]+)(:((?!\\d+)[0-9a-zA-Z-_]+))?$" dropped: not compilable by Go's RE2 regexp.
 			},
 			"functionUrl": &provider.ResourceDefinitionsSchema{
 				Type:        provider.ResourceDefinitionsSchemaTypeString,
@@ -132,15 +132,15 @@ func lambdaUrlSchema() *provider.ResourceDefinitionsSchema {
 				Description:  "The alias qualifier for the target function. If TargetFunctionArn is unqualified then Qualifier must be passed.",
 				Nullable:     true,
 				MustRecreate: true,
-				Pattern:      "((?!^[0-9]+$)([a-zA-Z0-9-_]+))",
-				MinLength:    1,
-				MaxLength:    128,
+				// CloudFormation pattern "((?!^[0-9]+$)([a-zA-Z0-9-_]+))" dropped: not compilable by Go's RE2 regexp.
+				MinLength: 1,
+				MaxLength: 128,
 			},
 			"targetFunctionArn": &provider.ResourceDefinitionsSchema{
 				Type:         provider.ResourceDefinitionsSchemaTypeString,
 				Description:  "The Amazon Resource Name (ARN) of the function associated with the Function URL.",
 				MustRecreate: true,
-				Pattern:      "^(arn:(aws[a-zA-Z-]*)?:lambda:)?([a-z]{2}((-gov)|(-iso(b?)))?-[a-z]+-\\d{1}:)?(\\d{12}:)?(function:)?([a-zA-Z0-9-_]+)(:((?!\\d+)[0-9a-zA-Z-_]+))?$",
+				// CloudFormation pattern "^(arn:(aws[a-zA-Z-]*)?:lambda:)?([a-z]{2}((-gov)|(-iso(b?)))?-[a-z]+-\\d{1}:)?(\\d{12}:)?(function:)?([a-zA-Z0-9-_]+)(:((?!\\d+)[0-9a-zA-Z-_]+))?$" dropped: not compilable by Go's RE2 regexp.
 			},
 		},
 	}

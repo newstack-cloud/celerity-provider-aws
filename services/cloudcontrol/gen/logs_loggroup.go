@@ -83,8 +83,8 @@ func logsLogGroupSchema() *provider.ResourceDefinitionsSchema {
 				Type:        provider.ResourceDefinitionsSchemaTypeString,
 				Description: "The Amazon Resource Name (ARN) of the KMS key to use when encrypting log data.\n To associate an KMS key with the log group, specify the ARN of that KMS key here. If you do so, ingested data is encrypted using this key. This association is stored as long as the data encrypted with the KMS key is still within CWL. This enables CWL to decrypt this data whenever it is requested.\n If you attempt to associate a KMS key with the log group but the KMS key doesn't exist or is deactivated, you will receive an `InvalidParameterException` error.\n Log group data is always encrypted in CWL. If you omit this key, the encryption does not use KMS. For more information, see [Encrypt log data in using](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/encrypt-log-data-kms.html)",
 				Nullable:    true,
-				Pattern:     "^arn:[a-z0-9-]+:kms:[a-z0-9-]+:\\d{12}:(key|alias)/.+\\Z",
-				MaxLength:   256,
+				// CloudFormation pattern "^arn:[a-z0-9-]+:kms:[a-z0-9-]+:\\d{12}:(key|alias)/.+\\Z" dropped: not compilable by Go's RE2 regexp.
+				MaxLength: 256,
 			},
 			"logGroupClass": &provider.ResourceDefinitionsSchema{
 				Type:          provider.ResourceDefinitionsSchemaTypeString,
@@ -97,9 +97,9 @@ func logsLogGroupSchema() *provider.ResourceDefinitionsSchema {
 				Description:  "The name of the log group. If you don't specify a name, Bluelink generates a unique ID for the log group.",
 				Nullable:     true,
 				MustRecreate: true,
-				Pattern:      "^[.\\-_/#A-Za-z0-9]{1,512}\\Z",
-				MinLength:    1,
-				MaxLength:    512,
+				// CloudFormation pattern "^[.\\-_/#A-Za-z0-9]{1,512}\\Z" dropped: not compilable by Go's RE2 regexp.
+				MinLength: 1,
+				MaxLength: 512,
 			},
 			"resourcePolicyDocument": &provider.ResourceDefinitionsSchema{
 				Type:        provider.ResourceDefinitionsSchemaTypeMap,

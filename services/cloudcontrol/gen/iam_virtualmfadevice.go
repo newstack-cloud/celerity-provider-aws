@@ -49,9 +49,9 @@ func iamVirtualMFADeviceSchema() *provider.ResourceDefinitionsSchema {
 				Type:         provider.ResourceDefinitionsSchemaTypeString,
 				Nullable:     true,
 				MustRecreate: true,
-				Pattern:      "(\\u002F)|(\\u002F[\\u0021-\\u007F]+\\u002F)",
-				MinLength:    1,
-				MaxLength:    512,
+				// CloudFormation pattern "(\\u002F)|(\\u002F[\\u0021-\\u007F]+\\u002F)" dropped: not compilable by Go's RE2 regexp.
+				MinLength: 1,
+				MaxLength: 512,
 			},
 			"serialNumber": &provider.ResourceDefinitionsSchema{
 				Type:      provider.ResourceDefinitionsSchemaTypeString,

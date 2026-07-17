@@ -218,6 +218,14 @@ func renderConstraints(b *strings.Builder, schema *irSchema, inner string) {
 	if schema.Pattern != "" {
 		fmt.Fprintf(b, "%sPattern: %q,\n", inner, schema.Pattern)
 	}
+	if schema.DroppedPattern != "" {
+		fmt.Fprintf(
+			b,
+			"%s// CloudFormation pattern %q dropped: not compilable by Go's RE2 regexp.\n",
+			inner,
+			schema.DroppedPattern,
+		)
+	}
 	if schema.MinLength != nil {
 		fmt.Fprintf(b, "%sMinLength: %d,\n", inner, *schema.MinLength)
 	}

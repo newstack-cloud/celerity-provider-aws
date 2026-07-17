@@ -54,9 +54,9 @@ func iamSAMLProviderSchema() *provider.ResourceDefinitionsSchema {
 				MustRecreate: true,
 				Sensitive:    true,
 				IgnoreDrift:  true,
-				Pattern:      "[\\u0009\\u000A\\u000D\\u0020-\\u00FF]+",
-				MinLength:    1,
-				MaxLength:    16384,
+				// CloudFormation pattern "[\\u0009\\u000A\\u000D\\u0020-\\u00FF]+" dropped: not compilable by Go's RE2 regexp.
+				MinLength: 1,
+				MaxLength: 16384,
 			},
 			"arn": &provider.ResourceDefinitionsSchema{
 				Type:        provider.ResourceDefinitionsSchemaTypeString,

@@ -79,9 +79,9 @@ func elasticacheUserGroupSchema() *provider.ResourceDefinitionsSchema {
 						"key": &provider.ResourceDefinitionsSchema{
 							Type:        provider.ResourceDefinitionsSchemaTypeString,
 							Description: "The key name of the tag. You can specify a value that is 1 to 128 Unicode characters in length and cannot be prefixed with 'aws:'. You can use any of the following characters: the set of Unicode letters, digits, whitespace, _, ., /, =, +, and -.",
-							Pattern:     "^(?!aws:)[a-zA-Z0-9 _\\.\\/=+:\\-@]*$",
-							MinLength:   1,
-							MaxLength:   128,
+							// CloudFormation pattern "^(?!aws:)[a-zA-Z0-9 _\\.\\/=+:\\-@]*$" dropped: not compilable by Go's RE2 regexp.
+							MinLength: 1,
+							MaxLength: 128,
 						},
 						"value": &provider.ResourceDefinitionsSchema{
 							Type:        provider.ResourceDefinitionsSchemaTypeString,
