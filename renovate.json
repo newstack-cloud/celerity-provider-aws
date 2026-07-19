@@ -21,6 +21,11 @@
       "description": "Single Go module, no commit scope, matching the existing deps: convention this repo's svu/git-cliff release flow expects.",
       "matchManagers": ["gomod", "custom.regex"],
       "semanticCommitScope": null
+    },
+    {
+      "description": "Group all Go module updates into one PR so simultaneous go.mod/go.sum bumps don't conflict. The plugin-docgen pin (custom.regex, a workflow file) stays its own PR.",
+      "matchManagers": ["gomod"],
+      "groupName": "go dependencies"
     }
   ]
 }
