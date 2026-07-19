@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.2] - 2026-07-19
+
+### Bug Fixes
+
+- Add improved resilience, support for auto-naming and various bug fixes([e76d40b](https://github.com/newstack-cloud/bluelink-provider-aws/commit/e76d40bb252c4e7bcb32bf60365493583ff77774))
 ## [0.4.1] - 2026-07-17
 
 ### Bug Fixes
