@@ -27,8 +27,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.42.0
 	github.com/aws/smithy-go v1.27.3
 	github.com/matoous/go-nanoid/v2 v2.1.0
-	github.com/newstack-cloud/bluelink/libs/blueprint v0.51.1
-	github.com/newstack-cloud/bluelink/libs/plugin-framework v0.14.0
+	github.com/newstack-cloud/bluelink/libs/blueprint v0.51.2
+	github.com/newstack-cloud/bluelink/libs/plugin-framework v0.15.0
 	github.com/stretchr/testify v1.11.1
 	github.com/wI2L/jsondiff v0.7.1
 	gopkg.in/yaml.v3 v3.0.1

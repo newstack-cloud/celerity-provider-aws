@@ -244,11 +244,24 @@ func (l *kinesisStreamLambdaFunctionLinkActions) destroyIntermediaryResources(
 	esmResourceID := streamFunctionESMResourceID(input.ResourceAInfo, input.ResourceBInfo)
 	uuid := getExistingEventSourceMappingUUID(input.CurrentLinkState, esmResourceID)
 	if uuid != "" {
-		_, err := lambdaService.DeleteEventSourceMapping(ctx, &lambda.DeleteEventSourceMappingInput{
+		// ESM deletion transiently fails with ResourceInUseException while the
+		// mapping is processing or mid-update. Retry in-call with backoff
+		// (~2 minutes, mirroring CloudFormation), then fall back to the
+		// engine's link-update retries.
+		deleteESM := linkutils.RetryOnESMInUse(
+			func(ctx context.Context, in *lambda.DeleteEventSourceMappingInput) (*lambda.DeleteEventSourceMappingOutput, error) {
+				return lambdaService.DeleteEventSourceMapping(ctx, in)
+			},
+		)
+		_, err := deleteESM(ctx, &lambda.DeleteEventSourceMappingInput{
 			UUID: aws.String(uuid),
 		})
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf(
+				"failed to delete event source mapping %q: %w",
+				uuid,
+				err,
+			)
 		}
 	}
 
@@ -322,13 +335,12 @@ func (l *kinesisStreamLambdaFunctionLinkActions) createEventSourceMapping(
 
 	// The execution role's stream-read grant is applied immediately before this call,
 	// but IAM is eventually consistent: CreateEventSourceMapping can transiently fail
-	// validation ("Cannot access stream ... ensure the role can perform ...") until the
-	// policy propagates. Treat that as retryable so the link deploy retries it.
-	createESM := pluginutils.RetryableReturnValue(
+	// validation until the policy propagates. Retry in-call with backoff (~2 minutes,
+	// mirroring CloudFormation), then fall back to the engine's link-update retries.
+	createESM := linkutils.RetryOnIAMPropagation(
 		func(ctx context.Context, in *lambda.CreateEventSourceMappingInput) (*lambda.CreateEventSourceMappingOutput, error) {
 			return lambdaService.CreateEventSourceMapping(ctx, in)
 		},
-		linkutils.IsRoleNotYetPropagatedError,
 	)
 
 	output, err := createESM(ctx, createInput)

@@ -53,10 +53,11 @@ func rdsDBSubnetGroupSchema() *provider.ResourceDefinitionsSchema {
 				Description: "The description for the DB subnet group.",
 			},
 			"dbSubnetGroupName": &provider.ResourceDefinitionsSchema{
-				Type:         provider.ResourceDefinitionsSchemaTypeString,
-				Description:  "The name for the DB subnet group. This value is stored as a lowercase string.\n Constraints:\n + Must contain no more than 255 letters, numbers, periods, underscores, spaces, or hyphens.\n + Must not be default.\n + First character must be a letter.\n \n Example: `mydbsubnetgroup`",
-				Nullable:     true,
-				MustRecreate: true,
+				Type:                provider.ResourceDefinitionsSchemaTypeString,
+				Description:         "The name for the DB subnet group. This value is stored as a lowercase string.\n Constraints:\n + Must contain no more than 255 letters, numbers, periods, underscores, spaces, or hyphens.\n + Must not be default.\n + First character must be a letter.\n \n Example: `mydbsubnetgroup`",
+				Nullable:            true,
+				ComputedWhenOmitted: true,
+				MustRecreate:        true,
 			},
 			"subnetIds": &provider.ResourceDefinitionsSchema{
 				Type:        provider.ResourceDefinitionsSchemaTypeArray,

@@ -116,10 +116,11 @@ func iamRoleSchema() *provider.ResourceDefinitionsSchema {
 				Computed: true,
 			},
 			"roleName": &provider.ResourceDefinitionsSchema{
-				Type:         provider.ResourceDefinitionsSchemaTypeString,
-				Description:  "A name for the IAM role, up to 64 characters in length. For valid values, see the `RoleName` parameter for the [CreateRole](https://docs.aws.amazon.com/IAM/latest/APIReference/API_CreateRole.html) action in the *User Guide*.\n This parameter allows (per its [regex pattern](https://docs.aws.amazon.com/http://wikipedia.org/wiki/regex)) a string of characters consisting of upper and lowercase alphanumeric characters with no spaces. You can also include any of the following characters: _+=,.@-. The role name must be unique within the account. Role names are not distinguished by case. For example, you cannot create roles named both \"Role1\" and \"role1\".\n If you don't specify a name, Bluelink generates a unique physical ID and uses that ID for the role name.\n If you specify a name, you must specify the `CAPABILITY_NAMED_IAM` value to acknowledge your blueprint's capabilities. For more information, see Acknowledging Resources in Blueprints.\n Naming an IAM resource can cause an unrecoverable error if you reuse the same blueprint in multiple Regions.",
-				Nullable:     true,
-				MustRecreate: true,
+				Type:                provider.ResourceDefinitionsSchemaTypeString,
+				Description:         "A name for the IAM role, up to 64 characters in length. For valid values, see the `RoleName` parameter for the [CreateRole](https://docs.aws.amazon.com/IAM/latest/APIReference/API_CreateRole.html) action in the *User Guide*.\n This parameter allows (per its [regex pattern](https://docs.aws.amazon.com/http://wikipedia.org/wiki/regex)) a string of characters consisting of upper and lowercase alphanumeric characters with no spaces. You can also include any of the following characters: _+=,.@-. The role name must be unique within the account. Role names are not distinguished by case. For example, you cannot create roles named both \"Role1\" and \"role1\".\n If you don't specify a name, Bluelink generates a unique physical ID and uses that ID for the role name.\n If you specify a name, you must specify the `CAPABILITY_NAMED_IAM` value to acknowledge your blueprint's capabilities. For more information, see Acknowledging Resources in Blueprints.\n Naming an IAM resource can cause an unrecoverable error if you reuse the same blueprint in multiple Regions.",
+				Nullable:            true,
+				ComputedWhenOmitted: true,
+				MustRecreate:        true,
 			},
 			"tags": &provider.ResourceDefinitionsSchema{
 				Type:        provider.ResourceDefinitionsSchemaTypeArray,

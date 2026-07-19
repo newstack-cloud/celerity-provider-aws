@@ -157,13 +157,10 @@ func (l *bucketFunctionLinkActions) UpdateIntermediaryResources(
 	}, nil
 }
 
+// Falls back to deriving the name from the bucket ARN for name-less
+// (auto-named) buckets whose assigned name is not in state at link-update time.
 func bucketName(bucketInfo *provider.ResourceInfo) (string, bool) {
-	spec := pluginutils.GetCurrentStateSpecDataFromResourceInfo(bucketInfo)
-	nameNode, has := pluginutils.GetValueByPath("$.bucketName", spec)
-	if !has {
-		return "", false
-	}
-	return core.StringValue(nameNode), true
+	return linkutils.PhysicalResourceName(bucketInfo, "bucketName")
 }
 
 func notificationEntryID(bucketInfo, functionInfo *provider.ResourceInfo) string {

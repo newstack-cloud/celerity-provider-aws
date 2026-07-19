@@ -415,15 +415,10 @@ func createLinkDataExecutionRoleName(resourceInfo *provider.ResourceInfo) string
 	)
 }
 
+// Falls back to deriving the name from the table ARN for name-less
+// (auto-named) tables whose assigned name is not in state at link-update time.
 func extractTableNameFromResourceInfo(resourceInfo *provider.ResourceInfo) (string, bool) {
-	tableName, hasTableName := pluginutils.GetValueByPath(
-		"$.tableName",
-		resourceInfo.CurrentResourceState.SpecData,
-	)
-	if !hasTableName {
-		return "", false
-	}
-	return core.StringValue(tableName), true
+	return linkutils.PhysicalResourceName(resourceInfo, "tableName")
 }
 
 func dynamoDBActionsForAccessLevel(accessLevel string) []string {

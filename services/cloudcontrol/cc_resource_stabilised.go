@@ -89,8 +89,13 @@ func (a *ccResourceActions) stabilisedSuccessOutput(
 		return nil, err
 	}
 	return &provider.ResourceHasStabilisedOutput{
-		Stabilised:          true,
-		ComputedFieldValues: a.computedFieldValues(specState, identifier, ""),
+		Stabilised: true,
+		ComputedFieldValues: a.computedFieldValues(
+			specState,
+			identifier,
+			"",
+			a.omittedAutoNamedFields(input.ResourceSpec),
+		),
 	}, nil
 }
 

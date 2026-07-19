@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -131,20 +132,50 @@ var (
 func (a *ccResourceActions) captureComputedFields(
 	ctx context.Context,
 	service cloudcontrolservice.Service,
-	providerContext provider.Context,
+	input *provider.ResourceDeployInput,
 	requestToken string,
 	identifier string,
 ) (*provider.ResourceDeployOutput, error) {
 	specState, resolvedID, err := a.awaitComputedState(
-		ctx, service, providerContext, requestToken, identifier,
+		ctx, service, input.ProviderContext, requestToken, identifier,
 	)
 	if err != nil {
 		return nil, err
 	}
 
 	return &provider.ResourceDeployOutput{
-		ComputedFieldValues: a.computedFieldValues(specState, resolvedID, requestToken),
+		ComputedFieldValues: a.computedFieldValues(
+			specState,
+			resolvedID,
+			requestToken,
+			a.omittedAutoNamedFields(resolvedSpec(input)),
+		),
 	}, nil
+}
+
+// Returns the top-level fields marked computed-when-omitted (auto-named
+// identifier components) that have no user-provided value in the given spec;
+// the AWS-assigned values for these fields are reported as computed once the
+// operation completes so references to them resolve from state.
+func (a *ccResourceActions) omittedAutoNamedFields(spec *core.MappingNode) []string {
+	if a.config.Schema == nil {
+		return nil
+	}
+
+	var fields []string
+	for name, attr := range a.config.Schema.Attributes {
+		if attr == nil || !attr.ComputedWhenOmitted || attr.Computed {
+			continue
+		}
+		if spec != nil && spec.Fields != nil {
+			if value := spec.Fields[name]; value != nil && core.StringValue(value) != "" {
+				continue
+			}
+		}
+		fields = append(fields, name)
+	}
+	sort.Strings(fields)
+	return fields
 }
 
 // Resolves the resource's primary identifier without waiting for the operation to
@@ -369,6 +400,7 @@ func (a *ccResourceActions) computedFieldValues(
 	specState *core.MappingNode,
 	identifier string,
 	requestToken string,
+	omittedAutoNamedFields []string,
 ) map[string]*core.MappingNode {
 	computed := map[string]*core.MappingNode{}
 	if requestToken != "" {
@@ -387,6 +419,16 @@ func (a *ccResourceActions) computedFieldValues(
 		if value, ok := pluginutils.GetValueByPath(fmt.Sprintf("$.%s", field), specState); ok {
 			specFieldKey := fmt.Sprintf("spec.%s", field)
 			computed[specFieldKey] = value
+		}
+	}
+
+	// Auto-named fields the user omitted carry the AWS-assigned (or engine
+	// generated) value in the post-operation state; they are computed for this
+	// deployment only.
+	for _, field := range omittedAutoNamedFields {
+		if value, ok := pluginutils.GetValueByPath(fmt.Sprintf("$.%s", field), specState); ok &&
+			computedFieldPopulated(value) {
+			computed[fmt.Sprintf("spec.%s", field)] = value
 		}
 	}
 	return computed

@@ -278,11 +278,12 @@ func lambdaFunctionSchema() *provider.ResourceDefinitionsSchema {
 				},
 			},
 			"functionName": &provider.ResourceDefinitionsSchema{
-				Type:         provider.ResourceDefinitionsSchemaTypeString,
-				Description:  "The name of the Lambda function, up to 64 characters in length. If you don't specify a name, Bluelink generates one.\n If you specify a name, you cannot perform updates that require replacement of this resource. You can perform updates that require no or some interruption. If you must replace the resource, specify a new name.",
-				Nullable:     true,
-				MustRecreate: true,
-				MinLength:    1,
+				Type:                provider.ResourceDefinitionsSchemaTypeString,
+				Description:         "The name of the Lambda function, up to 64 characters in length. If you don't specify a name, Bluelink generates one.\n If you specify a name, you cannot perform updates that require replacement of this resource. You can perform updates that require no or some interruption. If you must replace the resource, specify a new name.",
+				Nullable:            true,
+				ComputedWhenOmitted: true,
+				MustRecreate:        true,
+				MinLength:           1,
 			},
 			"functionScalingConfig": &provider.ResourceDefinitionsSchema{
 				Type:        provider.ResourceDefinitionsSchemaTypeObject,

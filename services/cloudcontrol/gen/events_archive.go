@@ -46,12 +46,13 @@ func eventsArchiveSchema() *provider.ResourceDefinitionsSchema {
 		Required:    []string{"sourceArn"},
 		Attributes: map[string]*provider.ResourceDefinitionsSchema{
 			"archiveName": &provider.ResourceDefinitionsSchema{
-				Type:         provider.ResourceDefinitionsSchemaTypeString,
-				Nullable:     true,
-				MustRecreate: true,
-				Pattern:      "[\\.\\-_A-Za-z0-9]+",
-				MinLength:    1,
-				MaxLength:    48,
+				Type:                provider.ResourceDefinitionsSchemaTypeString,
+				Nullable:            true,
+				ComputedWhenOmitted: true,
+				MustRecreate:        true,
+				Pattern:             "[\\.\\-_A-Za-z0-9]+",
+				MinLength:           1,
+				MaxLength:           48,
 			},
 			"arn": &provider.ResourceDefinitionsSchema{
 				Type:     provider.ResourceDefinitionsSchemaTypeString,

@@ -145,10 +145,11 @@ func iamUserSchema() *provider.ResourceDefinitionsSchema {
 				},
 			},
 			"userName": &provider.ResourceDefinitionsSchema{
-				Type:         provider.ResourceDefinitionsSchemaTypeString,
-				Description:  "The name of the user to create. Do not include the path in this value.\n This parameter allows (per its [regex pattern](https://docs.aws.amazon.com/http://wikipedia.org/wiki/regex)) a string of characters consisting of upper and lowercase alphanumeric characters with no spaces. You can also include any of the following characters: _+=,.@-. The user name must be unique within the account. User names are not distinguished by case. For example, you cannot create users named both \"John\" and \"john\".\n If you don't specify a name, Bluelink generates a unique physical ID and uses that ID for the user name.\n If you specify a name, you must specify the `CAPABILITY_NAMED_IAM` value to acknowledge your blueprint's capabilities. For more information, see Acknowledging Resources in Blueprints.\n Naming an IAM resource can cause an unrecoverable error if you reuse the same blueprint in multiple Regions.",
-				Nullable:     true,
-				MustRecreate: true,
+				Type:                provider.ResourceDefinitionsSchemaTypeString,
+				Description:         "The name of the user to create. Do not include the path in this value.\n This parameter allows (per its [regex pattern](https://docs.aws.amazon.com/http://wikipedia.org/wiki/regex)) a string of characters consisting of upper and lowercase alphanumeric characters with no spaces. You can also include any of the following characters: _+=,.@-. The user name must be unique within the account. User names are not distinguished by case. For example, you cannot create users named both \"John\" and \"john\".\n If you don't specify a name, Bluelink generates a unique physical ID and uses that ID for the user name.\n If you specify a name, you must specify the `CAPABILITY_NAMED_IAM` value to acknowledge your blueprint's capabilities. For more information, see Acknowledging Resources in Blueprints.\n Naming an IAM resource can cause an unrecoverable error if you reuse the same blueprint in multiple Regions.",
+				Nullable:            true,
+				ComputedWhenOmitted: true,
+				MustRecreate:        true,
 			},
 		},
 	}

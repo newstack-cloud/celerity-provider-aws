@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -169,23 +170,15 @@ func UpdateLambdaEnvironmentVariables(
 	currentConfig *types.FunctionConfiguration,
 	envVarsToSet map[string]string,
 ) error {
-	finalEnvVars := map[string]string{}
-	// A freshly created function has no environment configured, so Environment is nil.
-	if currentConfig != nil && currentConfig.Environment != nil {
-		maps.Copy(finalEnvVars, currentConfig.Environment.Variables)
-	}
-	maps.Copy(finalEnvVars, envVarsToSet)
-
-	_, err := lambdaService.UpdateFunctionConfiguration(
+	return mutateLambdaEnvironmentVariables(
 		ctx,
-		&lambda.UpdateFunctionConfigurationInput{
-			FunctionName: aws.String(functionARN),
-			Environment: &types.Environment{
-				Variables: finalEnvVars,
-			},
+		lambdaService,
+		functionARN,
+		currentConfig,
+		func(envVars map[string]string) {
+			maps.Copy(envVars, envVarsToSet)
 		},
 	)
-	return err
 }
 
 // RemoveLambdaEnvironmentVariables removes the environment variables for a Lambda function
@@ -198,23 +191,70 @@ func RemoveLambdaEnvironmentVariables(
 	currentConfig *types.FunctionConfiguration,
 	envVarsToRemove []string,
 ) error {
-	finalEnvVars := map[string]string{}
-	if currentConfig != nil && currentConfig.Environment != nil {
-		maps.Copy(finalEnvVars, currentConfig.Environment.Variables)
-	}
-
-	for _, envVarName := range envVarsToRemove {
-		delete(finalEnvVars, envVarName)
-	}
-
-	_, err := lambdaService.UpdateFunctionConfiguration(
+	return mutateLambdaEnvironmentVariables(
 		ctx,
-		&lambda.UpdateFunctionConfigurationInput{
-			FunctionName: aws.String(functionARN),
-			Environment: &types.Environment{
-				Variables: finalEnvVars,
-			},
+		lambdaService,
+		functionARN,
+		currentConfig,
+		func(envVars map[string]string) {
+			for _, envVarName := range envVarsToRemove {
+				delete(envVars, envVarName)
+			}
 		},
 	)
-	return err
+}
+
+func mutateLambdaEnvironmentVariables(
+	ctx context.Context,
+	lambdaService lambdaservice.Service,
+	functionARN string,
+	currentConfig *types.FunctionConfiguration,
+	mutate func(envVars map[string]string),
+) error {
+	attempt := func(config *types.FunctionConfiguration) error {
+		finalEnvVars := map[string]string{}
+		// A freshly created function has no environment configured, so Environment is nil.
+		if config != nil && config.Environment != nil {
+			maps.Copy(finalEnvVars, config.Environment.Variables)
+		}
+		mutate(finalEnvVars)
+
+		_, err := lambdaService.UpdateFunctionConfiguration(
+			ctx,
+			&lambda.UpdateFunctionConfigurationInput{
+				FunctionName: aws.String(functionARN),
+				Environment: &types.Environment{
+					Variables: finalEnvVars,
+				},
+			},
+		)
+		return err
+	}
+
+	err := attempt(currentConfig)
+	if err == nil || !IsLambdaFunctionConflictError(err) {
+		return err
+	}
+
+	for _, delay := range transientRetryBackoff {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(delay):
+		}
+
+		lambdaOutput, getErr := lambdaService.GetFunction(ctx, &lambda.GetFunctionInput{
+			FunctionName: aws.String(functionARN),
+		})
+		if getErr != nil {
+			return getErr
+		}
+
+		err = attempt(lambdaOutput.Configuration)
+		if err == nil || !IsLambdaFunctionConflictError(err) {
+			return err
+		}
+	}
+
+	return &provider.RetryableError{ChildError: err}
 }

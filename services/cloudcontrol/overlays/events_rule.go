@@ -1,11 +1,23 @@
 package overlays
 
-import "github.com/newstack-cloud/bluelink/libs/blueprint/provider"
+import (
+	"github.com/newstack-cloud/bluelink-provider-aws/utils"
+	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
+)
 
 const eventsRuleType = "aws/events/rule"
 
 func init() {
 	Register(eventsRuleType, eventsRuleOverlay)
+	RegisterBehaviour(eventsRuleType, &Behaviour{
+		// The Cloud Control AWS::Events::Rule handler NPEs when Name is omitted
+		// instead of auto-naming the rule, so a name is generated client-side
+		// before the create request. Rule names are capped at 64 characters.
+		Name: &NameGeneration{
+			Field:    "name",
+			Generate: utils.DefaultUniqueNameGenerator(64),
+		},
+	})
 }
 
 // An EventBridge rule wires each target inline through targets[].arn. Marking that

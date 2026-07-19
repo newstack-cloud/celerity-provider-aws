@@ -220,6 +220,87 @@ func (s *TableFunctionLinkUpdateSuite) Test_report_batch_item_failures_annotatio
 	)
 }
 
+// When the stream was enabled by this link's own UpdateResourceA (table deployed
+// without streams), the table's state snapshot has no streamArn, the
+// intermediary update must resolve it live via DescribeTable instead of failing.
+func (s *TableFunctionLinkUpdateSuite) Test_intermediary_update_resolves_stream_arn_via_describe_table_when_state_has_none() {
+	loader := &testutils.MockAWSConfigLoader{}
+
+	iamSvc := iammock.CreateIamServiceMock(
+		iammock.WithListRolePoliciesOutput(&iam.ListRolePoliciesOutput{PolicyNames: []string{}}),
+		iammock.WithListAttachedRolePoliciesOutput(&iam.ListAttachedRolePoliciesOutput{}),
+		iammock.WithPutRolePolicyOutput(&iam.PutRolePolicyOutput{}),
+	)
+	lambdaSvc := lambdamock.CreateLambdaServiceMock(
+		lambdamock.WithGetFunctionOutput(&lambda.GetFunctionOutput{
+			Configuration: &lambdatypes.FunctionConfiguration{
+				FunctionArn: aws.String(tflFuncARN),
+				Role:        aws.String(tflRoleARN),
+				Environment: &lambdatypes.EnvironmentResponse{Variables: map[string]string{}},
+			},
+		}),
+		lambdamock.WithCreateEventSourceMappingOutput(&lambda.CreateEventSourceMappingOutput{
+			UUID:                  aws.String(tflESMUUID),
+			EventSourceMappingArn: aws.String("arn:aws:lambda:us-west-2:123456789012:event-source-mapping:" + tflESMUUID),
+		}),
+	)
+
+	testCase := plugintestutils.LinkUpdateIntermediaryResourcesTestCase[
+		*aws.Config,
+		dynamodbservice.Service,
+		*aws.Config,
+		lambdaservice.Service,
+	]{
+		Name: "stream ARN missing from table state is resolved live via DescribeTable",
+		ServiceFactoryA: dynamodbmock.CreateDynamoDBServiceMockFactory(
+			dynamodbmock.WithDescribeTableOutput(&dynamodb.DescribeTableOutput{
+				Table: &dynamodbtypes.TableDescription{
+					TableName:       aws.String(tflTableName),
+					LatestStreamArn: aws.String(tflStreamARN),
+				},
+			}),
+		),
+		ConfigStoreA:                   testConfigStore(loader),
+		ServiceFactoryB:                func(c *aws.Config, pc provider.Context) lambdaservice.Service { return lambdaSvc },
+		ConfigStoreB:                   testConfigStore(loader),
+		IntermediariesServiceMockCalls: &iamSvc.MockCalls,
+		Input: &provider.LinkUpdateIntermediaryResourcesInput{
+			LinkUpdateType: provider.LinkUpdateTypeCreate,
+			InstanceName:   "test-instance",
+			// No streamArn in the table's state — the pre-fix code errored here
+			// with "ensure the table has DynamoDB Streams enabled".
+			ResourceAInfo:    tableResourceInfoStreamsDisabled(),
+			ResourceBInfo:    streamFunctionResourceInfo(),
+			LinkContext:      testLinkContext(),
+			ResourceService:  resourceservicemock.Create(resourceservicemock.WithLookupResourceInState(tflRoleState())),
+			CurrentLinkState: &state.LinkState{},
+		},
+		ExpectedOutputMatcher: matchStreamGrantOutput,
+	}
+
+	plugintestutils.RunLinkUpdateIntermediaryResourcesTestCases(
+		[]plugintestutils.LinkUpdateIntermediaryResourcesTestCase[
+			*aws.Config,
+			dynamodbservice.Service,
+			*aws.Config,
+			lambdaservice.Service,
+		]{testCase},
+		tableFunctionLinkFactory(iamSvc),
+		&s.Suite,
+	)
+
+	lambdaSvc.AssertCalledWith(
+		&s.Suite,
+		"CreateEventSourceMapping",
+		0,
+		plugintestutils.Any,
+		func(arg any) bool {
+			input, ok := arg.(*lambda.CreateEventSourceMappingInput)
+			return ok && aws.ToString(input.EventSourceArn) == tflStreamARN
+		},
+	)
+}
+
 func (s *TableFunctionLinkUpdateSuite) Test_absent_report_batch_item_failures_annotation_leaves_response_types_unset() {
 	loader := &testutils.MockAWSConfigLoader{}
 

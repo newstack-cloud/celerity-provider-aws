@@ -122,6 +122,7 @@ func (s *FunctionTableLinkUpdateSuite) Test_link_update_resources() {
 		dynamodbservice.Service,
 	]{
 		functionTableAddEnvVarTestCase(loader),
+		functionTableAddEnvVarFromARNTestCase(loader),
 		functionTableRemoveEnvVarTestCase(loader),
 		functionTableUpdateErrorTestCase(loader),
 	}
@@ -192,6 +193,83 @@ func functionTableAddEnvVarTestCase(
 					Variables: map[string]string{
 						"EXISTING":    "val",
 						fdtEnvVarName: fdtTableName,
+					},
+				},
+			},
+		},
+	}
+}
+
+// A name-less (auto-named) table has no tableName in state at link-update
+// time; the link must derive the physical name from the table ARN instead.
+func functionTableAddEnvVarFromARNTestCase(
+	loader *testutils.MockAWSConfigLoader,
+) plugintestutils.LinkUpdateResourceTestCase[
+	*aws.Config,
+	lambdaservice.Service,
+	*aws.Config,
+	dynamodbservice.Service,
+] {
+	lambdaSvc := lambdamock.CreateLambdaServiceMock(
+		lambdamock.WithGetFunctionOutput(functionWithEnvOutput(map[string]string{})),
+		lambdamock.WithUpdateFunctionConfigurationOutput(&lambda.UpdateFunctionConfigurationOutput{}),
+	)
+	arnDerivedTableName := "orders"
+
+	namelessTableInfo := &provider.ResourceInfo{
+		ResourceName: "ordersTable",
+		CurrentResourceState: &state.ResourceState{
+			SpecData: core.MappingNodeFields(
+				"arn", core.MappingNodeFromString(fdtTableARN),
+			),
+		},
+	}
+
+	return plugintestutils.LinkUpdateResourceTestCase[
+		*aws.Config,
+		lambdaservice.Service,
+		*aws.Config,
+		dynamodbservice.Service,
+	]{
+		Name:                    "derives the table name from the ARN for a name-less table",
+		Resource:                plugintestutils.LinkUpdateResourceA,
+		ServiceFactoryA:         func(c *aws.Config, pc provider.Context) lambdaservice.Service { return lambdaSvc },
+		ConfigStoreA:            testConfigStore(loader),
+		ServiceFactoryB:         dynamodbmock.CreateDynamoDBServiceMockFactory(),
+		ConfigStoreB:            testConfigStore(loader),
+		CurrentServiceMockCalls: &lambdaSvc.MockCalls,
+		Input: &provider.LinkUpdateResourceInput{
+			LinkUpdateType:    provider.LinkUpdateTypeCreate,
+			ResourceInfo:      functionResourceInfoA(),
+			OtherResourceInfo: namelessTableInfo,
+			LinkContext:       testLinkContext(),
+		},
+		ExpectedOutput: &provider.LinkUpdateResourceOutput{
+			LinkData: core.MappingNodeFields(
+				"processOrdersFunction",
+				core.MappingNodeFields(
+					"environmentVariables",
+					core.MappingNodeFields(
+						fdtEnvVarName, core.MappingNodeFromString(arnDerivedTableName),
+					),
+				),
+			),
+			ResourceDataMappings: map[string]string{
+				fmt.Sprintf(
+					"processOrdersFunction::spec.environment.variables[\"%s\"]",
+					fdtEnvVarName,
+				): fmt.Sprintf(
+					"processOrdersFunction.environmentVariables[\"%s\"]",
+					fdtEnvVarName,
+				),
+			},
+		},
+		UpdateActionsCalled: map[string]any{
+			"UpdateFunctionConfiguration": &lambda.UpdateFunctionConfigurationInput{
+				FunctionName: aws.String(fdtFunctionARN),
+				Environment: &lambdatypes.Environment{
+					Variables: map[string]string{
+						fdtEnvVarName: arnDerivedTableName,
 					},
 				},
 			},

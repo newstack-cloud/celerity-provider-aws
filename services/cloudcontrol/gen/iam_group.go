@@ -50,10 +50,11 @@ func iamGroupSchema() *provider.ResourceDefinitionsSchema {
 				Computed: true,
 			},
 			"groupName": &provider.ResourceDefinitionsSchema{
-				Type:         provider.ResourceDefinitionsSchemaTypeString,
-				Description:  "The name of the group to create. Do not include the path in this value.\n The group name must be unique within the account. Group names are not distinguished by case. For example, you cannot create groups named both \"ADMINS\" and \"admins\". If you don't specify a name, Bluelink generates a unique physical ID and uses that ID for the group name.\n If you specify a name, you cannot perform updates that require replacement of this resource. You can perform updates that require no or some interruption. If you must replace the resource, specify a new name.\n If you specify a name, you must specify the `CAPABILITY_NAMED_IAM` value to acknowledge your blueprint's capabilities. For more information, see Acknowledging Resources in Blueprints.\n Naming an IAM resource can cause an unrecoverable error if you reuse the same blueprint in multiple Regions.",
-				Nullable:     true,
-				MustRecreate: true,
+				Type:                provider.ResourceDefinitionsSchemaTypeString,
+				Description:         "The name of the group to create. Do not include the path in this value.\n The group name must be unique within the account. Group names are not distinguished by case. For example, you cannot create groups named both \"ADMINS\" and \"admins\". If you don't specify a name, Bluelink generates a unique physical ID and uses that ID for the group name.\n If you specify a name, you cannot perform updates that require replacement of this resource. You can perform updates that require no or some interruption. If you must replace the resource, specify a new name.\n If you specify a name, you must specify the `CAPABILITY_NAMED_IAM` value to acknowledge your blueprint's capabilities. For more information, see Acknowledging Resources in Blueprints.\n Naming an IAM resource can cause an unrecoverable error if you reuse the same blueprint in multiple Regions.",
+				Nullable:            true,
+				ComputedWhenOmitted: true,
+				MustRecreate:        true,
 			},
 			"managedPolicyArns": &provider.ResourceDefinitionsSchema{
 				Type:        provider.ResourceDefinitionsSchemaTypeArray,

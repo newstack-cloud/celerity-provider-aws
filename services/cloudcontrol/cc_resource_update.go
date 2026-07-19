@@ -48,7 +48,7 @@ func (a *ccResourceActions) Update(
 	if !hasChanges {
 		// Nothing to update, but the computed fields must still be captured into
 		// state from the live resource. An empty token short-circuits the wait.
-		return a.captureComputedFields(ctx, service, input.ProviderContext, "", identifier)
+		return a.captureComputedFields(ctx, service, input, "", identifier)
 	}
 
 	output, err := a.submitUpdate(ctx, service, identifier, patchDocument, input)
@@ -59,7 +59,7 @@ func (a *ccResourceActions) Update(
 	return a.captureComputedFields(
 		ctx,
 		service,
-		input.ProviderContext,
+		input,
 		aws.ToString(output.ProgressEvent.RequestToken),
 		identifier,
 	)
@@ -168,6 +168,7 @@ func (a *ccResourceActions) buildPatchDocument(
 	}
 
 	patch = a.dropCreateOnlyOperations(patch)
+	patch = a.dropUnmanagedOperations(patch)
 	if len(patch) == 0 {
 		return "", false, nil
 	}
@@ -227,6 +228,34 @@ func (a *ccResourceActions) dropCreateOnlyOperations(patch jsondiff.Patch) jsond
 	kept := make(jsondiff.Patch, 0, len(patch))
 	for _, operation := range patch {
 		if createOnlyRoots[patchRoot(operation.Path)] {
+			continue
+		}
+		kept = append(kept, operation)
+	}
+	return kept
+}
+
+// Read-back state can carry properties the generated schema does not model,
+// typically read-only fields AWS added to the live resource type after its
+// schema was vendored (e.g. AWS::Events::Rule's Id). Ops rooted at them would
+// be rejected by AWS ("readOnlyProperties ... cannot be updated") or add
+// state the engine does not manage, so they are dropped.
+func (a *ccResourceActions) dropUnmanagedOperations(patch jsondiff.Patch) jsondiff.Patch {
+	if a.config.Schema == nil || a.config.Schema.Attributes == nil {
+		return patch
+	}
+	managedRoots := make(map[string]bool, len(a.config.Schema.Attributes))
+	for name := range a.config.Schema.Attributes {
+		cfnName := a.config.Meta.FieldNameOverrides[name]
+		if cfnName == "" {
+			cfnName = upperFirst(name)
+		}
+		managedRoots["/"+cfnName] = true
+	}
+
+	kept := make(jsondiff.Patch, 0, len(patch))
+	for _, operation := range patch {
+		if !managedRoots[patchRoot(operation.Path)] {
 			continue
 		}
 		kept = append(kept, operation)

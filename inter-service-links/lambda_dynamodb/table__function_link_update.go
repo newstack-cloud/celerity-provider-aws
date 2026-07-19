@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -139,11 +140,22 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) UpdateIntermediaryResources(
 
 	streamARN, hasStreamARN := extractStreamARNFromResourceInfo(input.ResourceAInfo)
 	if !hasStreamARN {
-		return nil, fmt.Errorf(
-			"stream ARN could not be retrieved from the DynamoDB table %q; "+
-				"ensure the table has DynamoDB Streams enabled",
-			pluginutils.GetResourceName(input.ResourceAInfo),
+		// The table's state carries no streamArn when the stream was enabled by
+		// this link's UpdateResourceA (a direct UpdateTable call after the table
+		// deployed without streams). The state snapshot predates the stream, so
+		// the ARN must come from DescribeTable instead. On the deploy path the
+		// stream may still be materialising, so poll for it, and on destroy a single
+		// read is enough (a missing stream there is genuinely an error, and
+		// waiting would just delay the drain).
+		streamARN, err = l.lookupTableStreamARN(
+			ctx,
+			input,
+			providerCtx,
+			input.LinkUpdateType != provider.LinkUpdateTypeDestroy,
 		)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	functionARN, hasFunctionARN := utils.ExtractARNFromResourceInfo(input.ResourceBInfo)
@@ -314,11 +326,24 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) destroyIntermediaryResources(
 	esmResourceID := tableFunctionESMResourceID(input.ResourceAInfo, input.ResourceBInfo)
 	uuid := getExistingEventSourceMappingUUID(input.CurrentLinkState, esmResourceID)
 	if uuid != "" {
-		_, err := lambdaService.DeleteEventSourceMapping(ctx, &lambda.DeleteEventSourceMappingInput{
+		// ESM deletion transiently fails with ResourceInUseException while the
+		// mapping is processing or mid-update. Retry in-call with backoff
+		// (~2 minutes, mirroring CloudFormation), then fall back to the
+		// engine's link-update retries.
+		deleteESM := linkutils.RetryOnESMInUse(
+			func(ctx context.Context, in *lambda.DeleteEventSourceMappingInput) (*lambda.DeleteEventSourceMappingOutput, error) {
+				return lambdaService.DeleteEventSourceMapping(ctx, in)
+			},
+		)
+		_, err := deleteESM(ctx, &lambda.DeleteEventSourceMappingInput{
 			UUID: aws.String(uuid),
 		})
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf(
+				"failed to delete event source mapping %q: %w",
+				uuid,
+				err,
+			)
 		}
 	}
 
@@ -381,13 +406,12 @@ func (l *dynamoDBTableLambdaFunctionLinkActions) createEventSourceMapping(
 
 	// The execution role's stream-read grant is applied immediately before this call,
 	// but IAM is eventually consistent: CreateEventSourceMapping can transiently fail
-	// validation ("Cannot access stream ... ensure the role can perform ...") until the
-	// policy propagates. Treat that as retryable so the link deploy retries it.
-	createESM := pluginutils.RetryableReturnValue(
+	// validation until the policy propagates. Retry in-call with backoff (~2 minutes,
+	// mirroring CloudFormation), then fall back to the engine's link-update retries.
+	createESM := linkutils.RetryOnIAMPropagation(
 		func(ctx context.Context, in *lambda.CreateEventSourceMappingInput) (*lambda.CreateEventSourceMappingOutput, error) {
 			return lambdaService.CreateEventSourceMapping(ctx, in)
 		},
-		linkutils.IsRoleNotYetPropagatedError,
 	)
 
 	output, err := createESM(ctx, createInput)
@@ -715,6 +739,76 @@ func getStreamTriggerAnnotations(
 		filterPatterns:             filterPatterns,
 		enabled:                    enabled,
 	}
+}
+
+// Streams enabled via UpdateTable materialise asynchronously; DescribeTable
+// usually reports LatestStreamArn within a few seconds. ~1 minute total.
+var streamARNLookupBackoff = []time.Duration{
+	0,
+	2 * time.Second,
+	4 * time.Second,
+	8 * time.Second,
+	16 * time.Second,
+	30 * time.Second,
+}
+
+// lookupTableStreamARN reads the table's stream ARN live from DescribeTable,
+// polling until it appears when wait is true.
+func (l *dynamoDBTableLambdaFunctionLinkActions) lookupTableStreamARN(
+	ctx context.Context,
+	input *provider.LinkUpdateIntermediaryResourcesInput,
+	providerCtx provider.Context,
+	wait bool,
+) (string, error) {
+	tableName, hasTableName := extractTableNameFromResourceInfo(input.ResourceAInfo)
+	if !hasTableName {
+		return "", fmt.Errorf(
+			"table name could not be retrieved from the DynamoDB table %q",
+			pluginutils.GetResourceName(input.ResourceAInfo),
+		)
+	}
+
+	dynamodbService, err := l.getDynamoDBService(ctx, providerCtx)
+	if err != nil {
+		return "", err
+	}
+
+	attempts := streamARNLookupBackoff
+	if !wait {
+		attempts = streamARNLookupBackoff[:1]
+	}
+	for _, delay := range attempts {
+		if delay > 0 {
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(delay):
+			}
+		}
+
+		describeOutput, err := dynamodbService.DescribeTable(ctx, &dynamodb.DescribeTableInput{
+			TableName: aws.String(tableName),
+		})
+		if err != nil {
+			return "", fmt.Errorf(
+				"failed to describe DynamoDB table %q to resolve its stream ARN: %w",
+				tableName,
+				err,
+			)
+		}
+		if describeOutput.Table != nil {
+			streamARN := aws.ToString(describeOutput.Table.LatestStreamArn)
+			if streamARN != "" {
+				return streamARN, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf(
+		"stream ARN could not be retrieved from the DynamoDB table %q; "+
+			"ensure the table has DynamoDB Streams enabled",
+		pluginutils.GetResourceName(input.ResourceAInfo),
+	)
 }
 
 func extractStreamARNFromResourceInfo(resourceInfo *provider.ResourceInfo) (string, bool) {

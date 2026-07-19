@@ -528,10 +528,11 @@ func dynamodbTableSchema() *provider.ResourceDefinitionsSchema {
 				Nullable:    true,
 			},
 			"tableName": &provider.ResourceDefinitionsSchema{
-				Type:         provider.ResourceDefinitionsSchemaTypeString,
-				Description:  "A name for the table. If you don't specify a name, Bluelink generates a unique physical ID and uses that ID for the table name. For more information, see Name Type.\n If you specify a name, you cannot perform updates that require replacement of this resource. You can perform updates that require no or some interruption. If you must replace the resource, specify a new name.",
-				Nullable:     true,
-				MustRecreate: true,
+				Type:                provider.ResourceDefinitionsSchemaTypeString,
+				Description:         "A name for the table. If you don't specify a name, Bluelink generates a unique physical ID and uses that ID for the table name. For more information, see Name Type.\n If you specify a name, you cannot perform updates that require replacement of this resource. You can perform updates that require no or some interruption. If you must replace the resource, specify a new name.",
+				Nullable:            true,
+				ComputedWhenOmitted: true,
+				MustRecreate:        true,
 			},
 			"tags": &provider.ResourceDefinitionsSchema{
 				Type:        provider.ResourceDefinitionsSchemaTypeArray,

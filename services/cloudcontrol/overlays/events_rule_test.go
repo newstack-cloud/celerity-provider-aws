@@ -51,6 +51,27 @@ func (s *EventsRuleOverlaySuite) Test_is_a_no_op_when_targets_absent() {
 	s.NotPanics(func() { Apply(eventsRuleType, schema) })
 }
 
+// The Cloud Control AWS::Events::Rule handler when Name is omitted, so
+// the engine must generate a rule name client-side for name-less rules.
+func (s *EventsRuleOverlaySuite) Test_generates_a_rule_name_when_omitted() {
+	behaviour := BehaviourFor(eventsRuleType)
+	s.Require().NotNil(behaviour)
+	s.Require().NotNil(behaviour.Name)
+	s.Equal("name", behaviour.Name.Field)
+
+	name, err := behaviour.Name.Generate(&provider.ResourceDeployInput{
+		Changes: &provider.Changes{
+			AppliedResourceInfo: provider.ResourceInfo{
+				ResourceName: "orderEventsRule",
+			},
+		},
+	})
+	s.Require().NoError(err)
+	s.NotEmpty(name)
+	s.LessOrEqual(len(name), 64)
+	s.Contains(name, "orderEventsRule")
+}
+
 func TestEventsRuleOverlaySuite(t *testing.T) {
 	suite.Run(t, new(EventsRuleOverlaySuite))
 }

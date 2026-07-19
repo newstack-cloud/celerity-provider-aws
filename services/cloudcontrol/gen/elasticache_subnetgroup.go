@@ -48,10 +48,11 @@ func elasticacheSubnetGroupSchema() *provider.ResourceDefinitionsSchema {
 		Required:    []string{"description", "subnetIds"},
 		Attributes: map[string]*provider.ResourceDefinitionsSchema{
 			"cacheSubnetGroupName": &provider.ResourceDefinitionsSchema{
-				Type:         provider.ResourceDefinitionsSchemaTypeString,
-				Description:  "The name for the cache subnet group. This value is stored as a lowercase string.",
-				Nullable:     true,
-				MustRecreate: true,
+				Type:                provider.ResourceDefinitionsSchemaTypeString,
+				Description:         "The name for the cache subnet group. This value is stored as a lowercase string.",
+				Nullable:            true,
+				ComputedWhenOmitted: true,
+				MustRecreate:        true,
 			},
 			"description": &provider.ResourceDefinitionsSchema{
 				Type:        provider.ResourceDefinitionsSchemaTypeString,

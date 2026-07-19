@@ -696,9 +696,10 @@ func dynamodbGlobalTableSchema() *provider.ResourceDefinitionsSchema {
 				Computed: true,
 			},
 			"tableName": &provider.ResourceDefinitionsSchema{
-				Type:         provider.ResourceDefinitionsSchemaTypeString,
-				Nullable:     true,
-				MustRecreate: true,
+				Type:                provider.ResourceDefinitionsSchemaTypeString,
+				Nullable:            true,
+				ComputedWhenOmitted: true,
+				MustRecreate:        true,
 			},
 			"timeToLiveSpecification": &provider.ResourceDefinitionsSchema{
 				Type:     provider.ResourceDefinitionsSchemaTypeObject,

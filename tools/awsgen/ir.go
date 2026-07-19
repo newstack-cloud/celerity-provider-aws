@@ -38,19 +38,23 @@ type irResource struct {
 }
 
 type irSchema struct {
-	Type         string
-	Label        string
-	Description  string
-	Attributes   []irAttribute
-	Items        *irSchema
-	MapValues    *irSchema
-	OneOf        []*irSchema
-	Required     []string
-	Nullable     bool
-	Computed     bool
-	MustRecreate bool
-	Sensitive    bool
-	IgnoreDrift  bool
+	Type        string
+	Label       string
+	Description string
+	Attributes  []irAttribute
+	Items       *irSchema
+	MapValues   *irSchema
+	OneOf       []*irSchema
+	Required    []string
+	Nullable    bool
+	Computed    bool
+	// ComputedWhenOmitted marks a user-settable field that AWS populates when
+	// it is omitted (an auto-named primary identifier component); references
+	// to it resolve as known-after-deploy during change staging.
+	ComputedWhenOmitted bool
+	MustRecreate        bool
+	Sensitive           bool
+	IgnoreDrift         bool
 	// JSONString marks a string field that encodes a CloudFormation free-form
 	// object (which the repo cannot model as an open object). The engine parses it
 	// back to a JSON object when sending desired state to Cloud Control and
@@ -221,6 +225,14 @@ func (c *converter) stampPointerLists(resource *irResource, root *irSchema) {
 	}
 
 	for _, pointer := range c.schema.PrimaryIdentifier {
+		// An optional, non-read-only primary identifier component (e.g. an S3
+		// bucket's bucketName) is auto-named by AWS when omitted, so references
+		// to it must resolve as known-after-deploy during change staging.
+		stampPointer(root, pointer, func(s *irSchema) {
+			if !s.Computed && s.Nullable {
+				s.ComputedWhenOmitted = true
+			}
+		})
 		resource.PrimaryIdentifierFields = append(
 			resource.PrimaryIdentifierFields,
 			topLevelField(pointer),

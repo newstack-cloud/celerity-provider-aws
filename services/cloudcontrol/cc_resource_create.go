@@ -49,7 +49,7 @@ func (a *ccResourceActions) Create(
 	return a.captureComputedFields(
 		ctx,
 		service,
-		input.ProviderContext,
+		input,
 		requestToken,
 		identifier,
 	)
@@ -103,6 +103,6 @@ func (a *ccResourceActions) deferredComputedFieldsOutput(
 		return nil, err
 	}
 	return &provider.ResourceDeployOutput{
-		ComputedFieldValues: a.computedFieldValues(nil, resolvedID, requestToken),
+		ComputedFieldValues: a.computedFieldValues(nil, resolvedID, requestToken, nil),
 	}, nil
 }

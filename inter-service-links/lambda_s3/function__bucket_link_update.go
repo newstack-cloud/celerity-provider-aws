@@ -296,13 +296,10 @@ func specS3AccessStatementNode(sid, bucketName, accessLevel string) *core.Mappin
 	)
 }
 
+// Falls back to deriving the name from the bucket ARN for name-less
+// (auto-named) buckets whose assigned name is not in state at link-update time.
 func extractBucketName(bucketInfo *provider.ResourceInfo) (string, bool) {
-	spec := pluginutils.GetCurrentStateSpecDataFromResourceInfo(bucketInfo)
-	bucketNameNode, has := pluginutils.GetValueByPath("$.bucketName", spec)
-	if !has {
-		return "", false
-	}
-	return core.StringValue(bucketNameNode), true
+	return linkutils.PhysicalResourceName(bucketInfo, "bucketName")
 }
 
 func bucketEnvVarName(userDefinedEnvVarName string, resourceInfo *provider.ResourceInfo) string {

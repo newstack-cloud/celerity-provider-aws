@@ -34,6 +34,8 @@ func (s *CCResourceUpdateSuite) Test_update() {
 	testCases := []plugintestutils.ResourceDeployTestCase[*aws.Config, cloudcontrolservice.Service]{
 		updateChangedFieldCase(providerCtx, loader),
 		updateNoOpCase(providerCtx, loader),
+		updateIgnoresUnmanagedReadBackPropertyCase(providerCtx, loader),
+		updateNoOpWithUnmanagedReadBackPropertyCase(providerCtx, loader),
 	}
 
 	plugintestutils.RunResourceDeployTestCases(testCases, newTestResource, &s.Suite)
@@ -128,6 +130,114 @@ func updateNoOpCase(
 
 	return plugintestutils.ResourceDeployTestCase[*aws.Config, cloudcontrolservice.Service]{
 		Name:             "skips the update call when nothing changed but still captures computed fields",
+		ServiceFactory:   func(*aws.Config, provider.Context) cloudcontrolservice.Service { return service },
+		ServiceMockCalls: &service.MockCalls,
+		ConfigStore:      newAWSConfigStore(loader),
+		Input:            deployInput(providerCtx, desiredSpec, currentStateWithIdentifier()),
+		ExpectedOutput: &provider.ResourceDeployOutput{
+			ComputedFieldValues: map[string]*core.MappingNode{
+				"spec." + fieldPrimaryIdentifier: core.MappingNodeFromString(testQueueURL),
+				"spec.queueUrl":                  core.MappingNodeFromString(testQueueURL),
+				"spec.arn":                       core.MappingNodeFromString(testQueueARN),
+			},
+		},
+		SaveActionsNotCalled: []string{"UpdateResource"},
+	}
+}
+
+// AWS can return read-back properties the vendored schema does not model (e.g.
+// AWS::Events::Rule's read-only Id). A patch op rooted at such a property is
+// rejected by AWS ("readOnlyProperties ... cannot be updated"), so the patch
+// must only ever target properties in the desired schema.
+func updateIgnoresUnmanagedReadBackPropertyCase(
+	providerCtx provider.Context,
+	loader *testutils.MockAWSConfigLoader,
+) plugintestutils.ResourceDeployTestCase[*aws.Config, cloudcontrolservice.Service] {
+	currentProperties := `{
+		"QueueName": "test-queue",
+		"VisibilityTimeout": 30,
+		"QueueUrl": "` + testQueueURL + `",
+		"Arn": "` + testQueueARN + `",
+		"Id": "unmanaged-read-back-id"
+	}`
+
+	service := cloudcontrolmock.CreateCloudControlServiceMock(
+		cloudcontrolmock.WithGetResourceOutput(&awscc.GetResourceOutput{
+			ResourceDescription: &cctypes.ResourceDescription{
+				Identifier: aws.String(testQueueURL),
+				Properties: aws.String(currentProperties),
+			},
+		}),
+		cloudcontrolmock.WithUpdateResourceOutput(&awscc.UpdateResourceOutput{
+			ProgressEvent: &cctypes.ProgressEvent{
+				RequestToken: aws.String("update-token"),
+				Identifier:   aws.String(testQueueURL),
+			},
+		}),
+		cloudcontrolmock.WithGetResourceRequestStatusOutput(&awscc.GetResourceRequestStatusOutput{
+			ProgressEvent: &cctypes.ProgressEvent{
+				OperationStatus: cctypes.OperationStatusSuccess,
+				Identifier:      aws.String(testQueueURL),
+			},
+		}),
+	)
+
+	desiredSpec := core.MappingNodeFields(
+		"queueName", core.MappingNodeFromString("test-queue"),
+		"visibilityTimeout", core.MappingNodeFromInt(60),
+	)
+
+	return plugintestutils.ResourceDeployTestCase[*aws.Config, cloudcontrolservice.Service]{
+		Name:             "excludes properties the schema does not model from the update patch",
+		ServiceFactory:   func(*aws.Config, provider.Context) cloudcontrolservice.Service { return service },
+		ServiceMockCalls: &service.MockCalls,
+		ConfigStore:      newAWSConfigStore(loader),
+		Input:            deployInput(providerCtx, desiredSpec, currentStateWithIdentifier()),
+		ExpectedOutput: &provider.ResourceDeployOutput{
+			ComputedFieldValues: map[string]*core.MappingNode{
+				"spec." + fieldRequestToken:      core.MappingNodeFromString("update-token"),
+				"spec." + fieldPrimaryIdentifier: core.MappingNodeFromString(testQueueURL),
+				"spec.queueUrl":                  core.MappingNodeFromString(testQueueURL),
+				"spec.arn":                       core.MappingNodeFromString(testQueueARN),
+			},
+		},
+		SaveActionsCalled: map[string]any{
+			"UpdateResource": matchUpdateResourceInput(
+				testQueueURL,
+				`[{"op": "replace", "path": "/VisibilityTimeout", "value": 60}]`,
+			),
+		},
+	}
+}
+
+func updateNoOpWithUnmanagedReadBackPropertyCase(
+	providerCtx provider.Context,
+	loader *testutils.MockAWSConfigLoader,
+) plugintestutils.ResourceDeployTestCase[*aws.Config, cloudcontrolservice.Service] {
+	currentProperties := `{
+		"QueueName": "test-queue",
+		"VisibilityTimeout": 30,
+		"QueueUrl": "` + testQueueURL + `",
+		"Arn": "` + testQueueARN + `",
+		"Id": "unmanaged-read-back-id"
+	}`
+
+	service := cloudcontrolmock.CreateCloudControlServiceMock(
+		cloudcontrolmock.WithGetResourceOutput(&awscc.GetResourceOutput{
+			ResourceDescription: &cctypes.ResourceDescription{
+				Identifier: aws.String(testQueueURL),
+				Properties: aws.String(currentProperties),
+			},
+		}),
+	)
+
+	desiredSpec := core.MappingNodeFields(
+		"queueName", core.MappingNodeFromString("test-queue"),
+		"visibilityTimeout", core.MappingNodeFromInt(30),
+	)
+
+	return plugintestutils.ResourceDeployTestCase[*aws.Config, cloudcontrolservice.Service]{
+		Name:             "treats an unmanaged read-back property as no change",
 		ServiceFactory:   func(*aws.Config, provider.Context) cloudcontrolservice.Service { return service },
 		ServiceMockCalls: &service.MockCalls,
 		ConfigStore:      newAWSConfigStore(loader),

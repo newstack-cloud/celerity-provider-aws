@@ -23,6 +23,8 @@ func init() {
 	registerPolicyDocumentOverlay("aws/iam/group", "policies.*.policyDocument")
 	registerPolicyDocumentOverlay("aws/iam/user", "policies.*.policyDocument")
 	registerPolicyDocumentOverlay("aws/sqs/queueInlinePolicy", "policyDocument")
+	registerPolicyDocumentOverlay("aws/sns/topicInlinePolicy", "policyDocument")
+	registerPolicyDocumentOverlay("aws/s3/bucketPolicy", "policyDocument")
 	registerPolicyDocumentOverlay("aws/events/eventBus", "policy")
 	registerPolicyDocumentOverlay(
 		"aws/dynamodb/table",

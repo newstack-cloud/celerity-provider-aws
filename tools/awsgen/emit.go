@@ -203,6 +203,9 @@ func renderBoolFields(b *strings.Builder, schema *irSchema, inner string) {
 	if schema.Computed {
 		fmt.Fprintf(b, "%sComputed: true,\n", inner)
 	}
+	if schema.ComputedWhenOmitted {
+		fmt.Fprintf(b, "%sComputedWhenOmitted: true,\n", inner)
+	}
 	if schema.MustRecreate {
 		fmt.Fprintf(b, "%sMustRecreate: true,\n", inner)
 	}

@@ -430,10 +430,11 @@ func elasticacheReplicationGroupSchema() *provider.ResourceDefinitionsSchema {
 				Description: "A user-created description for the replication group.",
 			},
 			"replicationGroupId": &provider.ResourceDefinitionsSchema{
-				Type:         provider.ResourceDefinitionsSchemaTypeString,
-				Description:  "The replication group identifier. This parameter is stored as a lowercase string.",
-				Nullable:     true,
-				MustRecreate: true,
+				Type:                provider.ResourceDefinitionsSchemaTypeString,
+				Description:         "The replication group identifier. This parameter is stored as a lowercase string.",
+				Nullable:            true,
+				ComputedWhenOmitted: true,
+				MustRecreate:        true,
 			},
 			"securityGroupIds": &provider.ResourceDefinitionsSchema{
 				Type:        provider.ResourceDefinitionsSchemaTypeArray,

@@ -93,10 +93,11 @@ func logsLogGroupSchema() *provider.ResourceDefinitionsSchema {
 				AllowedValues: []*core.MappingNode{core.MappingNodeFromString("STANDARD"), core.MappingNodeFromString("INFREQUENT_ACCESS"), core.MappingNodeFromString("DELIVERY")},
 			},
 			"logGroupName": &provider.ResourceDefinitionsSchema{
-				Type:         provider.ResourceDefinitionsSchemaTypeString,
-				Description:  "The name of the log group. If you don't specify a name, Bluelink generates a unique ID for the log group.",
-				Nullable:     true,
-				MustRecreate: true,
+				Type:                provider.ResourceDefinitionsSchemaTypeString,
+				Description:         "The name of the log group. If you don't specify a name, Bluelink generates a unique ID for the log group.",
+				Nullable:            true,
+				ComputedWhenOmitted: true,
+				MustRecreate:        true,
 				// CloudFormation pattern "^[.\\-_/#A-Za-z0-9]{1,512}\\Z" dropped: not compilable by Go's RE2 regexp.
 				MinLength: 1,
 				MaxLength: 512,
