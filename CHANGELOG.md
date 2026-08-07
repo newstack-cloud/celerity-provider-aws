@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2026-08-07
+
+### Features
+
+- Complete the flex VPC networking stack([c9730c8](https://github.com/newstack-cloud/bluelink-provider-aws/commit/c9730c89742c59e25c465061f0af6e82bcc7c07e))
 ## [0.4.2] - 2026-07-19
 
 ### Bug Fixes
