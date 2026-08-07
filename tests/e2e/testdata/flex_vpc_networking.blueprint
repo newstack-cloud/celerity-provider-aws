@@ -1,0 +1,114 @@
+version "2025-11-02"
+
+variable namePrefix: string {}
+
+variable region: string {}
+
+# A VPC-attached function reaching two AWS services: SQS through an interface
+# endpoint and DynamoDB through a gateway endpoint. Both endpoint kinds and the
+# per-workload security group are exercised by one deploy.
+#
+# The isolated preset is deliberate. It provisions private subnets with no NAT
+# gateway and no internet gateway, which is both the fastest topology to stand up
+# and the case interface endpoints exist for: without a working endpoint path the
+# function has no route to either service at all.
+resource netVPC: aws/flex/vpc {
+    spec {
+        name = "${variables.namePrefix}-vpc"
+        mode = "create"
+        preset = "isolated"
+        cidrBlock = "10.72.0.0/16"
+        region = variables.region
+        # An empty group minted for a resource that needs an identity in the VPC. No
+        # target references it here, since the in-VPC targets that would (RDS,
+        # ElastiCache) cost more to stand up than this test is worth. What it does prove
+        # is that the group is created, exposed under its name, left with no rules of its
+        # own, and removed on teardown.
+        securityGroups = ["db"]
+        tags = {
+            System = "Orders"
+        }
+    }
+
+    select by label {
+        network = "orders"
+    }
+}
+
+resource netRole: aws/iam/role {
+    spec {
+        roleName = "${variables.namePrefix}-net-role"
+        # This role deliberately grants nothing itself. A VPC-attached Lambda cannot
+        # start without permission to manage its own elastic network interfaces, and
+        # the placement link grants exactly that, the same way the access links grant
+        # table and queue access. If the run gets as far as an attached, invocable
+        # function, the link granted it.
+        assumeRolePolicyDocument = {
+            version = "2012-10-17",
+            statement = [
+                {
+                    effect = "Allow",
+                    principal = { service = "lambda.amazonaws.com" },
+                    action = "sts:AssumeRole"
+                }
+            ]
+        }
+    }
+}
+
+resource netFunction: aws/lambda/function {
+    metadata {
+        labels = {
+            network = "orders"
+        }
+    }
+
+    select by label {
+        access = "ordersData"
+    }
+
+    spec {
+        functionName = "${variables.namePrefix}-net-fn"
+        runtime = "nodejs20.x"
+        handler = "index.handler"
+        role = "${resources.netRole.spec.arn}"
+        code = {
+            zipFile = "exports.handler = async () => ({});"
+        }
+    }
+}
+
+resource netQueue: aws/sqs/queue {
+    metadata {
+        labels = {
+            access = "ordersData"
+        }
+    }
+    spec {
+        queueName = "${variables.namePrefix}-net-queue"
+    }
+}
+
+resource netTable: aws/dynamodb/table {
+    metadata {
+        labels = {
+            access = "ordersData"
+        }
+    }
+    spec {
+        tableName = "${variables.namePrefix}-net-table"
+        billingMode = "PAY_PER_REQUEST"
+        attributeDefinitions = [
+            {
+                attributeName = "id",
+                attributeType = "S"
+            }
+        ]
+        keySchema = [
+            {
+                attributeName = "id",
+                keyType = "HASH"
+            }
+        ]
+    }
+}

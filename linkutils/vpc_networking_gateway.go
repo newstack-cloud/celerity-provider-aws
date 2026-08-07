@@ -20,7 +20,7 @@ import (
 // so a VPC-isolated caller can reach S3 or DynamoDB over the private network. Unlike an
 // interface endpoint, a gateway endpoint attaches to the caller's route tables and needs
 // no security group or network interface: access is via the route-table prefix list.
-func activateGatewayEndpoint(
+func reconcileGatewayEndpoint(
 	ctx context.Context,
 	ec2Service ec2service.Service,
 	input *provider.LinkUpdateIntermediaryResourcesInput,
@@ -63,8 +63,26 @@ func activateGatewayEndpoint(
 		routeTableIDs: routeTableIDs,
 	}
 
-	if input.LinkUpdateType == provider.LinkUpdateTypeDestroy && len(vpcEndpointsOutput.VpcEndpoints) > 0 {
+	callerSecurityGroupID := activation.Caller.SecurityGroupIDs[0]
+
+	if input.LinkUpdateType == provider.LinkUpdateTypeDestroy {
+		if err := revokeLinkRules(ctx, ec2Service, callerSecurityGroupID, input.LinkID); err != nil {
+			return nil, err
+		}
+		// Returns here even with no endpoint left to remove: falling through would
+		// take the create path and provision one during a teardown.
+		if len(vpcEndpointsOutput.VpcEndpoints) == 0 {
+			return output, nil
+		}
 		return removeGatewayEndpoint(ctx, ec2Service, &vpcEndpointsOutput.VpcEndpoints[0], input, output)
+	}
+
+	// A gateway endpoint has no security group of its own to pair with, so the caller's
+	// egress is opened to the service's managed prefix list instead. Without this the
+	// route exists and the security group drops the traffic.
+	err = authorizeGatewayEgress(ctx, ec2Service, callerSecurityGroupID, info, input.LinkID)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(vpcEndpointsOutput.VpcEndpoints) == 0 {
@@ -72,6 +90,74 @@ func activateGatewayEndpoint(
 	}
 
 	return updateGatewayEndpoint(ctx, ec2Service, info, &vpcEndpointsOutput.VpcEndpoints[0], input, output)
+}
+
+// Opens egress from the caller's security group to every address range the service
+// currently occupies, by referencing the AWS-managed prefix list for it.
+//
+// A prefix list is the only workable destination here: the address ranges of S3 or
+// DynamoDB are large and change over time, and AWS updates the list in place so the
+// rule keeps up without the provider tracking anything.
+func authorizeGatewayEgress(
+	ctx context.Context,
+	ec2Service ec2service.Service,
+	callerSecurityGroupID string,
+	info *gatewayEndpointInfo,
+	linkID string,
+) error {
+	prefixListID, err := servicePrefixListID(ctx, ec2Service, info.serviceName)
+	if err != nil {
+		return err
+	}
+
+	_, err = ec2Service.AuthorizeSecurityGroupEgress(
+		ctx,
+		&ec2.AuthorizeSecurityGroupEgressInput{
+			GroupId: aws.String(callerSecurityGroupID),
+			IpPermissions: []ec2types.IpPermission{
+				{
+					IpProtocol: aws.String("tcp"),
+					FromPort:   aws.Int32(vpcEndpointPort),
+					ToPort:     aws.Int32(vpcEndpointPort),
+					PrefixListIds: []ec2types.PrefixListId{
+						{PrefixListId: aws.String(prefixListID)},
+					},
+				},
+			},
+			TagSpecifications: securityGroupRuleTagSpecifications(linkID),
+		},
+	)
+	return ignoreDuplicateRuleError(err)
+}
+
+// The managed prefix list AWS publishes for a service is named after the endpoint
+// service name, so it is looked up by that rather than hardcoded per service and per
+// region.
+func servicePrefixListID(
+	ctx context.Context,
+	ec2Service ec2service.Service,
+	serviceName string,
+) (string, error) {
+	output, err := ec2Service.DescribeManagedPrefixLists(
+		ctx,
+		&ec2.DescribeManagedPrefixListsInput{
+			Filters: []ec2types.Filter{
+				{Name: aws.String("prefix-list-name"), Values: []string{serviceName}},
+			},
+		},
+	)
+	if err != nil {
+		return "", err
+	}
+
+	if output == nil || len(output.PrefixLists) == 0 {
+		return "", fmt.Errorf(
+			"no managed prefix list found for the %q service, so egress to it cannot be opened",
+			serviceName,
+		)
+	}
+
+	return aws.ToString(output.PrefixLists[0].PrefixListId), nil
 }
 
 func createGatewayEndpoint(

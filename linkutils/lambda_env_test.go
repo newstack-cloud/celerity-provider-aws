@@ -225,3 +225,81 @@ func (s *LambdaEnvUpdateSuite) Test_update_stops_waiting_on_context_cancellation
 func TestLambdaEnvUpdateSuite(t *testing.T) {
 	suite.Run(t, new(LambdaEnvUpdateSuite))
 }
+
+// Lambda serialises configuration updates on a function, so a placement link setting
+// vpcConfig while an access link sets environment variables gets a 409.
+//
+// This is a regression test for what failed the destroy in the first end-to-end run
+// that got far enough to tear down a placed function, taking both the placement link
+// and an access link down with it and leaving the instance in DESTROY FAILED.
+func (s *LambdaEnvUpdateSuite) Test_vpc_config_update_retries_on_conflict() {
+	s.withFastBackoff(func() {
+		service := &seqLambdaService{
+			updateResponses: []error{updateConflictErr, updateConflictErr, nil},
+		}
+
+		err := UpdateLambdaVPCConfig(
+			context.Background(),
+			service,
+			"arn:aws:lambda:eu-west-2:123456789012:function:orders-api",
+			[]string{"subnet-1"},
+			[]string{"sg-1"},
+			true,
+		)
+
+		s.Require().NoError(err)
+		s.Len(service.updateInputs, 3, "expected two retries after the conflicts")
+
+		// Every attempt sends the same fully-specified config: unlike environment
+		// variables there is nothing to merge, so no re-read is needed between tries.
+		for _, input := range service.updateInputs {
+			s.Equal([]string{"subnet-1"}, input.VpcConfig.SubnetIds)
+			s.Equal([]string{"sg-1"}, input.VpcConfig.SecurityGroupIds)
+		}
+		s.Zero(service.getCalls, "the vpc config path should not re-read the function")
+	})
+}
+
+// A conflict that never clears is surfaced as retryable so the deployment framework can
+// try again, rather than failing the link outright.
+func (s *LambdaEnvUpdateSuite) Test_vpc_config_update_surfaces_persistent_conflict_as_retryable() {
+	s.withFastBackoff(func() {
+		responses := make([]error, len(transientRetryBackoff)+1)
+		for i := range responses {
+			responses[i] = updateConflictErr
+		}
+		service := &seqLambdaService{updateResponses: responses}
+
+		err := UpdateLambdaVPCConfig(
+			context.Background(),
+			service,
+			"arn:aws:lambda:eu-west-2:123456789012:function:orders-api",
+			[]string{"subnet-1"},
+			[]string{"sg-1"},
+			false,
+		)
+
+		s.Require().Error(err)
+		var retryable *provider.RetryableError
+		s.Require().True(errors.As(err, &retryable))
+	})
+}
+
+// A non-conflict failure is returned as-is rather than retried.
+func (s *LambdaEnvUpdateSuite) Test_vpc_config_update_does_not_retry_other_errors() {
+	service := &seqLambdaService{
+		updateResponses: []error{apiError("InvalidParameterValueException", "bad subnet")},
+	}
+
+	err := UpdateLambdaVPCConfig(
+		context.Background(),
+		service,
+		"arn:aws:lambda:eu-west-2:123456789012:function:orders-api",
+		[]string{"subnet-1"},
+		[]string{"sg-1"},
+		false,
+	)
+
+	s.Require().Error(err)
+	s.Len(service.updateInputs, 1, "a non-conflict error should not be retried")
+}

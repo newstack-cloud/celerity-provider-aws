@@ -72,6 +72,7 @@ func NewProvider(
 	return &providerv1.ProviderPluginDefinition{
 		ProviderNamespace:        "aws",
 		ProviderConfigDefinition: providerConfigDefinition(),
+		ProviderRetryPolicy:      awsRetryPolicy,
 		Resources: mergeResources(
 			map[string]provider.Resource{
 				"aws/flex/vpc": flex.VPCResource(
@@ -162,6 +163,7 @@ func NewProvider(
 			// Inter-service links: Lambda <-> DynamoDB
 			"aws/lambda/function::aws/dynamodb/table": lambdadynamodb.FunctionDynamoDBTableLink(
 				iamServiceFactory,
+				ec2ServiceFactory,
 			)(
 				lambdadynamodb.FunctionToDynamoDBTableLinkDeps{
 					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, lambdaservice.Service]{
@@ -445,7 +447,9 @@ func NewProvider(
 				},
 			),
 			// Flex VPC placement: the VPC places the Lambda function in its subnets.
-			"aws/flex/vpc::aws/lambda/function": flexlambda.VPCFunctionLink()(
+			"aws/flex/vpc::aws/lambda/function": flexlambda.VPCFunctionLink(
+				iamServiceFactory,
+			)(
 				flexlambda.VPCToFunctionLinkDeps{
 					ResourceAService: pluginutils.ServiceWithConfigStore[*aws.Config, ec2service.Service]{
 						ServiceFactory: ec2ServiceFactory,
@@ -823,4 +827,37 @@ func providerConfigDefinition() *core.ConfigDefinition {
 			},
 		},
 	}
+}
+
+// This policy widens the framework default, which is sized for an API that reaches
+// consistency quickly.
+//
+// AWS routinely does not. A newly created IAM role is not immediately usable by the
+// services that assume it, an event source mapping stays "in use" for a while after the
+// thing using it is gone, and the network interfaces holding a security group are
+// released on AWS's own schedule: measured against a real account, the same teardown
+// released them after 18 seconds on one run and 977 on the next.
+//
+// The framework default allows five retries, which with backoff is roughly a minute of
+// waiting and, once each attempt's own work is counted, about four minutes end to end.
+// That is under the observed worst case, so a destroy that would have succeeded is
+// reported as failed and the operator has to run it again.
+//
+// Ten retries gives roughly eighteen minutes of backoff and around twenty-four minutes
+// overall, which covers what has actually been measured with room to spare.
+//
+// The first delay stays at two seconds deliberately: most retryable failures here are
+// short-lived (a Lambda configuration conflict clears in seconds), and lengthening the
+// first delay to reach the tail sooner would penalise every one of them. Exponential
+// backoff already reaches long waits on its own; the default simply stopped early.
+//
+// Only errors a provider wraps as provider.RetryableError are retried at all, so this
+// does not slow down reporting for anything that fails outright. What it does change is
+// how long a genuinely stuck retryable operation takes to give up.
+var awsRetryPolicy = &provider.RetryPolicy{
+	MaxRetries:      10,
+	FirstRetryDelay: 2,
+	MaxDelay:        300,
+	BackoffFactor:   2,
+	Jitter:          true,
 }

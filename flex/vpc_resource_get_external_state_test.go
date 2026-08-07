@@ -47,7 +47,6 @@ func (s *FlexVPCResourceGetExternalStateSuite) Test_get_external_state() {
 		createGetInternetGatewaysErrorTestCase(providerCtx, loader),
 		createGetNATGatewaysErrorTestCase(providerCtx, loader),
 		createMissingNameFieldTestCase(providerCtx, loader),
-		createEmptyInternetGatewayTestCase(providerCtx, loader),
 		createVPCWithPresetTestCase(providerCtx, loader),
 	}
 
@@ -99,9 +98,10 @@ func createVPCStateTestCase(
 					"subnetIds", core.MappingNodeItems(core.MappingNodeFromString("subnet-12345678")),
 				),
 			),
-			"securityGroups": core.MappingNodeItems(
+			"securityGroupIds": core.MappingNodeItems(
 				core.MappingNodeFromString("sg-12345678"),
 			),
+			"securityGroupIdsByName": {Fields: map[string]*core.MappingNode{}},
 			"networkAcls": core.MappingNodeItems(
 				core.MappingNodeFields(
 					"id", core.MappingNodeFromString("acl-12345678"),
@@ -797,80 +797,6 @@ func createMissingNameFieldTestCase(
 	}
 }
 
-func createEmptyInternetGatewayTestCase(
-	providerCtx provider.Context,
-	loader *testutils.MockAWSConfigLoader,
-) plugintestutils.ResourceGetExternalStateTestCase[*aws.Config, ec2service.Service] {
-	currentResourceSpec := &core.MappingNode{
-		Fields: map[string]*core.MappingNode{
-			"name": core.MappingNodeFromString("test-vpc"),
-			"mode": core.MappingNodeFromString("basic"),
-		},
-	}
-
-	return plugintestutils.ResourceGetExternalStateTestCase[*aws.Config, ec2service.Service]{
-		Name: "returns error when no internet gateway found",
-		ServiceFactory: ec2mock.CreateEc2ServiceMockFactory(
-			ec2mock.WithDescribeVpcsOutputs([]*ec2.DescribeVpcsOutput{
-				{
-					Vpcs: []types.Vpc{
-						{
-							VpcId:     aws.String("vpc-12345678"),
-							CidrBlock: aws.String("10.0.0.0/16"),
-							Tags: []types.Tag{
-								{
-									Key:   aws.String("flex-vpc-name"),
-									Value: aws.String("test-vpc"),
-								},
-							},
-						},
-					},
-				},
-			}),
-			ec2mock.WithDescribeVpcAttributeOutput(&ec2.DescribeVpcAttributeOutput{
-				EnableDnsSupport: &types.AttributeBooleanValue{
-					Value: aws.Bool(true),
-				},
-				EnableDnsHostnames: &types.AttributeBooleanValue{
-					Value: aws.Bool(true),
-				},
-			}),
-			ec2mock.WithDescribeSubnetsOutput(&ec2.DescribeSubnetsOutput{
-				Subnets: []types.Subnet{},
-			}),
-			ec2mock.WithDescribeRouteTablesOutput(&ec2.DescribeRouteTablesOutput{
-				RouteTables: []types.RouteTable{},
-			}),
-			ec2mock.WithDescribeSecurityGroupsOutput(&ec2.DescribeSecurityGroupsOutput{
-				SecurityGroups: []types.SecurityGroup{},
-			}),
-			ec2mock.WithDescribeNetworkAclsOutput(&ec2.DescribeNetworkAclsOutput{
-				NetworkAcls: []types.NetworkAcl{},
-			}),
-			ec2mock.WithDescribeInternetGatewaysOutput(&ec2.DescribeInternetGatewaysOutput{
-				InternetGateways: []types.InternetGateway{},
-			}),
-			ec2mock.WithDescribeNatGatewaysOutput(&ec2.DescribeNatGatewaysOutput{
-				NatGateways: []types.NatGateway{},
-			}),
-		),
-		ConfigStore: utils.NewAWSConfigStore(
-			[]string{},
-			utils.AWSConfigFromProviderContext,
-			loader,
-			utils.AWSConfigCacheKey,
-		),
-		Input: &provider.ResourceGetExternalStateInput{
-			InstanceID:          "test-instance-id",
-			ResourceID:          "test-vpc",
-			CurrentResourceSpec: currentResourceSpec,
-			ProviderContext:     providerCtx,
-		},
-		ExpectedOutput: nil,
-		ExpectError:    true,
-	}
-}
-
 func createVPCWithPresetTestCase(
 	providerCtx provider.Context,
 	loader *testutils.MockAWSConfigLoader,
@@ -887,21 +813,22 @@ func createVPCWithPresetTestCase(
 	// not an empty slice from core.MappingNodeItems()
 	expectedResourceSpecState := &core.MappingNode{
 		Fields: map[string]*core.MappingNode{
-			"name":               core.MappingNodeFromString("test-vpc"),
-			"mode":               core.MappingNodeFromString("basic"),
-			"preset":             core.MappingNodeFromString("production"),
-			"cidrBlock":          core.MappingNodeFromString("10.0.0.0/16"),
-			"enableDNSSupport":   core.MappingNodeFromBool(true),
-			"enableDNSHostnames": core.MappingNodeFromBool(true),
-			"region":             core.MappingNodeFromString("us-west-2"),
-			"tags":               nil,
-			"vpcId":              core.MappingNodeFromString("vpc-12345678"),
-			"subnets":            core.MappingNodeFields(),
-			"privateSubnetIds":   core.MappingNodeItems(),
-			"publicSubnetIds":    core.MappingNodeItems(),
-			"routeTables":        {},
-			"securityGroups":     {},
-			"networkAcls":        {},
+			"name":                   core.MappingNodeFromString("test-vpc"),
+			"mode":                   core.MappingNodeFromString("basic"),
+			"preset":                 core.MappingNodeFromString("production"),
+			"cidrBlock":              core.MappingNodeFromString("10.0.0.0/16"),
+			"enableDNSSupport":       core.MappingNodeFromBool(true),
+			"enableDNSHostnames":     core.MappingNodeFromBool(true),
+			"region":                 core.MappingNodeFromString("us-west-2"),
+			"tags":                   nil,
+			"vpcId":                  core.MappingNodeFromString("vpc-12345678"),
+			"subnets":                core.MappingNodeFields(),
+			"privateSubnetIds":       core.MappingNodeItems(),
+			"publicSubnetIds":        core.MappingNodeItems(),
+			"routeTables":            {},
+			"securityGroupIds":       {},
+			"securityGroupIdsByName": {Fields: map[string]*core.MappingNode{}},
+			"networkAcls":            {},
 			"gateways": core.MappingNodeFields(
 				"internetGatewayId", core.MappingNodeFromString("igw-12345678"),
 				"natGateways", &core.MappingNode{},

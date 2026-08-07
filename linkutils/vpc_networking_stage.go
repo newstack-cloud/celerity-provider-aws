@@ -10,7 +10,7 @@ import (
 
 // NetworkAccessFieldName is the synthetic link-data field name used to signal, in staged
 // changes, that a VPC-attached caller's network access to a link target will be configured at
-// deploy time (a VPC endpoint or a security-group rule opened by ActivateLinkNetworking).
+// deploy time (a VPC endpoint or a security-group rule opened by ReconcileLinkNetworking).
 func NetworkAccessFieldName(callerResourceName string) string {
 	return fmt.Sprintf("%sNetworkAccess", callerResourceName)
 }

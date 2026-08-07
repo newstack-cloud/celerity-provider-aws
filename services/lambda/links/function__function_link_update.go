@@ -301,8 +301,8 @@ func (l *lambdaFunctionFunctionLinkActions) UpdateIntermediaryResources(
 	}
 
 	// A VPC-attached caller reaching another Lambda needs an interface VPC endpoint for
-	// the Lambda service; ActivateLinkNetworking is a no-op for non-VPC functions.
-	return linkutils.ActivateLinkNetworking(
+	// the Lambda service; ReconcileLinkNetworking is a no-op for non-VPC functions.
+	return linkutils.ReconcileLinkNetworking(
 		ctx,
 		ec2Service,
 		input,

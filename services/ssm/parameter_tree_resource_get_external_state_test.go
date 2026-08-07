@@ -140,7 +140,7 @@ func (s *SSMParameterTreeResourceGetExternalStateSuite) Test_get_external_state(
 
 	// The no-read-back guarantee: values must never be fetched or decrypted when
 	// reporting external state.
-	service.MockCalls.AssertNotCalled(&s.Suite, "GetParameter")
+	service.AssertNotCalled(&s.Suite, "GetParameter")
 }
 
 func TestSSMParameterTreeResourceGetExternalStateSuite(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/newstack-cloud/bluelink-provider-aws/linkutils"
 	lambdaservice "github.com/newstack-cloud/bluelink-provider-aws/services/lambda/service"
@@ -200,7 +201,7 @@ func (l *lambdaFunctionDynamoDBTableLinkActions) UpdateIntermediaryResources(
 		input.LinkContext,
 		"aws",
 	)
-	lambdaService, err := l.getLambdaService(ctx, providerCtx)
+	lambdaService, region, err := l.getLambdaServiceWithRegion(ctx, providerCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -249,9 +250,21 @@ func (l *lambdaFunctionDynamoDBTableLinkActions) UpdateIntermediaryResources(
 		if err != nil {
 			return nil, err
 		}
-		return &provider.LinkUpdateIntermediaryResourcesOutput{
-			LinkData: core.MappingNodeFields(),
-		}, nil
+
+		ec2Service, err := l.getEC2Service(ctx, providerCtx)
+		if err != nil {
+			return nil, err
+		}
+
+		return linkutils.ReconcileLinkNetworking(
+			ctx,
+			ec2Service,
+			input,
+			dynamoDBNetworkingActivation(setupCtx, region),
+			&provider.LinkUpdateIntermediaryResourcesOutput{
+				LinkData: core.MappingNodeFields(),
+			},
+		)
 	}
 
 	tableARN, hasTableARN := utils.ExtractARNFromResourceInfo(input.ResourceBInfo)
@@ -280,7 +293,37 @@ func (l *lambdaFunctionDynamoDBTableLinkActions) UpdateIntermediaryResources(
 		return nil, err
 	}
 
-	return accessLinkOutput(input, setupCtx.RoleResourceName, sid, tableARN, annotations.accessLevel, result), nil
+	output := accessLinkOutput(input, setupCtx.RoleResourceName, sid, tableARN, annotations.accessLevel, result)
+
+	ec2Service, err := l.getEC2Service(ctx, providerCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	// A VPC-attached caller reaches DynamoDB through a gateway VPC endpoint; this is a
+	// no-op for functions that are not placed in a VPC.
+	return linkutils.ReconcileLinkNetworking(
+		ctx,
+		ec2Service,
+		input,
+		dynamoDBNetworkingActivation(setupCtx, region),
+		output,
+	)
+}
+
+// DynamoDB is reached through a gateway endpoint rather than an interface endpoint, so
+// there is no endpoint security group to pair with; the caller's egress is opened to
+// the service's managed prefix list instead.
+func dynamoDBNetworkingActivation(
+	setupCtx *linkutils.LambdaLinkSetupContext,
+	region string,
+) linkutils.NetworkingActivation {
+	return linkutils.NetworkingActivation{
+		Caller:       linkutils.CallerNetworkingFromLambdaVPCConfig(setupCtx.LambdaOutput.VpcConfig),
+		Region:       region,
+		AWSService:   "dynamodb",
+		EndpointType: ec2types.VpcEndpointTypeGateway,
+	}
 }
 
 // dynamoDBAccessStatement builds the IAM policy statement (canonical PascalCase, as

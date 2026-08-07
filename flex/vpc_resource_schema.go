@@ -184,6 +184,12 @@ func vpcResourceSchema() *provider.ResourceDefinitionsSchema {
 							Type:        provider.ResourceDefinitionsSchemaTypeString,
 							Description: "The availability zone of the subnet.",
 						},
+						"ipv6CidrBlock": {
+							Type: provider.ResourceDefinitionsSchemaTypeString,
+							Description: "The IPv6 CIDR block associated with the subnet. Only present " +
+								"for dual-stack subnets. Links that place resources in the VPC use this " +
+								"to decide whether the placed resource can be given outbound IPv6.",
+						},
 						"subnetType": {
 							Type:        provider.ResourceDefinitionsSchemaTypeString,
 							Description: "The tier of the subnet, either \"public\" or \"private\". Links that place resources in the VPC use this to select subnets by tier.",
@@ -203,7 +209,9 @@ func vpcResourceSchema() *provider.ResourceDefinitionsSchema {
 					"The \"standard\" and \"isolated\" presets provide 3 private subnets across 3 distinct " +
 					"availability zones, satisfying services that require subnets in at least 2 zones " +
 					"(such as RDS subnet groups and RDS Proxy). " +
-					"For presets without private subnets (\"public\", \"light\", \"light-public\"), this is an empty list. " +
+					"The \"light\" preset provides a single private subnet in one availability zone, which does " +
+					"not satisfy those services. " +
+					"For presets without private subnets (\"public\", \"light-public\"), this is an empty list. " +
 					"In \"reference\" mode, this reflects the referenced VPC's private-tagged subnets with no guaranteed minimum.",
 				Computed:   true,
 				TrackDrift: true,
@@ -253,6 +261,31 @@ func vpcResourceSchema() *provider.ResourceDefinitionsSchema {
 				},
 			},
 			"securityGroups": {
+				Type:                 provider.ResourceDefinitionsSchemaTypeArray,
+				Description:          vpcResourceSecurityGroupsDescription,
+				FormattedDescription: vpcResourceSecurityGroupsDescription,
+				MustRecreate:         false,
+				Nullable:             true,
+				Items: &provider.ResourceDefinitionsSchema{
+					Type: provider.ResourceDefinitionsSchemaTypeString,
+					Description: "A name for the group, unique within this VPC. It is the key " +
+						"the group is exposed under in securityGroupIdsByName.",
+				},
+			},
+			"securityGroupIdsByName": {
+				Type: provider.ResourceDefinitionsSchemaTypeMap,
+				Description: "The ID of the security group created for each name in securityGroups, " +
+					"keyed by that name. A resource in the VPC references one of these from its own " +
+					"security group field, and the link between a workload and that resource pairs " +
+					"the two groups.",
+				Computed:   true,
+				TrackDrift: true,
+				MapValues: &provider.ResourceDefinitionsSchema{
+					Type:        provider.ResourceDefinitionsSchemaTypeString,
+					Description: "The ID of the named security group.",
+				},
+			},
+			"securityGroupIds": {
 				Type:        provider.ResourceDefinitionsSchemaTypeArray,
 				Description: "A list of the security groups that will be created or referenced.",
 				Computed:    true,
@@ -292,11 +325,18 @@ func vpcResourceSchema() *provider.ResourceDefinitionsSchema {
 				Description: "A structure containing internet and NAT gateways that will be created or referenced.",
 				Computed:    true,
 				TrackDrift:  true,
-				Required:    []string{"internetGatewayId", "natGateways"},
+				Required:    []string{"natGateways"},
 				Attributes: map[string]*provider.ResourceDefinitionsSchema{
 					"internetGatewayId": {
-						Type:        provider.ResourceDefinitionsSchemaTypeString,
-						Description: "The ID of the internet gateway.",
+						Type: provider.ResourceDefinitionsSchemaTypeString,
+						Description: "The ID of the internet gateway. Absent for presets that " +
+							"provision no public subnets, such as the isolated preset.",
+					},
+					"egressOnlyInternetGatewayId": {
+						Type: provider.ResourceDefinitionsSchemaTypeString,
+						Description: "The ID of the egress-only internet gateway that carries outbound " +
+							"IPv6 traffic from private subnets. Only present for presets whose private " +
+							"subnets route to the internet.",
 					},
 					"natGateways": {
 						Type:        provider.ResourceDefinitionsSchemaTypeArray,
@@ -331,12 +371,28 @@ func vpcResourceSchema() *provider.ResourceDefinitionsSchema {
 	}
 }
 
+const vpcResourceSecurityGroupsDescription = `
+Names of empty security groups to create in this VPC, for resources that need an identity of their
+own within it.
+
+A database or cache in the VPC references one of these groups from its own spec, through
+` + "`securityGroupIdsByName`" + `. The link between a workload and that resource then opens a path
+between the workload's group and this one, on the port the resource listens on.
+
+Each name gets a group of its own so that reach is granted per resource rather than to everything in
+the VPC. Two databases sharing a group means a workload linked to one of them can reach the other on
+the same port, whether or not it is linked to it.
+
+The groups are created empty and stay that way unless a link opens something on them. The VPC never
+writes rules of its own.
+`
+
 const vpcResourcePresetDescription = `
 The preset of the flex VPC resource.
 This can be one of the following values:
 - standard: A multi-AZ VPC with public and private subnets in 3 availability zones (AZs) for high availability and fault tolerance. That is 3 public subnets and 3 private subnets in total, each with a unique, non-overlapping CIDR block.
 - public: A multi-AZ VPC with only public subnets in 3 availability zones (AZs) for high availability and fault tolerance. That is 3 public subnets in total, each with a unique, non-overlapping CIDR block.
 - isolated: A multi-AZ VPC with only private subnets in 3 availability zones (AZs) for high availability and fault tolerance. That is 3 private subnets in total, each with a unique, non-overlapping CIDR block.
-- light: A VPC with only a public subnet in a single availability zone. This is the most cost-effective option for a VPC that does not require private subnets for resources. The cost savings are primarily due to the fact that a NAT gateway is not required.
+- light: A VPC with a public and a private subnet in a single availability zone, with a NAT gateway for the private subnet. This is a single-AZ equivalent of the "standard" preset, for workloads that do not need multi-AZ redundancy. Single-AZ private subnets do not satisfy services that require subnets in at least two availability zones, such as RDS subnet groups and RDS Proxy.
 - light-public: A VPC with only a public subnet in a single availability zone. This is the most cost-effective option for a VPC that does not require private subnets for resources. The cost savings are primarily due to the fact that a NAT gateway is not required.
 `

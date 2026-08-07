@@ -176,7 +176,19 @@ func (l *functionQueueLinkActions) UpdateIntermediaryResources(
 		}); err != nil {
 			return nil, err
 		}
-		return &provider.LinkUpdateIntermediaryResourcesOutput{LinkData: core.MappingNodeFields()}, nil
+		// The endpoint this link provisioned is removed here; returning early would
+		// leave it, and its security group, behind.
+		ec2Service, err := l.getEC2Service(ctx, providerCtx)
+		if err != nil {
+			return nil, err
+		}
+		return linkutils.ReconcileLinkNetworking(
+			ctx,
+			ec2Service,
+			input,
+			sqsNetworkingActivation(setupCtx, region),
+			&provider.LinkUpdateIntermediaryResourcesOutput{LinkData: core.MappingNodeFields()},
+		)
 	}
 
 	queueARN, hasQueueARN := extractQueueARN(input.ResourceBInfo)
@@ -216,16 +228,11 @@ func (l *functionQueueLinkActions) UpdateIntermediaryResources(
 
 	// A VPC-isolated caller needs an interface VPC endpoint for SQS; this is a no-op for
 	// non-VPC functions.
-	return linkutils.ActivateLinkNetworking(
+	return linkutils.ReconcileLinkNetworking(
 		ctx,
 		ec2Service,
 		input,
-		linkutils.NetworkingActivation{
-			Caller:       linkutils.CallerNetworkingFromLambdaVPCConfig(setupCtx.LambdaOutput.VpcConfig),
-			Region:       region,
-			AWSService:   "sqs",
-			EndpointType: ec2types.VpcEndpointTypeInterface,
-		},
+		sqsNetworkingActivation(setupCtx, region),
 		output,
 	)
 }
@@ -352,5 +359,24 @@ func getQueueLinkAnnotations(
 		populateEnvVars: populateEnvVars,
 		envVarName:      envVarName,
 		accessLevel:     accessLevel,
+	}
+}
+
+// Shared by the create and destroy paths so a teardown removes exactly what the create
+// path provisioned.
+//
+// Destroy used to return before reaching the activation, so the VPC endpoint and its
+// security group were left behind on every teardown. That group's ingress rule
+// references the caller's group, which then blocks the caller's group, and with it the
+// whole VPC, from being deleted.
+func sqsNetworkingActivation(
+	setupCtx *linkutils.LambdaLinkSetupContext,
+	region string,
+) linkutils.NetworkingActivation {
+	return linkutils.NetworkingActivation{
+		Caller:       linkutils.CallerNetworkingFromLambdaVPCConfig(setupCtx.LambdaOutput.VpcConfig),
+		Region:       region,
+		AWSService:   "sqs",
+		EndpointType: ec2types.VpcEndpointTypeInterface,
 	}
 }

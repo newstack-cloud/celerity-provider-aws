@@ -14,6 +14,7 @@ import (
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/newstack-cloud/bluelink-provider-aws/internal/testutils"
 	dynamodbmock "github.com/newstack-cloud/bluelink-provider-aws/internal/testutils/dynamodb_mock"
+	ec2mock "github.com/newstack-cloud/bluelink-provider-aws/internal/testutils/ec2_mock"
 	iammock "github.com/newstack-cloud/bluelink-provider-aws/internal/testutils/iam_mock"
 	lambdamock "github.com/newstack-cloud/bluelink-provider-aws/internal/testutils/lambda_mock"
 	resourceservicemock "github.com/newstack-cloud/bluelink-provider-aws/internal/testutils/resourceservice_mock"
@@ -51,6 +52,7 @@ func functionTableLinkFactory(
 ) provider.Link {
 	build := FunctionDynamoDBTableLink(
 		func(c *aws.Config, pc provider.Context) iamservice.Service { return iamSvc },
+		ec2mock.CreateEc2ServiceMockFactory(),
 	)
 	return func(
 		deps pluginutils.LinkServiceDeps[*aws.Config, lambdaservice.Service, *aws.Config, dynamodbservice.Service],

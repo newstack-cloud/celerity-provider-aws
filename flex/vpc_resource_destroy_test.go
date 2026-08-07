@@ -42,6 +42,8 @@ func (s *FlexVPCResourceDestroySuite) Test_destroy() {
 		createSuccessfulDestroyTestCase(providerCtx, loader),
 		createReferenceModeDestroyTestCase(providerCtx, loader),
 		createMissingVPCIDTestCase(providerCtx, loader),
+		createPartialCreateDestroyTestCase(providerCtx, loader),
+		createPartialCreateNothingDeployedTestCase(providerCtx, loader),
 		createMissingModeTestCase(providerCtx, loader),
 		createNetworkACLDisassociationErrorTestCase(providerCtx, loader),
 		createNetworkACLDeletionErrorTestCase(providerCtx, loader),
@@ -118,6 +120,16 @@ func createSuccessfulDestroyTestCase(
 		ec2mock.WithDisassociateRouteTableOutput(&ec2.DisassociateRouteTableOutput{}),
 		ec2mock.WithDeleteRouteTableOutput(&ec2.DeleteRouteTableOutput{}),
 		ec2mock.WithDeleteNatGatewayOutput(&ec2.DeleteNatGatewayOutput{}),
+		// The elastic IP stays attached until its NAT gateway has finished
+		// deleting, so teardown waits on the gateway before releasing the address.
+		ec2mock.WithDescribeNatGatewaysOutput(&ec2.DescribeNatGatewaysOutput{
+			NatGateways: []types.NatGateway{
+				{
+					NatGatewayId: aws.String("nat-12345678"),
+					State:        types.NatGatewayStateDeleted,
+				},
+			},
+		}),
 		ec2mock.WithReleaseAddressOutput(&ec2.ReleaseAddressOutput{}),
 		ec2mock.WithDetachInternetGatewayOutput(&ec2.DetachInternetGatewayOutput{}),
 		ec2mock.WithDeleteInternetGatewayOutput(&ec2.DeleteInternetGatewayOutput{}),
@@ -135,7 +147,7 @@ func createSuccessfulDestroyTestCase(
 						"id", core.MappingNodeFromString("acl-12345678"),
 					),
 				),
-				"securityGroups": core.MappingNodeItems(
+				"securityGroupIds": core.MappingNodeItems(
 					core.MappingNodeFromString("sg-12345678"),
 				),
 				"routeTables": core.MappingNodeItems(
@@ -152,8 +164,10 @@ func createSuccessfulDestroyTestCase(
 						),
 					),
 				),
-				"subnets": core.MappingNodeItems(
-					core.MappingNodeFields(
+				// Subnets are held in state as a map keyed by the preset's subnet
+				// name, matching what the create path writes.
+				"subnets": core.MappingNodeFields(
+					"public-az-1", core.MappingNodeFields(
 						"id", core.MappingNodeFromString("subnet-12345678"),
 					),
 				),
@@ -266,7 +280,7 @@ func createReferenceModeDestroyTestCase(
 						"id", core.MappingNodeFromString("acl-12345678"),
 					),
 				),
-				"securityGroups": core.MappingNodeItems(
+				"securityGroupIds": core.MappingNodeItems(
 					core.MappingNodeFromString("sg-12345678"),
 				),
 				"routeTables": core.MappingNodeItems(
@@ -283,8 +297,10 @@ func createReferenceModeDestroyTestCase(
 						),
 					),
 				),
-				"subnets": core.MappingNodeItems(
-					core.MappingNodeFields(
+				// Subnets are held in state as a map keyed by the preset's subnet
+				// name, matching what the create path writes.
+				"subnets": core.MappingNodeFields(
+					"public-az-1", core.MappingNodeFields(
 						"id", core.MappingNodeFromString("subnet-12345678"),
 					),
 				),
@@ -342,7 +358,7 @@ func createMissingVPCIDTestCase(
 	}
 
 	return plugintestutils.ResourceDestroyTestCase[*aws.Config, ec2service.Service]{
-		Name: "returns error when vpcId is missing",
+		Name: "returns error when neither vpcId nor name is available to locate the VPC",
 		ServiceFactory: func(awsConfig *aws.Config, providerContext provider.Context) ec2service.Service {
 			return ec2mock.CreateEc2ServiceMock()
 		},
@@ -553,7 +569,7 @@ func createSecurityGroupDeletionErrorTestCase(
 			Fields: map[string]*core.MappingNode{
 				"vpcId": core.MappingNodeFromString("vpc-12345678"),
 				"mode":  core.MappingNodeFromString("create"),
-				"securityGroups": core.MappingNodeItems(
+				"securityGroupIds": core.MappingNodeItems(
 					core.MappingNodeFromString("sg-12345678"),
 				),
 			},
@@ -902,8 +918,10 @@ func createSubnetDeletionErrorTestCase(
 			Fields: map[string]*core.MappingNode{
 				"vpcId": core.MappingNodeFromString("vpc-12345678"),
 				"mode":  core.MappingNodeFromString("create"),
-				"subnets": core.MappingNodeItems(
-					core.MappingNodeFields(
+				// Subnets are held in state as a map keyed by the preset's subnet
+				// name, matching what the create path writes.
+				"subnets": core.MappingNodeFields(
+					"public-az-1", core.MappingNodeFields(
 						"id", core.MappingNodeFromString("subnet-12345678"),
 					),
 				),
@@ -1113,4 +1131,105 @@ func createNetworkACLNotFoundTestCase(
 
 func TestFlexVPCResourceDestroy(t *testing.T) {
 	suite.Run(t, new(FlexVPCResourceDestroySuite))
+}
+
+// A create that fails partway records no computed fields, so the teardown steps
+// have nothing to work from and the resources are left in the account. The VPC is
+// located by its name tag instead and torn down from what discovery finds.
+func createPartialCreateDestroyTestCase(
+	providerCtx provider.Context,
+	loader *testutils.MockAWSConfigLoader,
+) plugintestutils.ResourceDestroyTestCase[*aws.Config, ec2service.Service] {
+	service := ec2mock.CreateEc2ServiceMock(
+		ec2mock.WithDescribeVpcsOutputs([]*ec2.DescribeVpcsOutput{
+			{
+				Vpcs: []types.Vpc{
+					{VpcId: aws.String("vpc-partial"), CidrBlock: aws.String("10.0.0.0/16")},
+				},
+			},
+		}),
+		ec2mock.WithDescribeVpcAttributeOutput(&ec2.DescribeVpcAttributeOutput{}),
+		ec2mock.WithDescribeSubnetsOutput(&ec2.DescribeSubnetsOutput{}),
+		ec2mock.WithDescribeRouteTablesOutput(&ec2.DescribeRouteTablesOutput{}),
+		ec2mock.WithDescribeSecurityGroupsOutput(&ec2.DescribeSecurityGroupsOutput{}),
+		ec2mock.WithDescribeNetworkAclsOutput(&ec2.DescribeNetworkAclsOutput{}),
+		ec2mock.WithDescribeInternetGatewaysOutput(&ec2.DescribeInternetGatewaysOutput{
+			InternetGateways: []types.InternetGateway{
+				{InternetGatewayId: aws.String("igw-partial")},
+			},
+		}),
+		ec2mock.WithDescribeNatGatewaysOutput(&ec2.DescribeNatGatewaysOutput{}),
+		ec2mock.WithDeleteVpcOutput(&ec2.DeleteVpcOutput{}),
+	)
+
+	resourceState := &state.ResourceState{
+		SpecData: &core.MappingNode{
+			Fields: map[string]*core.MappingNode{
+				"mode": core.MappingNodeFromString("create"),
+				"name": core.MappingNodeFromString("TestVPC"),
+			},
+		},
+	}
+
+	return plugintestutils.ResourceDestroyTestCase[*aws.Config, ec2service.Service]{
+		Name: "locates the VPC by name when a partial create left no vpcId in state",
+		ServiceFactory: func(awsConfig *aws.Config, providerContext provider.Context) ec2service.Service {
+			return service
+		},
+		ServiceMockCalls: &service.MockCalls,
+		ConfigStore: utils.NewAWSConfigStore(
+			[]string{},
+			utils.AWSConfigFromProviderContext,
+			loader,
+			utils.AWSConfigCacheKey,
+		),
+		Input: &provider.ResourceDestroyInput{
+			ProviderContext: providerCtx,
+			ResourceState:   resourceState,
+		},
+		ExpectError: false,
+		DestroyActionsCalled: map[string]any{
+			"DeleteVpc": &ec2.DeleteVpcInput{VpcId: aws.String("vpc-partial")},
+		},
+	}
+}
+
+// When the VPC cannot be found, nothing reached the target environment and the
+// destroy is a no-op rather than an error.
+func createPartialCreateNothingDeployedTestCase(
+	providerCtx provider.Context,
+	loader *testutils.MockAWSConfigLoader,
+) plugintestutils.ResourceDestroyTestCase[*aws.Config, ec2service.Service] {
+	service := ec2mock.CreateEc2ServiceMock(
+		ec2mock.WithDescribeVpcsOutputs([]*ec2.DescribeVpcsOutput{{Vpcs: []types.Vpc{}}}),
+	)
+
+	resourceState := &state.ResourceState{
+		SpecData: &core.MappingNode{
+			Fields: map[string]*core.MappingNode{
+				"mode": core.MappingNodeFromString("create"),
+				"name": core.MappingNodeFromString("TestVPC"),
+			},
+		},
+	}
+
+	return plugintestutils.ResourceDestroyTestCase[*aws.Config, ec2service.Service]{
+		Name: "is a no-op when no VPC was created in the target environment",
+		ServiceFactory: func(awsConfig *aws.Config, providerContext provider.Context) ec2service.Service {
+			return service
+		},
+		ServiceMockCalls: &service.MockCalls,
+		ConfigStore: utils.NewAWSConfigStore(
+			[]string{},
+			utils.AWSConfigFromProviderContext,
+			loader,
+			utils.AWSConfigCacheKey,
+		),
+		Input: &provider.ResourceDestroyInput{
+			ProviderContext: providerCtx,
+			ResourceState:   resourceState,
+		},
+		ExpectError:             false,
+		DestroyActionsNotCalled: []string{"DeleteVpc", "DeleteSubnet", "DeleteSecurityGroup"},
+	}
 }

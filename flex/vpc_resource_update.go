@@ -34,9 +34,13 @@ func (l *vpcResourceActions) Update(
 	modeStr := core.StringValue(mode)
 
 	if modeStr == "reference" {
-		return &provider.ResourceDeployOutput{
-			ComputedFieldValues: computedFieldsFromCurrentState(currentStateSpecData),
-		}, nil
+		return l.updateReferencedVPC(
+			ctx,
+			input,
+			service,
+			currentStateSpecData,
+			updatedResourceSpecData,
+		)
 	}
 
 	vpcIDValue, hasVPCID := pluginutils.GetValueByPath("$.vpcId", currentStateSpecData)
@@ -67,11 +71,114 @@ func (l *vpcResourceActions) Update(
 		return nil, err
 	}
 
-	// Only user-defined fields are updated, so computed field values
-	// can be sourced from the current state.
+	userTags, _ := pluginutils.GetValueByPath("$.tags", updatedResourceSpecData)
+	if userTags == nil {
+		userTags = core.MappingNodeFields()
+	}
+
+	namedGroupIDs, err := l.updateNamedSecurityGroups(
+		ctx,
+		input,
+		service,
+		vpcID,
+		currentStateSpecData,
+		updatedResourceSpecData,
+		userTags,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Apart from the security groups, only user-defined fields are updated, so the
+	// remaining computed field values are sourced from the current state.
+	computedFields := computedFieldsFromCurrentState(currentStateSpecData)
+	computedFields["spec.securityGroupIdsByName"] = toSpecComputedSecurityGroupIdsByName(
+		namedGroupIDs,
+	)
+
 	return &provider.ResourceDeployOutput{
-		ComputedFieldValues: computedFieldsFromCurrentState(currentStateSpecData),
+		ComputedFieldValues: computedFields,
 	}, nil
+}
+
+// The shared topology of a referenced VPC belongs to another blueprint, so an update
+// reconciles this application's own named security groups and nothing else.
+func (l *vpcResourceActions) updateReferencedVPC(
+	ctx context.Context,
+	input *provider.ResourceDeployInput,
+	service ec2service.Service,
+	currentStateSpecData *core.MappingNode,
+	updatedResourceSpecData *core.MappingNode,
+) (*provider.ResourceDeployOutput, error) {
+	computedFields := computedFieldsFromCurrentState(currentStateSpecData)
+
+	vpcIDValue, hasVPCID := pluginutils.GetValueByPath("$.vpcId", currentStateSpecData)
+	if !hasVPCID {
+		return &provider.ResourceDeployOutput{ComputedFieldValues: computedFields}, nil
+	}
+
+	namedGroupIDs, err := l.updateNamedSecurityGroups(
+		ctx,
+		input,
+		service,
+		core.StringValue(vpcIDValue),
+		currentStateSpecData,
+		updatedResourceSpecData,
+		// A referenced VPC's user tags describe the owner's VPC and are ignored in
+		// this mode, so they are not applied to the groups created here.
+		core.MappingNodeFields(),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	computedFields["spec.securityGroupIdsByName"] = toSpecComputedSecurityGroupIdsByName(
+		namedGroupIDs,
+	)
+
+	return &provider.ResourceDeployOutput{ComputedFieldValues: computedFields}, nil
+}
+
+// Reconciles the VPC's named security groups against what the updated spec declares.
+//
+// The reconcile reads the groups back from AWS by tag rather than trusting a list carried
+// in state, so for a VPC that declares any it runs on every update, which also repairs a
+// group deleted outside Bluelink. A VPC that has never declared one skips it entirely
+// rather than paying for a describe on every update.
+//
+// The guard has to consider the current state as well as the updated spec, or removing
+// the last name would skip the reconcile that deletes its group.
+func (l *vpcResourceActions) updateNamedSecurityGroups(
+	ctx context.Context,
+	input *provider.ResourceDeployInput,
+	service ec2service.Service,
+	vpcID string,
+	currentStateSpecData *core.MappingNode,
+	updatedResourceSpecData *core.MappingNode,
+	userTags *core.MappingNode,
+) (map[string]string, error) {
+	declared := parseSecurityGroupNames(updatedResourceSpecData)
+	current, _ := pluginutils.GetValueByPath("$.securityGroupIdsByName", currentStateSpecData)
+	if len(declared) == 0 && (current == nil || len(current.Fields) == 0) {
+		return map[string]string{}, nil
+	}
+
+	name, hasName := pluginutils.GetValueByPath("$.name", updatedResourceSpecData)
+	if !hasName {
+		return nil, errors.New("name is not set in resource spec data")
+	}
+
+	vpcName := core.StringValue(name)
+
+	vpcCtx := &vpcContext{
+		resourceSpecData: updatedResourceSpecData,
+		vpcName:          vpcName,
+		tags:             vpcElementTags(vpcName, userTags, getBluelinkTagsAsEC2Tags(input)),
+		instanceID:       input.InstanceID,
+		vpcID:            aws.String(vpcID),
+	}
+
+	return l.reconcileNamedSecurityGroups(ctx, service, vpcCtx)
 }
 
 func (l *vpcResourceActions) updateConcreteVPC(
@@ -218,8 +325,9 @@ func collectVPCSubnetResourceIDs(
 		return subnetResourceIDs
 	}
 
-	for _, subnet := range subnets.Items {
-		subnetID, hasSubnetID := pluginutils.GetValueByPath("$.id", subnet)
+	// Subnets are held in state as a map keyed by the preset's subnet name.
+	for _, subnetName := range sortedFieldNames(subnets) {
+		subnetID, hasSubnetID := pluginutils.GetValueByPath("$.id", subnets.Fields[subnetName])
 		if hasSubnetID {
 			subnetResourceIDs = append(subnetResourceIDs, core.StringValue(subnetID))
 		}
@@ -256,7 +364,7 @@ func collectVPCSecurityGroupResourceIDs(
 ) []string {
 	securityGroupResourceIDs := []string{}
 
-	securityGroups, hasSecurityGroups := pluginutils.GetValueByPath("$.securityGroups", currentStateSpecData)
+	securityGroups, hasSecurityGroups := pluginutils.GetValueByPath("$.securityGroupIds", currentStateSpecData)
 	if !hasSecurityGroups {
 		return securityGroupResourceIDs
 	}
@@ -330,7 +438,11 @@ func computedFieldsFromCurrentState(currentStateSpecData *core.MappingNode) map[
 	vpcID, _ := pluginutils.GetValueByPath("$.vpcId", currentStateSpecData)
 	subnets, _ := pluginutils.GetValueByPath("$.subnets", currentStateSpecData)
 	routeTables, _ := pluginutils.GetValueByPath("$.routeTables", currentStateSpecData)
-	securityGroups, _ := pluginutils.GetValueByPath("$.securityGroups", currentStateSpecData)
+	securityGroups, _ := pluginutils.GetValueByPath("$.securityGroupIds", currentStateSpecData)
+	securityGroupIdsByName, _ := pluginutils.GetValueByPath(
+		"$.securityGroupIdsByName",
+		currentStateSpecData,
+	)
 	networkACLs, _ := pluginutils.GetValueByPath("$.networkAcls", currentStateSpecData)
 	gateways, _ := pluginutils.GetValueByPath("$.gateways", currentStateSpecData)
 
@@ -339,11 +451,12 @@ func computedFieldsFromCurrentState(currentStateSpecData *core.MappingNode) map[
 		"spec.subnets": subnets,
 		// Derived from the subnets map rather than carried forward so that state
 		// saved before these fields existed is populated on the next update.
-		"spec.privateSubnetIds": specSubnetIdsByTier(subnets, "private"),
-		"spec.publicSubnetIds":  specSubnetIdsByTier(subnets, "public"),
-		"spec.routeTables":      routeTables,
-		"spec.securityGroups":   securityGroups,
-		"spec.networkAcls":      networkACLs,
-		"spec.gateways":         gateways,
+		"spec.privateSubnetIds":       specSubnetIdsByTier(subnets, "private"),
+		"spec.publicSubnetIds":        specSubnetIdsByTier(subnets, "public"),
+		"spec.routeTables":            routeTables,
+		"spec.securityGroupIds":       securityGroups,
+		"spec.securityGroupIdsByName": securityGroupIdsByName,
+		"spec.networkAcls":            networkACLs,
+		"spec.gateways":               gateways,
 	}
 }

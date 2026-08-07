@@ -252,6 +252,10 @@ type iamServiceMock struct {
 
 type iamServiceMockOption func(*iamServiceMock)
 
+// Mock is an exported alias for the mock type, so tests in other packages can hold a
+// reference to a configured mock and assert on the calls it recorded.
+type Mock = iamServiceMock
+
 func CreateIamServiceMockFactory(
 	opts ...iamServiceMockOption,
 ) func(awsConfig *aws.Config, providerContext provider.Context) iamservice.Service {

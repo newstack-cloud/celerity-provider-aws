@@ -177,7 +177,22 @@ func (l *functionBucketLinkActions) UpdateIntermediaryResources(
 		}); err != nil {
 			return nil, err
 		}
-		return &provider.LinkUpdateIntermediaryResourcesOutput{LinkData: core.MappingNodeFields()}, nil
+
+		ec2Service, err := l.getEC2Service(ctx, providerCtx)
+		if err != nil {
+			return nil, err
+		}
+
+		// Destroy used to return here, which removed the IAM grant and left the
+		// gateway endpoint behind. It now also leaves the caller's egress rule behind,
+		// so the teardown has to run the same activation path as create.
+		return linkutils.ReconcileLinkNetworking(
+			ctx,
+			ec2Service,
+			input,
+			s3NetworkingActivation(setupCtx, region),
+			&provider.LinkUpdateIntermediaryResourcesOutput{LinkData: core.MappingNodeFields()},
+		)
 	}
 
 	bucketName, hasBucketName := extractBucketName(input.ResourceBInfo)
@@ -215,18 +230,27 @@ func (l *functionBucketLinkActions) UpdateIntermediaryResources(
 
 	// A VPC-isolated caller reaches S3 through a gateway VPC endpoint; this is a no-op
 	// for non-VPC functions.
-	return linkutils.ActivateLinkNetworking(
+	return linkutils.ReconcileLinkNetworking(
 		ctx,
 		ec2Service,
 		input,
-		linkutils.NetworkingActivation{
-			Caller:       linkutils.CallerNetworkingFromLambdaVPCConfig(setupCtx.LambdaOutput.VpcConfig),
-			Region:       region,
-			AWSService:   "s3",
-			EndpointType: ec2types.VpcEndpointTypeGateway,
-		},
+		s3NetworkingActivation(setupCtx, region),
 		output,
 	)
+}
+
+// Shared by create and destroy so the teardown removes exactly what the create path
+// provisioned.
+func s3NetworkingActivation(
+	setupCtx *linkutils.LambdaLinkSetupContext,
+	region string,
+) linkutils.NetworkingActivation {
+	return linkutils.NetworkingActivation{
+		Caller:       linkutils.CallerNetworkingFromLambdaVPCConfig(setupCtx.LambdaOutput.VpcConfig),
+		Region:       region,
+		AWSService:   "s3",
+		EndpointType: ec2types.VpcEndpointTypeGateway,
+	}
 }
 
 func bucketResourceARN(bucketName string) string {

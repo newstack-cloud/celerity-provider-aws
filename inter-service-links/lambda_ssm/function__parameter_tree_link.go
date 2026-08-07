@@ -2,6 +2,7 @@ package lambdassm
 
 import (
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/newstack-cloud/bluelink-provider-aws/linkutils"
 	ec2service "github.com/newstack-cloud/bluelink-provider-aws/services/ec2/service"
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
@@ -41,6 +42,9 @@ func FunctionParameterTreeLink(
 		return &providerv1.LinkDefinition{
 			ResourceTypeA: "aws/lambda/function",
 			ResourceTypeB: "aws/ssm/parameterTree",
+			// ReconcileLinkNetworking reads the function's live VPC attachment, so the
+			// placement link that establishes it has to run first.
+			Requires: linkutils.NetworkAttachedRequired(provider.LinkPriorityResourceA),
 			// It doesn't matter which resource is created first as the lambda function will
 			// be configured to access the parameter tree once both have been created.
 			Kind:             provider.LinkKindSoft,

@@ -282,6 +282,7 @@ func (s *FunctionProxyLinkUpdateSuite) Test_update_intermediary_resources_sg_pai
 	loader := &testutils.MockAWSConfigLoader{}
 
 	ec2Svc := ec2mock.CreateEc2ServiceMock(
+		ec2mock.WithDescribeVpcsOutputs(flexVPCDescribeOutput()),
 		ec2mock.WithAuthorizeSecurityGroupIngressOutput(&ec2.AuthorizeSecurityGroupIngressOutput{}),
 		ec2mock.WithAuthorizeSecurityGroupEgressOutput(&ec2.AuthorizeSecurityGroupEgressOutput{}),
 	)
@@ -297,6 +298,11 @@ func (s *FunctionProxyLinkUpdateSuite) Test_update_intermediary_resources_sg_pai
 		Name: "appVpc",
 		SpecData: core.MappingNodeFields(
 			"name", core.MappingNodeFromString("orders-vpc"),
+			// The group the VPC minted for the target. A link pairs against one of
+			// these rather than against whatever group the target lists first.
+			"securityGroupIdsByName", core.MappingNodeFields(
+				"db", core.MappingNodeFromString(testProxySGID),
+			),
 			"enableDNSSupport", core.MappingNodeFromBool(true),
 			"enableDNSHostnames", core.MappingNodeFromBool(true),
 		),

@@ -93,6 +93,11 @@ func createVPCCreateWithStandardPresetTestCase(
 		ec2mock.WithCreateInternetGatewayOutput(standardPresetCreateInternetGatewayMockOutput()),
 		// The internet gateway will be attached to the VPC.
 		ec2mock.WithAttachInternetGatewayOutput(&ec2.AttachInternetGatewayOutput{}),
+		// A single egress-only internet gateway carries outbound IPv6 for every
+		// private subnet that routes to the internet.
+		ec2mock.WithCreateEgressOnlyInternetGatewayOutput(
+			standardPresetCreateEgressOnlyInternetGatewayMockOutput(),
+		),
 		// A route table will be created for each subnet.
 		ec2mock.WithCreateRouteTableOutputs(standardPresetCreateRouteTableMockOutputs()),
 		// The route tables will be associated with the subnets.
@@ -165,7 +170,32 @@ func createVPCCreateWithStandardPresetTestCase(
 		// are made. The integrated test suite will provide additional assurances that all the resources
 		// are provisioned correctly for a flex VPC.
 		ExpectedOutput: standardPresetExpectedOutput(),
-		ExpectError:    false,
+		SaveActionsCalled: map[string]any{
+			// Every flex VPC resource must carry the VPC's base tag set, not just
+			// its own identifying tags: each lookup in GetExternalState filters on
+			// the flex VPC name, so a resource missing it is invisible to the
+			// provider even though it exists in the account.
+			"CreateSecurityGroup": &ec2.CreateSecurityGroupInput{
+				GroupName:   aws.String("TestVPC"),
+				Description: aws.String("Security group for TestVPC"),
+				VpcId:       aws.String("vpc-12345678"),
+				TagSpecifications: []types.TagSpecification{
+					{
+						ResourceType: types.ResourceTypeSecurityGroup,
+						Tags: []types.Tag{
+							{Key: aws.String(TagFlexVPCName), Value: aws.String("TestVPC")},
+							{Key: aws.String(TagFlexVPCResource), Value: aws.String("true")},
+							{Key: aws.String("System"), Value: aws.String("Orders")},
+							{
+								Key:   aws.String(TagFlexVPCSecurityGroup),
+								Value: aws.String("true"),
+							},
+						},
+					},
+				},
+			},
+		},
+		ExpectError: false,
 	}
 }
 
@@ -392,9 +422,12 @@ func createVPCCreateReferenceModeTestCase(
 						),
 					),
 				),
-				"spec.securityGroups": core.MappingNodeItems(
+				"spec.securityGroupIds": core.MappingNodeItems(
 					core.MappingNodeFromString("sg-12345678"),
 				),
+				"spec.securityGroupIdsByName": {
+					Fields: map[string]*core.MappingNode{},
+				},
 				"spec.networkAcls": core.MappingNodeItems(
 					core.MappingNodeFields(
 						"id",
@@ -724,6 +757,25 @@ func standardPresetDescribeVPCMockOutputs() []*ec2.DescribeVpcsOutput {
 				},
 			},
 		},
+		{
+			Vpcs: []types.Vpc{
+				// Re-reading the VPC for the Amazon-provided IPv6 block, which is
+				// assigned asynchronously and is empty in the CreateVpc response.
+				{
+					VpcId:     aws.String("vpc-12345678"),
+					CidrBlock: aws.String("10.0.0.0/16"),
+					State:     types.VpcStateAvailable,
+					Ipv6CidrBlockAssociationSet: []types.VpcIpv6CidrBlockAssociation{
+						{
+							Ipv6CidrBlock: aws.String("2001:db8:1234:1a00::/56"),
+							Ipv6CidrBlockState: &types.VpcCidrBlockState{
+								State: types.VpcCidrBlockStateCodeAssociated,
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -883,6 +935,20 @@ func standardPresetCreateSubnetMockOutputs() []*ec2.CreateSubnetOutput {
 	}
 }
 
+func standardPresetCreateEgressOnlyInternetGatewayMockOutput() *ec2.CreateEgressOnlyInternetGatewayOutput {
+	return &ec2.CreateEgressOnlyInternetGatewayOutput{
+		EgressOnlyInternetGateway: &types.EgressOnlyInternetGateway{
+			EgressOnlyInternetGatewayId: aws.String("eigw-12345678"),
+			Tags: []types.Tag{
+				{
+					Key:   aws.String(TagFlexVPCName),
+					Value: aws.String("TestVPC"),
+				},
+			},
+		},
+	}
+}
+
 func standardPresetCreateInternetGatewayMockOutput() *ec2.CreateInternetGatewayOutput {
 	return &ec2.CreateInternetGatewayOutput{
 		InternetGateway: &types.InternetGateway{
@@ -984,6 +1050,8 @@ func standardPresetExpectedOutput() *provider.ResourceDeployOutput {
 				core.MappingNodeFields(
 					"id",
 					core.MappingNodeFromString("subnet-1"),
+					"ipv6CidrBlock",
+					core.MappingNodeFromString("2001:db8:1234:1a00::/64"),
 					"availabilityZone",
 					core.MappingNodeFromString("us-east-1a"),
 					"subnetType",
@@ -993,6 +1061,8 @@ func standardPresetExpectedOutput() *provider.ResourceDeployOutput {
 				core.MappingNodeFields(
 					"id",
 					core.MappingNodeFromString("subnet-2"),
+					"ipv6CidrBlock",
+					core.MappingNodeFromString("2001:db8:1234:1a01::/64"),
 					"availabilityZone",
 					core.MappingNodeFromString("us-east-1b"),
 					"subnetType",
@@ -1002,6 +1072,8 @@ func standardPresetExpectedOutput() *provider.ResourceDeployOutput {
 				core.MappingNodeFields(
 					"id",
 					core.MappingNodeFromString("subnet-3"),
+					"ipv6CidrBlock",
+					core.MappingNodeFromString("2001:db8:1234:1a02::/64"),
 					"availabilityZone",
 					core.MappingNodeFromString("us-east-1c"),
 					"subnetType",
@@ -1011,6 +1083,8 @@ func standardPresetExpectedOutput() *provider.ResourceDeployOutput {
 				core.MappingNodeFields(
 					"id",
 					core.MappingNodeFromString("subnet-4"),
+					"ipv6CidrBlock",
+					core.MappingNodeFromString("2001:db8:1234:1a03::/64"),
 					"availabilityZone",
 					core.MappingNodeFromString("us-east-1a"),
 					"subnetType",
@@ -1020,6 +1094,8 @@ func standardPresetExpectedOutput() *provider.ResourceDeployOutput {
 				core.MappingNodeFields(
 					"id",
 					core.MappingNodeFromString("subnet-5"),
+					"ipv6CidrBlock",
+					core.MappingNodeFromString("2001:db8:1234:1a04::/64"),
 					"availabilityZone",
 					core.MappingNodeFromString("us-east-1b"),
 					"subnetType",
@@ -1029,6 +1105,8 @@ func standardPresetExpectedOutput() *provider.ResourceDeployOutput {
 				core.MappingNodeFields(
 					"id",
 					core.MappingNodeFromString("subnet-6"),
+					"ipv6CidrBlock",
+					core.MappingNodeFromString("2001:db8:1234:1a05::/64"),
 					"availabilityZone",
 					core.MappingNodeFromString("us-east-1c"),
 					"subnetType",
@@ -1099,13 +1177,18 @@ func standardPresetExpectedOutput() *provider.ResourceDeployOutput {
 					),
 				),
 			),
-			"spec.securityGroups": core.MappingNodeItems(
+			"spec.securityGroupIds": core.MappingNodeItems(
 				core.MappingNodeFromString("sg-12345678"),
 			),
+			"spec.securityGroupIdsByName": {
+				Fields: map[string]*core.MappingNode{},
+			},
 			"spec.networkAcls": core.MappingNodeItems(),
 			"spec.gateways": core.MappingNodeFields(
 				"internetGatewayId",
 				core.MappingNodeFromString("igw-12345678"),
+				"egressOnlyInternetGatewayId",
+				core.MappingNodeFromString("eigw-12345678"),
 				"natGateways",
 				core.MappingNodeItems(
 					core.MappingNodeFields(

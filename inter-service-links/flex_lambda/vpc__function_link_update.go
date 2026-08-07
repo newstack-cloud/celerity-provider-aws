@@ -47,10 +47,47 @@ func (l *vpcFunctionLinkActions) UpdateResourceB(
 	}
 	functionName := pluginutils.GetResourceName(input.ResourceInfo)
 
+	ec2Service, err := l.getEC2Service(ctx, providerCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	// The flex VPC is the link's other resource; its computed subnets and topology
+	// are read from its resource state (populated for create and reference-mode).
+	flexVPCState := input.OtherResourceInfo.CurrentResourceState.SpecData
+	identity, err := workloadIdentity(flexVPCState, functionName, input.ResourceInfo.InstanceID)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"cannot place function %q in flex VPC %q: %w",
+			functionName,
+			pluginutils.GetResourceName(input.OtherResourceInfo),
+			err,
+		)
+	}
+
 	if input.LinkUpdateType == provider.LinkUpdateTypeDestroy {
-		if err := linkutils.UpdateLambdaVPCConfig(ctx, lambdaService, functionARN, []string{}, []string{}); err != nil {
+		// Detaching the function is all this link does on destroy. Its security group
+		// is removed by the flex VPC's own teardown: the group is referenced by rules
+		// on groups the access links own, and this link cannot make a peer link revoke
+		// them first, so deleting it here fails whenever an access link has not run yet.
+		//
+		// The detach comes first, and only then the permissions are revoked: Lambda
+		// deletes the function's network interfaces using the execution role, so a role
+		// stripped of those permissions while still attached leaves interfaces behind
+		// that hold the VPC's security groups, and with them the VPC, undeletable.
+		if err := linkutils.UpdateLambdaVPCConfig(
+			ctx, lambdaService, functionARN,
+			/* subnetIDs */ []string{},
+			/* securityGroupIDs */ []string{},
+			/* ipv6AllowedForDualStack */ false,
+		); err != nil {
 			return nil, err
 		}
+
+		if _, err := l.revokeENIPermissions(ctx, input, providerCtx); err != nil {
+			return nil, err
+		}
+
 		return &provider.LinkUpdateResourceOutput{
 			LinkData:             core.MappingNodeFields(functionName, core.MappingNodeFields()),
 			ResourceDataMappings: map[string]string{},
@@ -59,9 +96,6 @@ func (l *vpcFunctionLinkActions) UpdateResourceB(
 
 	subnetType := subnetTypeAnnotation(input.ResourceInfo)
 
-	// The flex VPC is the link's other resource; its computed subnets and security
-	// group are read from its resource state (populated for create and reference-mode).
-	flexVPCState := input.OtherResourceInfo.CurrentResourceState.SpecData
 	subnetIDs, err := subnetIDsByTier(flexVPCState, subnetType)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -71,20 +105,61 @@ func (l *vpcFunctionLinkActions) UpdateResourceB(
 			err,
 		)
 	}
-	securityGroupID, hasSecurityGroup := firstSecurityGroup(flexVPCState)
-	if !hasSecurityGroup {
+
+	// The function gets its own group rather than the VPC's shared one, so reach
+	// within the VPC is granted per link instead of to everything placed in it.
+	securityGroupID, err := resolveWorkloadSecurityGroup(ctx, ec2Service, identity)
+	if err != nil {
 		return nil, fmt.Errorf(
-			"no security group found on the linked flex VPC %q",
+			"cannot create a security group for function %q in flex VPC %q: %w",
+			functionName,
 			pluginutils.GetResourceName(input.OtherResourceInfo),
+			err,
 		)
 	}
 
-	securityGroupIDs := []string{securityGroupID}
-	if err := linkutils.UpdateLambdaVPCConfig(ctx, lambdaService, functionARN, subnetIDs, securityGroupIDs); err != nil {
+	// Reach outside the VPC is declared, not derived from links, since the public
+	// internet is not a resource the link graph can name.
+	egress, err := resolveEgressPlan(input.ResourceInfo, flexVPCState, subnetType)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"cannot resolve outbound access for function %q: %w",
+			functionName,
+			err,
+		)
+	}
+	if err := authorizeWorkloadEgress(ctx, ec2Service, securityGroupID, egress); err != nil {
+		return nil, fmt.Errorf(
+			"cannot authorise outbound access for function %q: %w",
+			functionName,
+			err,
+		)
+	}
+
+	// Lambda validates the execution role's network interface permissions at the moment
+	// the attachment is set, so the grant has to land first. UpdateLambdaVPCConfig
+	// retries the rejection IAM's eventual consistency can still produce here.
+	grant, err := l.grantENIPermissions(ctx, input, providerCtx)
+	if err != nil {
 		return nil, err
 	}
 
-	return vpcConfigLinkOutput(functionName, subnetIDs, securityGroupIDs), nil
+	securityGroupIDs := []string{securityGroupID}
+	ipv6Allowed := subnetsAreDualStack(flexVPCState, subnetIDs)
+	if err := linkutils.UpdateLambdaVPCConfig(
+		ctx,
+		lambdaService,
+		functionARN,
+		subnetIDs,
+		securityGroupIDs,
+		ipv6Allowed,
+	); err != nil {
+		return nil, err
+	}
+
+	output := vpcConfigLinkOutput(functionName, subnetIDs, securityGroupIDs, ipv6Allowed)
+
+	return addENIGrantToOutput(output, input, grant), nil
 }
 
 // UpdateIntermediaryResources is a no-op: placement creates no intermediary resources.
@@ -136,17 +211,38 @@ func subnetIDsByTier(flexVPCSpecData *core.MappingNode, tier string) ([]string, 
 	return ids, nil
 }
 
-func firstSecurityGroup(flexVPCSpecData *core.MappingNode) (string, bool) {
-	sgNode, ok := pluginutils.GetValueByPath("$.securityGroups", flexVPCSpecData)
-	if !ok || sgNode == nil || len(sgNode.Items) == 0 {
-		return "", false
+// Whether every subnet the function is placed in carries an IPv6 CIDR. A function is
+// placed in all subnets of its tier, so IPv6 is only enabled when all of them can
+// provide an address; a partially dual-stack VPC would otherwise give the function an
+// egress path that depends on which subnet an invocation happened to land in.
+func subnetsAreDualStack(flexVPCSpecData *core.MappingNode, subnetIDs []string) bool {
+	subnetsNode, ok := pluginutils.GetValueByPath("$.subnets", flexVPCSpecData)
+	if !ok || subnetsNode == nil || subnetsNode.Fields == nil {
+		return false
 	}
-	return core.StringValue(sgNode.Items[0]), true
+
+	dualStack := map[string]bool{}
+	for _, subnet := range subnetsNode.Fields {
+		idNode, _ := pluginutils.GetValueByPath("$.id", subnet)
+		ipv6Node, _ := pluginutils.GetValueByPath("$.ipv6CidrBlock", subnet)
+		if id := core.StringValue(idNode); id != "" {
+			dualStack[id] = core.StringValue(ipv6Node) != ""
+		}
+	}
+
+	for _, subnetID := range subnetIDs {
+		if !dualStack[subnetID] {
+			return false
+		}
+	}
+
+	return len(subnetIDs) > 0
 }
 
 func vpcConfigLinkOutput(
 	functionName string,
 	subnetIDs, securityGroupIDs []string,
+	ipv6AllowedForDualStack bool,
 ) *provider.LinkUpdateResourceOutput {
 	return &provider.LinkUpdateResourceOutput{
 		LinkData: core.MappingNodeFields(
@@ -156,12 +252,17 @@ func vpcConfigLinkOutput(
 				core.MappingNodeFields(
 					"subnetIds", stringItems(subnetIDs),
 					"securityGroupIds", stringItems(securityGroupIDs),
+					"ipv6AllowedForDualStack", core.MappingNodeFromBool(ipv6AllowedForDualStack),
 				),
 			),
 		),
 		ResourceDataMappings: map[string]string{
 			fmt.Sprintf("%s::spec.vpcConfig.subnetIds", functionName):        fmt.Sprintf("%s.vpcConfig.subnetIds", functionName),
 			fmt.Sprintf("%s::spec.vpcConfig.securityGroupIds", functionName): fmt.Sprintf("%s.vpcConfig.securityGroupIds", functionName),
+			fmt.Sprintf("%s::spec.vpcConfig.ipv6AllowedForDualStack", functionName): fmt.Sprintf(
+				"%s.vpcConfig.ipv6AllowedForDualStack",
+				functionName,
+			),
 		},
 	}
 }

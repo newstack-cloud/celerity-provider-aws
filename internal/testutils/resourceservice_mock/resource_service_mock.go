@@ -21,6 +21,16 @@ type mockResourceService struct {
 	DeployCalls []DeployCall
 	// DestroyCalls records every Destroy invocation, in order.
 	DestroyCalls []DestroyCall
+
+	// lastLookupExternalID is the external ID of the most recent lookup, so a test can
+	// assert what a caller identified a resource by.
+	lastLookupExternalID string
+}
+
+// LastLookupExternalID returns the external ID passed to the most recent
+// LookupResourceInState call.
+func (m *mockResourceService) LastLookupExternalID() string {
+	return m.lastLookupExternalID
 }
 
 // DeployCall captures the arguments of a single Deploy invocation.
@@ -81,6 +91,7 @@ func (m *mockResourceService) LookupResourceInState(
 	ctx context.Context,
 	input *provider.ResourceLookupInput,
 ) (*state.ResourceState, error) {
+	m.lastLookupExternalID = input.ExternalID
 	return m.lookupResult, m.lookupError
 }
 

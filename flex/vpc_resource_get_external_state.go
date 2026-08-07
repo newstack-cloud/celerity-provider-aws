@@ -84,6 +84,11 @@ func (v *vpcResourceActions) GetExternalState(
 		return nil, err
 	}
 
+	securityGroupIdsByName, err := namedSecurityGroupIDs(ctx, service, vpcName, input.InstanceID)
+	if err != nil {
+		return nil, err
+	}
+
 	networkACLs, err := v.getNetworkACLs(ctx, service, vpcName)
 	if err != nil {
 		return nil, err
@@ -122,8 +127,10 @@ func (v *vpcResourceActions) GetExternalState(
 			specSubnetIdsByTier(subnets, "public"),
 			"routeTables",
 			routeTables,
-			"securityGroups",
+			"securityGroupIds",
 			securityGroups,
+			"securityGroupIdsByName",
+			toSpecComputedSecurityGroupIdsByName(securityGroupIdsByName),
 			"networkAcls",
 			networkACLs,
 			"gateways",
@@ -221,13 +228,11 @@ func (v *vpcResourceActions) getSubnets(
 		if subnetName == "" {
 			subnetName = aws.ToString(subnet.SubnetId)
 		}
-		subnets.Fields[subnetName] = core.MappingNodeFields(
-			"id",
-			core.MappingNodeFromString(aws.ToString(subnet.SubnetId)),
-			"availabilityZone",
-			core.MappingNodeFromString(aws.ToString(subnet.AvailabilityZone)),
-			"subnetType",
-			core.MappingNodeFromString(ec2TagValue(subnet.Tags, TagFlexVPCSubnetType)),
+		// Shared with the create path so a referenced VPC and a managed one expose
+		// subnets in the same shape.
+		subnets.Fields[subnetName] = toSpecComputedSubnet(
+			&subnet,
+			ec2TagValue(subnet.Tags, TagFlexVPCSubnetType),
 		)
 	}
 
@@ -297,11 +302,17 @@ func (v *vpcResourceActions) getSecurityGroups(
 	service ec2service.Service,
 	vpcName string,
 ) (*core.MappingNode, error) {
+	// Filtered on the base-group tag as well as the VPC name so the per-policy
+	// groups, which carry the VPC name but not this tag, are not swept in here.
 	securityGroupsOutput, err := service.DescribeSecurityGroups(ctx, &ec2.DescribeSecurityGroupsInput{
 		Filters: []types.Filter{
 			{
 				Name:   aws.String(fmt.Sprintf("tag:%s", TagFlexVPCName)),
 				Values: []string{vpcName},
+			},
+			{
+				Name:   aws.String(fmt.Sprintf("tag:%s", TagFlexVPCSecurityGroup)),
+				Values: []string{"true"},
 			},
 		},
 	})
@@ -381,21 +392,45 @@ func (v *vpcResourceActions) getGateways(
 		return nil, err
 	}
 
-	if len(igwOutput.InternetGateways) == 0 {
-		return nil, errors.New("no internet gateway found for VPC")
-	}
-
 	natGateways, err := v.getNatGateways(ctx, service, vpcName, natGatewaySubnetMappings)
 	if err != nil {
 		return nil, err
 	}
 
-	return core.MappingNodeFields(
-		"internetGatewayId",
-		core.MappingNodeFromString(aws.ToString(igwOutput.InternetGateways[0].InternetGatewayId)),
+	gateways := core.MappingNodeFields(
 		"natGateways",
 		natGateways,
-	), nil
+	)
+
+	// An isolated VPC has no internet gateway, so its absence is expected rather than
+	// a failure to discover one.
+	if len(igwOutput.InternetGateways) > 0 {
+		gateways.Fields["internetGatewayId"] = core.MappingNodeFromString(
+			aws.ToString(igwOutput.InternetGateways[0].InternetGatewayId),
+		)
+	}
+
+	eigwOutput, err := service.DescribeEgressOnlyInternetGateways(ctx, &ec2.DescribeEgressOnlyInternetGatewaysInput{
+		Filters: []types.Filter{
+			{
+				Name:   aws.String(fmt.Sprintf("tag:%s", TagFlexVPCName)),
+				Values: []string{vpcName},
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Presets without an internet-connected private subnet have none, so its absence
+	// is not an error the way a missing internet gateway is.
+	if eigwOutput != nil && len(eigwOutput.EgressOnlyInternetGateways) > 0 {
+		gateways.Fields["egressOnlyInternetGatewayId"] = core.MappingNodeFromString(
+			aws.ToString(eigwOutput.EgressOnlyInternetGateways[0].EgressOnlyInternetGatewayId),
+		)
+	}
+
+	return gateways, nil
 }
 
 func (v *vpcResourceActions) getNatGateways(

@@ -2,6 +2,7 @@ package linkutils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"strings"
@@ -17,6 +18,12 @@ import (
 	"github.com/newstack-cloud/bluelink/libs/blueprint/state"
 	"github.com/newstack-cloud/bluelink/libs/plugin-framework/sdk/pluginutils"
 )
+
+// ErrExecutionRoleNotInBlueprint is returned when a Lambda function's execution role is
+// not a resource in the same blueprint. Most links treat this as fatal, since they exist
+// to grant permissions on that role. A link whose main job is something else can check
+// for it and carry on without the grant, leaving the role the user's responsibility.
+var ErrExecutionRoleNotInBlueprint = errors.New("was not created as a part of the same blueprint")
 
 type LambdaLinkSetupData struct {
 	LambdaFuncResourceInfo *provider.ResourceInfo
@@ -36,7 +43,7 @@ type LambdaLinkSetupContext struct {
 }
 
 // CallerNetworkingFromLambdaVPCConfig adapts a Lambda function's VpcConfig into the
-// platform-agnostic CallerNetworking that ActivateLinkNetworking consumes. A nil or
+// platform-agnostic CallerNetworking that ReconcileLinkNetworking consumes. A nil or
 // unattached config yields a zero CallerNetworking, which the helper treats as a no-op.
 func CallerNetworkingFromLambdaVPCConfig(vpcConfig *types.VpcConfigResponse) CallerNetworking {
 	if vpcConfig == nil {
@@ -49,27 +56,76 @@ func CallerNetworkingFromLambdaVPCConfig(vpcConfig *types.VpcConfigResponse) Cal
 	}
 }
 
-// UpdateLambdaVPCConfig sets a Lambda function's VPC configuration (subnets and
-// security groups) via UpdateFunctionConfiguration. Passing empty slices detaches the
-// function from its VPC, which AWS treats as clearing the configuration.
+// UpdateLambdaVPCConfig sets a Lambda function's VPC configuration (subnets, security
+// groups and whether outbound IPv6 is allowed) via UpdateFunctionConfiguration. Passing
+// empty slices detaches the function from its VPC, which AWS treats as clearing the
+// configuration.
+//
+// ipv6AllowedForDualStack only has an effect in subnets that carry an IPv6 CIDR; a
+// function in one is given an IPv6 address and can egress over IPv6 without a NAT
+// gateway, which a VPC-attached function can never do over IPv4.
+// Lambda serialises configuration updates on a function and rejects a concurrent one
+// with ResourceConflictException. Several links commonly touch the same function at
+// once (placement sets vpcConfig while access links set environment variables), so
+// this retries on conflict exactly as the environment-variable path does.
+//
+// Unlike the environment path there is nothing to re-read between attempts: the whole
+// vpcConfig is specified here rather than merged into what is already there.
+//
+// Attaching a function to a VPC also makes Lambda validate, at this moment, that the
+// execution role can manage network interfaces. The caller grants that permission
+// immediately beforehand, and IAM is eventually consistent, so a first attempt can be
+// rejected for a permission that does exist. That rejection is retried on the same
+// schedule as the conflict.
 func UpdateLambdaVPCConfig(
 	ctx context.Context,
 	lambdaService lambdaservice.Service,
 	functionARN string,
 	subnetIDs []string,
 	securityGroupIDs []string,
+	ipv6AllowedForDualStack bool,
 ) error {
-	_, err := lambdaService.UpdateFunctionConfiguration(
-		ctx,
-		&lambda.UpdateFunctionConfigurationInput{
-			FunctionName: aws.String(functionARN),
-			VpcConfig: &types.VpcConfig{
-				SubnetIds:        subnetIDs,
-				SecurityGroupIds: securityGroupIDs,
+	attempt := func() error {
+		_, err := lambdaService.UpdateFunctionConfiguration(
+			ctx,
+			&lambda.UpdateFunctionConfigurationInput{
+				FunctionName: aws.String(functionARN),
+				VpcConfig: &types.VpcConfig{
+					SubnetIds:               subnetIDs,
+					SecurityGroupIds:        securityGroupIDs,
+					Ipv6AllowedForDualStack: aws.Bool(ipv6AllowedForDualStack),
+				},
 			},
-		},
-	)
-	return err
+		)
+		return err
+	}
+
+	err := attempt()
+	if err == nil || !isVPCConfigTransientError(err) {
+		return err
+	}
+
+	for _, delay := range transientRetryBackoff {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(delay):
+		}
+
+		err = attempt()
+		if err == nil || !isVPCConfigTransientError(err) {
+			return err
+		}
+	}
+
+	return &provider.RetryableError{ChildError: err}
+}
+
+// Both failure modes are transient and clear on their own: another link holding the
+// function's configuration update, and an ENI permission granted moments ago that has not
+// yet propagated through IAM.
+func isVPCConfigTransientError(err error) bool {
+	return IsLambdaFunctionConflictError(err) || IsRoleNotYetPropagatedError(err)
 }
 
 // SetupLinkFromLambdaFunction sets up a link from a Lambda function to another resource.
@@ -123,10 +179,11 @@ func SetupLinkFromLambdaFunction(
 
 		if roleResourceState == nil {
 			return nil, fmt.Errorf(
-				"the lambda execution role %q was not created as a part of the "+
-					"same blueprint, when linking a lambda function to another resource,"+
-					" the execution role must be created as a part of the same blueprint",
+				"the lambda execution role %q %w, when linking a lambda function to"+
+					" another resource, the execution role must be created as a part of"+
+					" the same blueprint",
 				roleARN,
+				ErrExecutionRoleNotInBlueprint,
 			)
 		}
 
@@ -251,7 +308,7 @@ func mutateLambdaEnvironmentVariables(
 		}
 
 		err = attempt(lambdaOutput.Configuration)
-		if err == nil || !IsLambdaFunctionConflictError(err) {
+		if err == nil || !isVPCConfigTransientError(err) {
 			return err
 		}
 	}

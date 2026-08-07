@@ -8,9 +8,11 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
+	"github.com/newstack-cloud/bluelink-provider-aws/flex"
 	"github.com/newstack-cloud/bluelink-provider-aws/internal/testutils"
 	ec2mock "github.com/newstack-cloud/bluelink-provider-aws/internal/testutils/ec2_mock"
 	iammock "github.com/newstack-cloud/bluelink-provider-aws/internal/testutils/iam_mock"
@@ -165,6 +167,7 @@ func (s *FunctionCacheLinkUpdateSuite) Test_update_intermediary_resources_sg_pai
 	loader := &testutils.MockAWSConfigLoader{}
 
 	ec2Svc := ec2mock.CreateEc2ServiceMock(
+		ec2mock.WithDescribeVpcsOutputs(flexVPCDescribeOutput()),
 		ec2mock.WithAuthorizeSecurityGroupIngressOutput(&ec2.AuthorizeSecurityGroupIngressOutput{}),
 		ec2mock.WithAuthorizeSecurityGroupEgressOutput(&ec2.AuthorizeSecurityGroupEgressOutput{}),
 	)
@@ -179,6 +182,11 @@ func (s *FunctionCacheLinkUpdateSuite) Test_update_intermediary_resources_sg_pai
 		Name: "appVpc",
 		SpecData: core.MappingNodeFields(
 			"name", core.MappingNodeFromString("app-vpc"),
+			// The group the VPC prepared for the target. A link pairs against one of
+			// these rather than against whatever group the target lists first.
+			"securityGroupIdsByName", core.MappingNodeFields(
+				"cache", core.MappingNodeFromString(testCacheSGID),
+			),
 			"enableDNSSupport", core.MappingNodeFromBool(true),
 			"enableDNSHostnames", core.MappingNodeFromBool(true),
 		),
@@ -329,4 +337,24 @@ func lcMatchConnectOutput(
 
 func TestFunctionCacheLinkUpdateSuite(t *testing.T) {
 	suite.Run(t, new(FunctionCacheLinkUpdateSuite))
+}
+
+// The networking activation resolves the flex VPC's Bluelink name from the AWS VPC's
+// tag before it can find the resource in state, so the mock has to answer it.
+func flexVPCDescribeOutput() []*ec2.DescribeVpcsOutput {
+	return []*ec2.DescribeVpcsOutput{
+		{
+			Vpcs: []ec2types.Vpc{
+				{
+					VpcId: aws.String("vpc-1"),
+					Tags: []ec2types.Tag{
+						{
+							Key:   aws.String(flex.TagFlexVPCName),
+							Value: aws.String("orders-vpc"),
+						},
+					},
+				},
+			},
+		},
+	}
 }

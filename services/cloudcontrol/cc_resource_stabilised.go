@@ -58,8 +58,7 @@ func (a *ccResourceActions) Stabilised(
 	case cctypes.OperationStatusFailed,
 		cctypes.OperationStatusCancelInProgress,
 		cctypes.OperationStatusCancelComplete:
-		return nil, fmt.Errorf(
-			"cloud control operation for %s failed (%s): %s",
+		return nil, ccOperationFailedError(
 			a.config.CFNType,
 			output.ProgressEvent.ErrorCode,
 			aws.ToString(output.ProgressEvent.StatusMessage),

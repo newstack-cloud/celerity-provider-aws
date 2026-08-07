@@ -95,11 +95,11 @@ func getStringParameterExternalStateTestCase(
 		ExpectedOutput: &provider.ResourceGetExternalStateOutput{
 			ResourceSpecState: &core.MappingNode{
 				Fields: map[string]*core.MappingNode{
-					"name":        core.MappingNodeFromString(testParameterName),
-					"type":        core.MappingNodeFromString("String"),
-					"value":       core.MappingNodeFromString("db.internal.example.com"),
-					"arn":         core.MappingNodeFromString(testParameterARN),
-					"version":     core.MappingNodeFromInt(5),
+					"name":    core.MappingNodeFromString(testParameterName),
+					"type":    core.MappingNodeFromString("String"),
+					"value":   core.MappingNodeFromString("db.internal.example.com"),
+					"arn":     core.MappingNodeFromString(testParameterARN),
+					"version": core.MappingNodeFromInt(5),
 					// The effective region the parameter was looked up in, reported back
 					// from the provider-configured region when the spec leaves it unset.
 					"region":      core.MappingNodeFromString("us-west-2"),

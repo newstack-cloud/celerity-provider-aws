@@ -36,14 +36,14 @@ func TestCallerNetworking_attached(t *testing.T) {
 }
 
 // A caller that is not VPC-attached reaches AWS services over the public API, so
-// ActivateLinkNetworking returns the output unchanged without resolving the flex VPC or
+// ReconcileLinkNetworking returns the output unchanged without resolving the flex VPC or
 // touching the EC2 service (a nil service here would panic if it were used).
 func TestActivateLinkNetworking_noOpWhenNotAttached(t *testing.T) {
 	output := &provider.LinkUpdateIntermediaryResourcesOutput{
 		LinkData: core.MappingNodeFields("marker", core.MappingNodeFromString("unchanged")),
 	}
 
-	result, err := ActivateLinkNetworking(
+	result, err := ReconcileLinkNetworking(
 		context.Background(),
 		nil, // EC2 service must not be used on the no-op path.
 		&provider.LinkUpdateIntermediaryResourcesInput{},

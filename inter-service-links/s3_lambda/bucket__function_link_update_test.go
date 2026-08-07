@@ -10,8 +10,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/newstack-cloud/bluelink-provider-aws/internal/testutils"
-	s3mock "github.com/newstack-cloud/bluelink-provider-aws/internal/testutils/s3_mock"
 	resourceservicemock "github.com/newstack-cloud/bluelink-provider-aws/internal/testutils/resourceservice_mock"
+	s3mock "github.com/newstack-cloud/bluelink-provider-aws/internal/testutils/s3_mock"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/state"
@@ -146,7 +146,10 @@ func (s *BucketFunctionLinkUpdateSuite) Test_create_preserves_foreign_entries() 
 	s.Require().NoError(err)
 
 	s3Svc.AssertCalledWith(&s.Suite, "PutBucketNotificationConfiguration", 0, plugintestutils.Any, func(arg any) bool {
-		in := arg.(*s3.PutBucketNotificationConfigurationInput)
+		in, ok := arg.(*s3.PutBucketNotificationConfigurationInput)
+		if !ok {
+			return false
+		}
 		entries := in.NotificationConfiguration.LambdaFunctionConfigurations
 		if len(entries) != 2 {
 			return false
@@ -201,7 +204,10 @@ func (s *BucketFunctionLinkUpdateSuite) Test_destroy_removes_notification_and_pe
 	s.Equal(bfResourceID, rs.DestroyCalls[0].Input.ResourceID)
 	// The link's notification entry is removed (written back without it).
 	s3Svc.AssertCalledWith(&s.Suite, "PutBucketNotificationConfiguration", 0, plugintestutils.Any, func(arg any) bool {
-		in := arg.(*s3.PutBucketNotificationConfigurationInput)
+		in, ok := arg.(*s3.PutBucketNotificationConfigurationInput)
+		if !ok {
+			return false
+		}
 		return len(in.NotificationConfiguration.LambdaFunctionConfigurations) == 0
 	})
 }
@@ -238,7 +244,10 @@ func (s *BucketFunctionLinkUpdateSuite) Test_create_writes_one_entry_per_event()
 
 	// Two notification entries are written, one per event, with distinct per-event ids.
 	s3Svc.AssertCalledWith(&s.Suite, "PutBucketNotificationConfiguration", 0, plugintestutils.Any, func(arg any) bool {
-		in := arg.(*s3.PutBucketNotificationConfigurationInput)
+		in, ok := arg.(*s3.PutBucketNotificationConfigurationInput)
+		if !ok {
+			return false
+		}
 		entries := in.NotificationConfiguration.LambdaFunctionConfigurations
 		if len(entries) != 2 {
 			return false

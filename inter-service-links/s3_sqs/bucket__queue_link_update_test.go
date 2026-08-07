@@ -153,7 +153,10 @@ func (s *BucketQueueLinkUpdateSuite) Test_create_preserves_foreign_entries() {
 	s.Require().NoError(err)
 
 	s3Svc.AssertCalledWith(&s.Suite, "PutBucketNotificationConfiguration", 0, plugintestutils.Any, func(arg any) bool {
-		in := arg.(*s3.PutBucketNotificationConfigurationInput)
+		in, ok := arg.(*s3.PutBucketNotificationConfigurationInput)
+		if !ok {
+			return false
+		}
 		entries := in.NotificationConfiguration.QueueConfigurations
 		if len(entries) != 2 {
 			return false
@@ -208,7 +211,10 @@ func (s *BucketQueueLinkUpdateSuite) Test_destroy_removes_notification_and_polic
 	s.Equal(bqResourceID, rs.DestroyCalls[0].Input.ResourceID)
 	// The link's notification entry is removed (written back without it).
 	s3Svc.AssertCalledWith(&s.Suite, "PutBucketNotificationConfiguration", 0, plugintestutils.Any, func(arg any) bool {
-		in := arg.(*s3.PutBucketNotificationConfigurationInput)
+		in, ok := arg.(*s3.PutBucketNotificationConfigurationInput)
+		if !ok {
+			return false
+		}
 		return len(in.NotificationConfiguration.QueueConfigurations) == 0
 	})
 }

@@ -27,8 +27,9 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.42.0
 	github.com/aws/smithy-go v1.27.3
 	github.com/matoous/go-nanoid/v2 v2.1.0
-	github.com/newstack-cloud/bluelink/libs/blueprint v0.51.2
-	github.com/newstack-cloud/bluelink/libs/plugin-framework v0.15.0
+	github.com/newstack-cloud/bluelink/libs/blueprint v0.52.0
+	github.com/newstack-cloud/bluelink/libs/blueprint-state v0.8.3
+	github.com/newstack-cloud/bluelink/libs/plugin-framework v0.16.0
 	github.com/stretchr/testify v1.11.1
 	github.com/wI2L/jsondiff v0.7.1
 	gopkg.in/yaml.v3 v3.0.1
@@ -53,21 +54,20 @@ require (
 	github.com/coreos/go-json v0.0.0-20231102161613-e49c8866685a // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/newstack-cloud/bluelink/libs/blueprint-state v0.8.2
 	github.com/newstack-cloud/bluelink/libs/common v0.4.0 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/spf13/afero v1.15.0
-	github.com/tailscale/hujson v0.0.0-20250226034555-ec1d1c113d33 // indirect
+	github.com/tailscale/hujson v0.0.0-20260718110524-10d7940d4c87 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
-	go.uber.org/zap v1.27.1 // indirect
-	golang.org/x/net v0.52.0 // indirect
-	golang.org/x/sys v0.42.0 // indirect
-	golang.org/x/text v0.35.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260401024825-9d38bb4040a9 // indirect
-	google.golang.org/grpc v1.80.0 // indirect
+	go.uber.org/zap v1.28.0 // indirect
+	golang.org/x/net v0.55.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
+	google.golang.org/grpc v1.83.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )

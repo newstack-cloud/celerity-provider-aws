@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/newstack-cloud/bluelink-provider-aws/linkutils"
 	cloudcontrolservice "github.com/newstack-cloud/bluelink-provider-aws/services/cloudcontrol/service"
 	ec2service "github.com/newstack-cloud/bluelink-provider-aws/services/ec2/service"
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
@@ -44,8 +45,11 @@ func FunctionTopicLink(
 		}
 
 		return &providerv1.LinkDefinition{
-			ResourceTypeA:                   "aws/lambda/function",
-			ResourceTypeB:                   "aws/sns/topic",
+			ResourceTypeA: "aws/lambda/function",
+			ResourceTypeB: "aws/sns/topic",
+			// ReconcileLinkNetworking reads the function's live VPC attachment, so the
+			// placement link that establishes it has to run first.
+			Requires:                        linkutils.NetworkAttachedRequired(provider.LinkPriorityResourceA),
 			Kind:                            provider.LinkKindSoft,
 			PriorityResource:                provider.LinkPriorityResourceNone,
 			PlainTextSummary:                "A link that grants a Lambda function permission to publish to an SNS topic.",

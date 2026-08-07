@@ -227,6 +227,19 @@ func CreateTagFilterFlexVPCNameForLink(flexVPCName string) ec2types.Filter {
 	}
 }
 
+// CreateTagFilterBluelinkService returns a filter matching the AWS service a link's
+// networking resources were created for.
+//
+// A tag is matched with a "tag:" prefix on the filter name. Passing the bare tag key
+// makes EC2 reject the whole call with InvalidParameterValue, which is what happened
+// at both call sites before this existed.
+func CreateTagFilterBluelinkService(serviceName string) ec2types.Filter {
+	return ec2types.Filter{
+		Name:   aws.String(fmt.Sprintf("tag:%s", TagBluelinkService)),
+		Values: []string{serviceName},
+	}
+}
+
 // CreateTagBlueprintInstanceName creates a tag that is used to identify the blueprint instance
 // associated with a networking resource created as a part of a link implementation.
 func CreateTagBlueprintInstanceName(instanceName string) ec2types.Tag {

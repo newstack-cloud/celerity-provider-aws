@@ -132,6 +132,22 @@ type Service interface {
 	//
 	// [Internet gateways]: https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Internet_Gateway.html
 	AttachInternetGateway(ctx context.Context, params *ec2.AttachInternetGatewayInput, optFns ...func(*ec2.Options)) (*ec2.AttachInternetGatewayOutput, error)
+	// Creates an egress-only internet gateway for use with a IPv6-enabled VPC. An
+	// egress-only internet gateway is used to enable outbound communication over IPv6
+	// from instances in your VPC to the internet, and prevents hosts outside of your
+	// VPC from initiating an IPv6 connection with your instance.
+	//
+	// For more information, see [Egress-only internet gateways] in the Amazon VPC User Guide.
+	//
+	// [Egress-only internet gateways]: https://docs.aws.amazon.com/vpc/latest/userguide/egress-only-internet-gateway.html
+	CreateEgressOnlyInternetGateway(ctx context.Context, params *ec2.CreateEgressOnlyInternetGatewayInput, optFns ...func(*ec2.Options)) (*ec2.CreateEgressOnlyInternetGatewayOutput, error)
+	// Describes your egress-only internet gateways. The default is to describe all
+	// your egress-only internet gateways. Alternatively, you can specify specific
+	// egress-only internet gateway IDs or filter the results to include only the
+	// egress-only internet gateways that match specific criteria.
+	DescribeEgressOnlyInternetGateways(ctx context.Context, params *ec2.DescribeEgressOnlyInternetGatewaysInput, optFns ...func(*ec2.Options)) (*ec2.DescribeEgressOnlyInternetGatewaysOutput, error)
+	// Deletes an egress-only internet gateway.
+	DeleteEgressOnlyInternetGateway(ctx context.Context, params *ec2.DeleteEgressOnlyInternetGatewayInput, optFns ...func(*ec2.Options)) (*ec2.DeleteEgressOnlyInternetGatewayOutput, error)
 	// Creates a route in a route table within a VPC.
 	//
 	// You must specify either a destination CIDR block or a prefix list ID. You must
@@ -254,6 +270,31 @@ type Service interface {
 	// Rule changes are propagated to instances within the security group as quickly
 	// as possible. However, a small delay might occur.
 	RevokeSecurityGroupEgress(ctx context.Context, params *ec2.RevokeSecurityGroupEgressInput, optFns ...func(*ec2.Options)) (*ec2.RevokeSecurityGroupEgressOutput, error)
+	// Removes the specified inbound (ingress) rules from a security group.
+	//
+	// A rule must match exactly for it to be removed; the protocol, port range and
+	// source must all match. Removing a rule that no longer exists is an error.
+	//
+	// Rule changes are propagated to instances within the security group as quickly
+	// as possible. However, a small delay might occur.
+	RevokeSecurityGroupIngress(ctx context.Context, params *ec2.RevokeSecurityGroupIngressInput, optFns ...func(*ec2.Options)) (*ec2.RevokeSecurityGroupIngressOutput, error)
+	// Describes one or more of your security group rules.
+	//
+	// Unlike DescribeSecurityGroups, which returns rules grouped into permissions,
+	// this returns each rule individually with its own ID and tags. That makes it
+	// possible to tell apart rules added by different writers to the same security
+	// group, and to revoke a specific rule by ID.
+	DescribeSecurityGroupRules(ctx context.Context, params *ec2.DescribeSecurityGroupRulesInput, optFns ...func(*ec2.Options)) (*ec2.DescribeSecurityGroupRulesOutput, error)
+	// Describes one or more of your network interfaces.
+	DescribeNetworkInterfaces(ctx context.Context, params *ec2.DescribeNetworkInterfacesInput, optFns ...func(*ec2.Options)) (*ec2.DescribeNetworkInterfacesOutput, error)
+	// Deletes the specified network interface. You must detach the network interface
+	// before you can delete it.
+	DeleteNetworkInterface(ctx context.Context, params *ec2.DeleteNetworkInterfaceInput, optFns ...func(*ec2.Options)) (*ec2.DeleteNetworkInterfaceOutput, error)
+	// Describes your managed prefix lists and any Amazon Web Services-managed prefix
+	// lists.
+	//
+	// To view the entries for your prefix list, use GetManagedPrefixListEntries.
+	DescribeManagedPrefixLists(ctx context.Context, params *ec2.DescribeManagedPrefixListsInput, optFns ...func(*ec2.Options)) (*ec2.DescribeManagedPrefixListsOutput, error)
 	// Creates a network ACL in a VPC. Network ACLs provide an optional layer of
 	// security (in addition to security groups) for the instances in your VPC.
 	//

@@ -56,6 +56,14 @@ Options:
   -r, --run <pattern>    Pass a -run regex to go test to target specific tests,
                          e.g. --run 'TestResources/lambda_function'.
   -h, --help             Show this help.
+
+Environment:
+  E2E_CONCURRENCY        Max concurrent e2e AWS operations (default 6).
+  E2E_SLOW               Set to 1 to include the slow e2e fixtures that are
+                         skipped by default. Currently the direct-author parity
+                         fixture, which stands up an Aurora cluster and adds
+                         several minutes plus RDS cost to the run:
+                           E2E_SLOW=1 bash scripts/run-tests.sh --integration
 EOF
 }
 

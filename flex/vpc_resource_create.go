@@ -27,6 +27,13 @@ const vpcWaitTimeout = 10 * time.Minute
 // The timeout for waiting for a NAT gateway to be available.
 const natGatewayWaitTimeout = 10 * time.Minute
 
+// The timeout for waiting for an Amazon-provided IPv6 CIDR block to be
+// associated with a VPC, and how often the association is re-checked.
+const (
+	vpcIPv6CIDRWaitTimeout  = 2 * time.Minute
+	vpcIPv6CIDRPollInterval = 2 * time.Second
+)
+
 func (l *vpcResourceActions) Create(
 	ctx context.Context,
 	input *provider.ResourceDeployInput,
@@ -54,16 +61,14 @@ func (l *vpcResourceActions) Create(
 		externalStateOutput, err := l.GetExternalState(ctx, &provider.ResourceGetExternalStateInput{
 			ProviderContext:     input.ProviderContext,
 			CurrentResourceSpec: resourceSpecData,
+			InstanceID:          input.InstanceID,
+			InstanceName:        input.InstanceName,
 		})
 		if err != nil {
 			return nil, err
 		}
 
-		return &provider.ResourceDeployOutput{
-			ComputedFieldValues: extractComputedFieldsFromExternalState(
-				externalStateOutput.ResourceSpecState,
-			),
-		}, nil
+		return l.referenceModeDeployOutput(ctx, service, input, resourceSpecData, externalStateOutput)
 	}
 
 	// When in create mode, if the VPC already exists, then the deployment should fail
@@ -210,13 +215,19 @@ func (l *vpcResourceActions) createFlexVPCResources(
 		return nil, err
 	}
 
+	vpcIPv6CIDRBlock, err := waitForVPCIPv6CIDRBlock(ctx, service, createVPCOutput.Vpc.VpcId)
+	if err != nil {
+		return nil, err
+	}
+
 	vpcCtx := &vpcContext{
 		resourceSpecData: resourceSpecData,
 		vpcName:          vpcName,
 		tags:             createVPCInput.TagSpecifications[0].Tags,
+		instanceID:       input.InstanceID,
 		vpcID:            createVPCOutput.Vpc.VpcId,
 		vpcCIDRBlock:     aws.ToString(createVPCInput.CidrBlock),
-		vpcIPv6CIDRBlock: aws.ToString(createVPCOutput.Vpc.Ipv6CidrBlockAssociationSet[0].Ipv6CidrBlock),
+		vpcIPv6CIDRBlock: vpcIPv6CIDRBlock,
 		region:           region,
 	}
 	subnets, err := l.createAndConfigureSubnets(
@@ -238,6 +249,11 @@ func (l *vpcResourceActions) createFlexVPCResources(
 		return nil, err
 	}
 
+	namedGroupIDs, err := l.createNamedSecurityGroups(ctx, service, vpcCtx)
+	if err != nil {
+		return nil, err
+	}
+
 	networkACL, err := l.createInitialNACL(ctx, service, subnets, vpcCtx)
 	if err != nil {
 		return nil, err
@@ -253,14 +269,16 @@ func (l *vpcResourceActions) createFlexVPCResources(
 			"spec.privateSubnetIds": specSubnetIdsByTier(specSubnets, "private"),
 			"spec.publicSubnetIds":  specSubnetIdsByTier(specSubnets, "public"),
 			"spec.routeTables":      toSpecComputedRouteTables(routingInfo.routeTables),
-			"spec.securityGroups": toSpecComputedSecurityGroups(
+			"spec.securityGroupIds": toSpecComputedSecurityGroupIds(
 				[]*ec2.CreateSecurityGroupOutput{securityGroupOutput},
 			),
+			"spec.securityGroupIdsByName": toSpecComputedSecurityGroupIdsByName(namedGroupIDs),
 			"spec.networkAcls": toSpecComputedNetworkACLs(
 				[]*networkACLInfo{networkACL},
 			),
 			"spec.gateways": toSpecComputedGateways(
 				routingInfo.internetGateway,
+				routingInfo.egressOnlyInternetGateway,
 				routingInfo.natGateways,
 			),
 		},
@@ -276,6 +294,11 @@ func (l *vpcResourceActions) setupRoutingForSubnets(
 	routeTables := []*routeTableInfo{}
 
 	igw, err := l.createInternetGateway(ctx, service, subnetsConfig, vpcCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	eigw, err := l.createEgressOnlyInternetGateway(ctx, service, subnetsConfig, vpcCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -306,7 +329,7 @@ func (l *vpcResourceActions) setupRoutingForSubnets(
 			subnetInfo.subnet,
 			subnetInfo.name,
 			subnetsConfig,
-			igw,
+			eigw,
 			vpcCtx,
 		)
 		if err != nil {
@@ -317,16 +340,18 @@ func (l *vpcResourceActions) setupRoutingForSubnets(
 	}
 
 	return &routingInfo{
-		routeTables:     routeTables,
-		internetGateway: igw,
-		natGateways:     natGateways,
+		routeTables:               routeTables,
+		internetGateway:           igw,
+		egressOnlyInternetGateway: eigw,
+		natGateways:               natGateways,
 	}, nil
 }
 
 type routingInfo struct {
-	routeTables     []*routeTableInfo
-	natGateways     []*natGatewayInfo
-	internetGateway *types.InternetGateway
+	routeTables               []*routeTableInfo
+	natGateways               []*natGatewayInfo
+	internetGateway           *types.InternetGateway
+	egressOnlyInternetGateway *types.EgressOnlyInternetGateway
 }
 
 type routeTableInfo struct {
@@ -348,7 +373,7 @@ func (l *vpcResourceActions) setupPublicSubnetRouting(
 	routeTableOutput, err := service.CreateRouteTable(ctx, &ec2.CreateRouteTableInput{
 		VpcId: subnet.VpcId,
 		TagSpecifications: createRouteTableTagSpecifications(
-			tagsWithRouteTable(vpcCtx.tags, subnetName),
+			tagsWithRouteTable(vpcCtx.tags, vpcCtx.vpcName, subnetName),
 		),
 	})
 	if err != nil {
@@ -402,7 +427,7 @@ func (l *vpcResourceActions) setupPrivateSubnetRouting(
 	subnet *types.Subnet,
 	subnetName string,
 	subnetsConfig *subnets,
-	igw *types.InternetGateway,
+	eigw *types.EgressOnlyInternetGateway,
 	vpcCtx *vpcContext,
 ) (*routeTableInfo, error) {
 	natGateways := []*natGatewayInfo{}
@@ -412,7 +437,7 @@ func (l *vpcResourceActions) setupPrivateSubnetRouting(
 	routeTableOutput, err := service.CreateRouteTable(ctx, &ec2.CreateRouteTableInput{
 		VpcId: subnet.VpcId,
 		TagSpecifications: createRouteTableTagSpecifications(
-			tagsWithRouteTable(vpcCtx.tags, subnetName),
+			tagsWithRouteTable(vpcCtx.tags, vpcCtx.vpcName, subnetName),
 		),
 	})
 	if err != nil {
@@ -431,7 +456,7 @@ func (l *vpcResourceActions) setupPrivateSubnetRouting(
 		elasticIPOutput, err := service.AllocateAddress(ctx, &ec2.AllocateAddressInput{
 			Domain: types.DomainTypeVpc,
 			TagSpecifications: createElasticIPTagSpecifications(
-				tagsWithElasticIP(vpcCtx.tags, subnetName),
+				tagsWithElasticIP(vpcCtx.tags, vpcCtx.vpcName, subnetName),
 			),
 		})
 		if err != nil {
@@ -442,7 +467,7 @@ func (l *vpcResourceActions) setupPrivateSubnetRouting(
 			SubnetId:     publicSubnet.SubnetId,
 			AllocationId: elasticIPOutput.AllocationId,
 			TagSpecifications: createNatGatewayTagSpecifications(
-				tagsWithNatGateway(vpcCtx.tags, subnetName),
+				tagsWithNatGateway(vpcCtx.tags, vpcCtx.vpcName, subnetName),
 			),
 		})
 		if err != nil {
@@ -470,10 +495,19 @@ func (l *vpcResourceActions) setupPrivateSubnetRouting(
 			return nil, err
 		}
 
+		if eigw == nil {
+			return nil, fmt.Errorf(
+				"no egress-only internet gateway was created for subnet %q, which routes to the internet",
+				subnetName,
+			)
+		}
+
+		// Outbound IPv6 goes through the egress-only gateway rather than the internet
+		// gateway, so the subnet stays private in both address families.
 		_, err = service.CreateRoute(ctx, &ec2.CreateRouteInput{
-			RouteTableId:             routeTableOutput.RouteTable.RouteTableId,
-			GatewayId:                igw.InternetGatewayId,
-			DestinationIpv6CidrBlock: aws.String("::/0"),
+			RouteTableId:                routeTableOutput.RouteTable.RouteTableId,
+			EgressOnlyInternetGatewayId: eigw.EgressOnlyInternetGatewayId,
+			DestinationIpv6CidrBlock:    aws.String("::/0"),
 		})
 		if err != nil {
 			return nil, err
@@ -485,6 +519,53 @@ func (l *vpcResourceActions) setupPrivateSubnetRouting(
 		subnetIds:   []string{aws.ToString(subnet.SubnetId)},
 		natGateways: natGateways,
 	}, nil
+}
+
+// IPv6 has no NAT: the equivalent of a NAT gateway for outbound-only IPv6 is an
+// egress-only internet gateway. Routing ::/0 from a private subnet to the ordinary
+// internet gateway would work for outbound traffic but an internet gateway is
+// bidirectional for IPv6, leaving anything in the subnet that holds an IPv6 address
+// reachable from the internet.
+//
+// One gateway serves every private subnet in the VPC, so it is created once here
+// rather than per subnet as NAT gateways are.
+func (l *vpcResourceActions) createEgressOnlyInternetGateway(
+	ctx context.Context,
+	service ec2service.Service,
+	subnetsConfig *subnets,
+	vpcCtx *vpcContext,
+) (*types.EgressOnlyInternetGateway, error) {
+	if !anyPrivateSubnetConnectsToInternet(subnetsConfig) {
+		return nil, nil
+	}
+
+	output, err := service.CreateEgressOnlyInternetGateway(ctx, &ec2.CreateEgressOnlyInternetGatewayInput{
+		VpcId: vpcCtx.vpcID,
+		TagSpecifications: createEgressOnlyInternetGatewayTagSpecifications(
+			tagsWithEgressOnlyInternetGateway(vpcCtx.tags, vpcCtx.vpcName),
+		),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if output == nil || output.EgressOnlyInternetGateway == nil {
+		return nil, errors.New(
+			"no egress-only internet gateway was returned when creating one for the VPC",
+		)
+	}
+
+	return output.EgressOnlyInternetGateway, nil
+}
+
+func anyPrivateSubnetConnectsToInternet(subnetsConfig *subnets) bool {
+	for _, route := range subnetsConfig.privateRoutes {
+		if route.connectsToInternet {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (l *vpcResourceActions) createInternetGateway(
@@ -906,6 +987,60 @@ func waitForVPCAvailable(
 	)
 }
 
+// An Amazon-provided IPv6 block is assigned asynchronously. The CreateVpc
+// response carries the association in an "associating" state with an empty CIDR,
+// and the VpcAvailable waiter reports on the VPC's own state rather than the
+// association's. Subnet CIDRs are derived from this block, so the VPC is re-read
+// until the association completes instead of trusting the create response.
+func waitForVPCIPv6CIDRBlock(
+	ctx context.Context,
+	service ec2service.Service,
+	vpcID *string,
+) (string, error) {
+	deadline := time.Now().Add(vpcIPv6CIDRWaitTimeout)
+	for {
+		vpcsOutput, err := service.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{
+			VpcIds: []string{aws.ToString(vpcID)},
+		})
+		if err != nil {
+			return "", err
+		}
+
+		if vpcsOutput != nil && len(vpcsOutput.Vpcs) > 0 {
+			if cidrBlock := associatedIPv6CIDRBlock(vpcsOutput.Vpcs[0]); cidrBlock != "" {
+				return cidrBlock, nil
+			}
+		}
+
+		if time.Now().After(deadline) {
+			return "", fmt.Errorf(
+				"timed out waiting for an IPv6 CIDR block to be associated with VPC %q",
+				aws.ToString(vpcID),
+			)
+		}
+
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(vpcIPv6CIDRPollInterval):
+		}
+	}
+}
+
+func associatedIPv6CIDRBlock(vpc types.Vpc) string {
+	for _, association := range vpc.Ipv6CidrBlockAssociationSet {
+		if association.Ipv6CidrBlockState == nil ||
+			association.Ipv6CidrBlockState.State != types.VpcCidrBlockStateCodeAssociated {
+			continue
+		}
+		if cidrBlock := aws.ToString(association.Ipv6CidrBlock); cidrBlock != "" {
+			return cidrBlock
+		}
+	}
+
+	return ""
+}
+
 func waitForNATGatewayAvailable(
 	ctx context.Context,
 	service ec2service.Service,
@@ -1084,7 +1219,7 @@ func standardPresetConfig(
 					CidrBlock:     aws.String(ipv4SubnetCIDRBlocks[0]),
 					Ipv6CidrBlock: aws.String(ipv6SubnetCIDRBlocks[0]),
 					TagSpecifications: createSubnetTagSpecifications(
-						tagsWithPrivateSubnet(vpcCtx.tags, "private-az-1"),
+						tagsWithPrivateSubnet(vpcCtx.tags, vpcCtx.vpcName, "private-az-1"),
 					),
 					AvailabilityZone: aws.String(vpcCtx.regionAZs[0]),
 				},
@@ -1096,7 +1231,7 @@ func standardPresetConfig(
 					CidrBlock:     aws.String(ipv4SubnetCIDRBlocks[1]),
 					Ipv6CidrBlock: aws.String(ipv6SubnetCIDRBlocks[1]),
 					TagSpecifications: createSubnetTagSpecifications(
-						tagsWithPrivateSubnet(vpcCtx.tags, "private-az-2"),
+						tagsWithPrivateSubnet(vpcCtx.tags, vpcCtx.vpcName, "private-az-2"),
 					),
 					AvailabilityZone: aws.String(vpcCtx.regionAZs[1]),
 				},
@@ -1108,7 +1243,7 @@ func standardPresetConfig(
 					CidrBlock:     aws.String(ipv4SubnetCIDRBlocks[2]),
 					Ipv6CidrBlock: aws.String(ipv6SubnetCIDRBlocks[2]),
 					TagSpecifications: createSubnetTagSpecifications(
-						tagsWithPrivateSubnet(vpcCtx.tags, "private-az-3"),
+						tagsWithPrivateSubnet(vpcCtx.tags, vpcCtx.vpcName, "private-az-3"),
 					),
 					AvailabilityZone: aws.String(vpcCtx.regionAZs[2]),
 				},
@@ -1141,7 +1276,7 @@ func standardPresetConfig(
 					CidrBlock:     aws.String(ipv4SubnetCIDRBlocks[3]),
 					Ipv6CidrBlock: aws.String(ipv6SubnetCIDRBlocks[3]),
 					TagSpecifications: createSubnetTagSpecifications(
-						tagsWithPublicSubnet(vpcCtx.tags, "public-az-1"),
+						tagsWithPublicSubnet(vpcCtx.tags, vpcCtx.vpcName, "public-az-1"),
 					),
 					AvailabilityZone: aws.String(vpcCtx.regionAZs[0]),
 				},
@@ -1153,7 +1288,7 @@ func standardPresetConfig(
 					CidrBlock:     aws.String(ipv4SubnetCIDRBlocks[4]),
 					Ipv6CidrBlock: aws.String(ipv6SubnetCIDRBlocks[4]),
 					TagSpecifications: createSubnetTagSpecifications(
-						tagsWithPublicSubnet(vpcCtx.tags, "public-az-2"),
+						tagsWithPublicSubnet(vpcCtx.tags, vpcCtx.vpcName, "public-az-2"),
 					),
 					AvailabilityZone: aws.String(vpcCtx.regionAZs[1]),
 				},
@@ -1165,7 +1300,7 @@ func standardPresetConfig(
 					CidrBlock:     aws.String(ipv4SubnetCIDRBlocks[5]),
 					Ipv6CidrBlock: aws.String(ipv6SubnetCIDRBlocks[5]),
 					TagSpecifications: createSubnetTagSpecifications(
-						tagsWithPublicSubnet(vpcCtx.tags, "public-az-3"),
+						tagsWithPublicSubnet(vpcCtx.tags, vpcCtx.vpcName, "public-az-3"),
 					),
 					AvailabilityZone: aws.String(vpcCtx.regionAZs[2]),
 				},
@@ -1218,7 +1353,7 @@ func publicPresetConfig(
 					CidrBlock:     aws.String(ipv4SubnetCIDRBlocks[0]),
 					Ipv6CidrBlock: aws.String(ipv6SubnetCIDRBlocks[0]),
 					TagSpecifications: createSubnetTagSpecifications(
-						tagsWithPublicSubnet(vpcCtx.tags, "public-az-1"),
+						tagsWithPublicSubnet(vpcCtx.tags, vpcCtx.vpcName, "public-az-1"),
 					),
 					AvailabilityZone: aws.String(vpcCtx.regionAZs[0]),
 				},
@@ -1230,7 +1365,7 @@ func publicPresetConfig(
 					CidrBlock:     aws.String(ipv4SubnetCIDRBlocks[1]),
 					Ipv6CidrBlock: aws.String(ipv6SubnetCIDRBlocks[1]),
 					TagSpecifications: createSubnetTagSpecifications(
-						tagsWithPublicSubnet(vpcCtx.tags, "public-az-2"),
+						tagsWithPublicSubnet(vpcCtx.tags, vpcCtx.vpcName, "public-az-2"),
 					),
 					AvailabilityZone: aws.String(vpcCtx.regionAZs[1]),
 				},
@@ -1242,7 +1377,7 @@ func publicPresetConfig(
 					CidrBlock:     aws.String(ipv4SubnetCIDRBlocks[2]),
 					Ipv6CidrBlock: aws.String(ipv6SubnetCIDRBlocks[2]),
 					TagSpecifications: createSubnetTagSpecifications(
-						tagsWithPublicSubnet(vpcCtx.tags, "public-az-3"),
+						tagsWithPublicSubnet(vpcCtx.tags, vpcCtx.vpcName, "public-az-3"),
 					),
 					AvailabilityZone: aws.String(vpcCtx.regionAZs[2]),
 				},
@@ -1295,7 +1430,7 @@ func isolatedPresetConfig(
 					CidrBlock:     aws.String(ipv4SubnetCIDRBlocks[0]),
 					Ipv6CidrBlock: aws.String(ipv6SubnetCIDRBlocks[0]),
 					TagSpecifications: createSubnetTagSpecifications(
-						tagsWithPrivateSubnet(vpcCtx.tags, "private-az-1"),
+						tagsWithPrivateSubnet(vpcCtx.tags, vpcCtx.vpcName, "private-az-1"),
 					),
 					AvailabilityZone: aws.String(vpcCtx.regionAZs[0]),
 				},
@@ -1307,7 +1442,7 @@ func isolatedPresetConfig(
 					CidrBlock:     aws.String(ipv4SubnetCIDRBlocks[1]),
 					Ipv6CidrBlock: aws.String(ipv6SubnetCIDRBlocks[1]),
 					TagSpecifications: createSubnetTagSpecifications(
-						tagsWithPrivateSubnet(vpcCtx.tags, "private-az-2"),
+						tagsWithPrivateSubnet(vpcCtx.tags, vpcCtx.vpcName, "private-az-2"),
 					),
 					AvailabilityZone: aws.String(vpcCtx.regionAZs[1]),
 				},
@@ -1319,7 +1454,7 @@ func isolatedPresetConfig(
 					CidrBlock:     aws.String(ipv4SubnetCIDRBlocks[2]),
 					Ipv6CidrBlock: aws.String(ipv6SubnetCIDRBlocks[2]),
 					TagSpecifications: createSubnetTagSpecifications(
-						tagsWithPrivateSubnet(vpcCtx.tags, "private-az-3"),
+						tagsWithPrivateSubnet(vpcCtx.tags, vpcCtx.vpcName, "private-az-3"),
 					),
 					AvailabilityZone: aws.String(vpcCtx.regionAZs[2]),
 				},
@@ -1372,7 +1507,7 @@ func lightPresetConfig(
 					CidrBlock:     aws.String(ipv4SubnetCIDRBlocks[0]),
 					Ipv6CidrBlock: aws.String(ipv6SubnetCIDRBlocks[0]),
 					TagSpecifications: createSubnetTagSpecifications(
-						tagsWithPrivateSubnet(vpcCtx.tags, "private-az-1"),
+						tagsWithPrivateSubnet(vpcCtx.tags, vpcCtx.vpcName, "private-az-1"),
 					),
 					AvailabilityZone: aws.String(vpcCtx.regionAZs[0]),
 				},
@@ -1393,7 +1528,7 @@ func lightPresetConfig(
 					CidrBlock:     aws.String(ipv4SubnetCIDRBlocks[1]),
 					Ipv6CidrBlock: aws.String(ipv6SubnetCIDRBlocks[1]),
 					TagSpecifications: createSubnetTagSpecifications(
-						tagsWithPublicSubnet(vpcCtx.tags, "public-az-1"),
+						tagsWithPublicSubnet(vpcCtx.tags, vpcCtx.vpcName, "public-az-1"),
 					),
 					AvailabilityZone: aws.String(vpcCtx.regionAZs[0]),
 				},
@@ -1438,7 +1573,7 @@ func lightPublicPresetConfig(
 					CidrBlock:     aws.String(ipv4SubnetCIDRBlocks[0]),
 					Ipv6CidrBlock: aws.String(ipv6SubnetCIDRBlocks[0]),
 					TagSpecifications: createSubnetTagSpecifications(
-						tagsWithPublicSubnet(vpcCtx.tags, "public-az-1"),
+						tagsWithPublicSubnet(vpcCtx.tags, vpcCtx.vpcName, "public-az-1"),
 					),
 					AvailabilityZone: aws.String(vpcCtx.regionAZs[0]),
 				},
@@ -1453,141 +1588,99 @@ func lightPublicPresetConfig(
 	}, nil
 }
 
-func tagsWithPrivateSubnet(tags []types.Tag, subnetName string) []types.Tag {
-	newTags := []types.Tag{}
-	copy(newTags, tags)
-	newTags = append(
-		newTags,
-		types.Tag{
-			Key:   aws.String(TagFlexVPCSubnetType),
-			Value: aws.String("private"),
-		},
-		types.Tag{
-			Key:   aws.String(TagFlexVPCSubnetName),
-			Value: aws.String(subnetName),
-		},
-	)
-	return newTags
+// The single constructor for the tags on any resource created as part of a flex
+// VPC: the VPC's base tag set (Bluelink provenance and the user's own tags) with
+// the flex VPC name, the flex VPC resource marker, and the tags identifying this
+// particular resource upserted onto it.
+//
+// Every flex VPC resource must be tagged through this. The name and resource
+// marker are applied here rather than by each caller because every lookup in
+// GetExternalState filters on the name, so a resource missing it is invisible to
+// the provider even though it exists in the account.
+func flexVPCResourceTags(base []types.Tag, vpcName string, identifying ...types.Tag) []types.Tag {
+	tags := append([]types.Tag{}, base...)
+	tags = upsertTag(tags, TagFlexVPCName, vpcName)
+	tags = upsertTag(tags, TagFlexVPCResource, "true")
+	for _, tag := range identifying {
+		tags = upsertTag(tags, aws.ToString(tag.Key), aws.ToString(tag.Value))
+	}
+
+	return tags
 }
 
-func tagsWithPublicSubnet(tags []types.Tag, subnetName string) []types.Tag {
-	newTags := []types.Tag{}
-	copy(newTags, tags)
-	newTags = append(
-		newTags,
-		types.Tag{
-			Key:   aws.String(TagFlexVPCSubnetType),
-			Value: aws.String("public"),
-		},
-		types.Tag{
-			Key:   aws.String(TagFlexVPCSubnetName),
-			Value: aws.String(subnetName),
-		},
-	)
-	return newTags
+func flexVPCTag(key string, value string) types.Tag {
+	return types.Tag{Key: aws.String(key), Value: aws.String(value)}
 }
 
-func tagsWithRouteTable(tags []types.Tag, subnetName string) []types.Tag {
-	newTags := []types.Tag{}
-	copy(newTags, tags)
-	newTags = append(
-		newTags,
-		types.Tag{
-			Key:   aws.String(TagFlexVPCRouteTable),
-			Value: aws.String("true"),
-		},
-		types.Tag{
-			// Each route table created for a flex VPC is associated with a specific subnet.
-			Key:   aws.String(TagFlexVPCSubnetName),
-			Value: aws.String(subnetName),
-		},
-	)
-	return newTags
+func upsertTag(tags []types.Tag, key string, value string) []types.Tag {
+	for i := range tags {
+		if aws.ToString(tags[i].Key) == key {
+			tags[i].Value = aws.String(value)
+			return tags
+		}
+	}
+
+	return append(tags, types.Tag{Key: aws.String(key), Value: aws.String(value)})
 }
 
-func tagsWithNatGateway(tags []types.Tag, subnetName string) []types.Tag {
-	newTags := []types.Tag{}
-	copy(newTags, tags)
-	newTags = append(
-		newTags,
-		types.Tag{
-			Key:   aws.String(TagFlexVPCNATGateway),
-			Value: aws.String("true"),
-		},
-		types.Tag{
-			Key:   aws.String(TagFlexVPCSubnetName),
-			Value: aws.String(subnetName),
-		},
+func tagsWithPrivateSubnet(tags []types.Tag, vpcName string, subnetName string) []types.Tag {
+	return flexVPCResourceTags(tags, vpcName,
+		flexVPCTag(TagFlexVPCSubnetType, "private"),
+		flexVPCTag(TagFlexVPCSubnetName, subnetName),
 	)
-	return newTags
+}
+
+func tagsWithPublicSubnet(tags []types.Tag, vpcName string, subnetName string) []types.Tag {
+	return flexVPCResourceTags(tags, vpcName,
+		flexVPCTag(TagFlexVPCSubnetType, "public"),
+		flexVPCTag(TagFlexVPCSubnetName, subnetName),
+	)
+}
+
+func tagsWithRouteTable(tags []types.Tag, vpcName string, subnetName string) []types.Tag {
+	return flexVPCResourceTags(tags, vpcName,
+		flexVPCTag(TagFlexVPCRouteTable, "true"),
+		// Each route table created for a flex VPC is associated with a specific subnet.
+		flexVPCTag(TagFlexVPCSubnetName, subnetName),
+	)
+}
+
+func tagsWithNatGateway(tags []types.Tag, vpcName string, subnetName string) []types.Tag {
+	return flexVPCResourceTags(tags, vpcName,
+		flexVPCTag(TagFlexVPCNATGateway, "true"),
+		flexVPCTag(TagFlexVPCSubnetName, subnetName),
+	)
 }
 
 func tagsWithInternetGateway(tags []types.Tag, vpcName string) []types.Tag {
-	newTags := []types.Tag{}
-	copy(newTags, tags)
-	newTags = append(
-		newTags,
-		types.Tag{
-			Key:   aws.String(TagFlexVPCInternetGateway),
-			Value: aws.String("true"),
-		},
-		types.Tag{
-			Key:   aws.String(TagFlexVPCName),
-			Value: aws.String(vpcName),
-		},
+	return flexVPCResourceTags(tags, vpcName,
+		flexVPCTag(TagFlexVPCInternetGateway, "true"),
 	)
-	return newTags
 }
 
-func tagsWithElasticIP(tags []types.Tag, subnetName string) []types.Tag {
-	newTags := []types.Tag{}
-	copy(newTags, tags)
-	newTags = append(
-		newTags,
-		types.Tag{
-			Key:   aws.String(TagFlexVPCElasticIP),
-			Value: aws.String("true"),
-		},
-		types.Tag{
-			Key:   aws.String(TagFlexVPCSubnetName),
-			Value: aws.String(subnetName),
-		},
+func tagsWithEgressOnlyInternetGateway(tags []types.Tag, vpcName string) []types.Tag {
+	return flexVPCResourceTags(tags, vpcName,
+		flexVPCTag(TagFlexVPCEgressOnlyInternetGateway, "true"),
 	)
-	return newTags
+}
+
+func tagsWithElasticIP(tags []types.Tag, vpcName string, subnetName string) []types.Tag {
+	return flexVPCResourceTags(tags, vpcName,
+		flexVPCTag(TagFlexVPCElasticIP, "true"),
+		flexVPCTag(TagFlexVPCSubnetName, subnetName),
+	)
 }
 
 func tagsWithSecurityGroup(tags []types.Tag, vpcName string) []types.Tag {
-	newTags := []types.Tag{}
-	copy(newTags, tags)
-	newTags = append(
-		newTags,
-		types.Tag{
-			Key:   aws.String(TagFlexVPCSecurityGroup),
-			Value: aws.String("true"),
-		},
-		types.Tag{
-			Key:   aws.String(TagFlexVPCName),
-			Value: aws.String(vpcName),
-		},
+	return flexVPCResourceTags(tags, vpcName,
+		flexVPCTag(TagFlexVPCSecurityGroup, "true"),
 	)
-	return newTags
 }
 
 func tagsWithNetworkAcl(tags []types.Tag, vpcName string) []types.Tag {
-	newTags := []types.Tag{}
-	copy(newTags, tags)
-	newTags = append(
-		newTags,
-		types.Tag{
-			Key:   aws.String(TagFlexVPCNetworkACL),
-			Value: aws.String("true"),
-		},
-		types.Tag{
-			Key:   aws.String(TagFlexVPCName),
-			Value: aws.String(vpcName),
-		},
+	return flexVPCResourceTags(tags, vpcName,
+		flexVPCTag(TagFlexVPCNetworkACL, "true"),
 	)
-	return newTags
 }
 
 func createSubnetTagSpecifications(tags []types.Tag) []types.TagSpecification {
@@ -1612,6 +1705,15 @@ func createInternetGatewayTagSpecifications(tags []types.Tag) []types.TagSpecifi
 	return []types.TagSpecification{
 		{
 			ResourceType: types.ResourceTypeInternetGateway,
+			Tags:         tags,
+		},
+	}
+}
+
+func createEgressOnlyInternetGatewayTagSpecifications(tags []types.Tag) []types.TagSpecification {
+	return []types.TagSpecification{
+		{
+			ResourceType: types.ResourceTypeEgressOnlyInternetGateway,
 			Tags:         tags,
 		},
 	}
@@ -1657,6 +1759,9 @@ type vpcContext struct {
 	resourceSpecData *core.MappingNode
 	vpcName          string
 	tags             []types.Tag
+	// The blueprint instance that owns any policy security groups created from
+	// this context; a referenced VPC is shared, so groups must be attributable.
+	instanceID       string
 	vpcID            *string
 	vpcCIDRBlock     string
 	vpcIPv6CIDRBlock string
@@ -1669,6 +1774,7 @@ func vpcContextWithRegionAZs(input *vpcContext, regionAZs []string) *vpcContext 
 		resourceSpecData: input.resourceSpecData,
 		vpcName:          input.vpcName,
 		tags:             input.tags,
+		instanceID:       input.instanceID,
 		vpcID:            input.vpcID,
 		vpcCIDRBlock:     input.vpcCIDRBlock,
 		vpcIPv6CIDRBlock: input.vpcIPv6CIDRBlock,
@@ -1714,7 +1820,7 @@ func toSpecComputedSubnets(subnets *subnets) *core.MappingNode {
 }
 
 func toSpecComputedSubnet(subnet *types.Subnet, subnetType string) *core.MappingNode {
-	return core.MappingNodeFields(
+	computed := core.MappingNodeFields(
 		"id",
 		core.MappingNodeFromString(aws.ToString(subnet.SubnetId)),
 		"availabilityZone",
@@ -1722,6 +1828,25 @@ func toSpecComputedSubnet(subnet *types.Subnet, subnetType string) *core.Mapping
 		"subnetType",
 		core.MappingNodeFromString(subnetType),
 	)
+
+	if ipv6CIDRBlock := subnetIPv6CIDRBlock(subnet); ipv6CIDRBlock != "" {
+		computed.Fields["ipv6CidrBlock"] = core.MappingNodeFromString(ipv6CIDRBlock)
+	}
+
+	return computed
+}
+
+// Whether a subnet is dual-stack decides whether a workload placed in it can be
+// given outbound IPv6, so the association is surfaced rather than left for a caller
+// to rediscover.
+func subnetIPv6CIDRBlock(subnet *types.Subnet) string {
+	for _, association := range subnet.Ipv6CidrBlockAssociationSet {
+		if association.Ipv6CidrBlock != nil {
+			return aws.ToString(association.Ipv6CidrBlock)
+		}
+	}
+
+	return ""
 }
 
 // Derives a directly-referenceable list of subnet IDs in the
@@ -1779,7 +1904,7 @@ func toSpecComputedRouteTables(routeTables []*routeTableInfo) *core.MappingNode 
 	return specRouteTables
 }
 
-func toSpecComputedSecurityGroups(securityGroups []*ec2.CreateSecurityGroupOutput) *core.MappingNode {
+func toSpecComputedSecurityGroupIds(securityGroups []*ec2.CreateSecurityGroupOutput) *core.MappingNode {
 	specSecurityGroups := core.MappingNodeItems()
 	for _, securityGroup := range securityGroups {
 		specSecurityGroups.Items = append(
@@ -1812,14 +1937,32 @@ func toSpecComputedNetworkACLs(networkACLs []*networkACLInfo) *core.MappingNode 
 
 func toSpecComputedGateways(
 	internetGateway *types.InternetGateway,
+	egressOnlyInternetGateway *types.EgressOnlyInternetGateway,
 	natGateways []*natGatewayInfo,
 ) *core.MappingNode {
-	return core.MappingNodeFields(
-		"internetGatewayId",
-		core.MappingNodeFromString(aws.ToString(internetGateway.InternetGatewayId)),
+	gateways := core.MappingNodeFields(
 		"natGateways",
 		toSpecComputedNATGateways(natGateways),
 	)
+
+	// The isolated preset provisions no public subnets, so it has no internet gateway
+	// and this is nil. Dereferencing it unconditionally made that preset impossible to
+	// create at all.
+	if internetGateway != nil {
+		gateways.Fields["internetGatewayId"] = core.MappingNodeFromString(
+			aws.ToString(internetGateway.InternetGatewayId),
+		)
+	}
+
+	// Presets with no internet-connected private subnet have no egress-only gateway,
+	// so the field is absent rather than empty.
+	if egressOnlyInternetGateway != nil {
+		gateways.Fields["egressOnlyInternetGatewayId"] = core.MappingNodeFromString(
+			aws.ToString(egressOnlyInternetGateway.EgressOnlyInternetGatewayId),
+		)
+	}
+
+	return gateways
 }
 
 func toSpecComputedNATGateways(natGateways []*natGatewayInfo) *core.MappingNode {
@@ -1849,19 +1992,24 @@ func extractComputedFieldsFromExternalState(
 	privateSubnetIds, _ := pluginutils.GetValueByPath("$.privateSubnetIds", externalState)
 	publicSubnetIds, _ := pluginutils.GetValueByPath("$.publicSubnetIds", externalState)
 	routeTables, _ := pluginutils.GetValueByPath("$.routeTables", externalState)
-	securityGroups, _ := pluginutils.GetValueByPath("$.securityGroups", externalState)
+	securityGroups, _ := pluginutils.GetValueByPath("$.securityGroupIds", externalState)
+	securityGroupIdsByName, _ := pluginutils.GetValueByPath(
+		"$.securityGroupIdsByName",
+		externalState,
+	)
 	networkACLs, _ := pluginutils.GetValueByPath("$.networkAcls", externalState)
 	gateways, _ := pluginutils.GetValueByPath("$.gateways", externalState)
 
 	return map[string]*core.MappingNode{
-		"spec.vpcId":            vpcID,
-		"spec.subnets":          subnets,
-		"spec.privateSubnetIds": privateSubnetIds,
-		"spec.publicSubnetIds":  publicSubnetIds,
-		"spec.routeTables":      routeTables,
-		"spec.securityGroups":   securityGroups,
-		"spec.networkAcls":      networkACLs,
-		"spec.gateways":         gateways,
+		"spec.vpcId":                  vpcID,
+		"spec.subnets":                subnets,
+		"spec.privateSubnetIds":       privateSubnetIds,
+		"spec.publicSubnetIds":        publicSubnetIds,
+		"spec.routeTables":            routeTables,
+		"spec.securityGroupIds":       securityGroups,
+		"spec.securityGroupIdsByName": securityGroupIdsByName,
+		"spec.networkAcls":            networkACLs,
+		"spec.gateways":               gateways,
 	}
 }
 

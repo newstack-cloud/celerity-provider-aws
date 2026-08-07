@@ -29,26 +29,17 @@ func TestConvertMarksOptionalPrimaryIdentifierAsComputedWhenOmitted(t *testing.T
 		t.Fatal(err)
 	}
 
-	widgetName := findAttribute(resource.Schema, "widgetName")
-	if widgetName == nil {
-		t.Fatal("widgetName attribute not found")
-	}
+	widgetName := mustFindAttribute(t, resource.Schema, "widgetName")
 	if !widgetName.ComputedWhenOmitted {
 		t.Error("optional primary identifier component should be computed-when-omitted")
 	}
 
-	region := findAttribute(resource.Schema, "region")
-	if region == nil {
-		t.Fatal("region attribute not found")
-	}
+	region := mustFindAttribute(t, resource.Schema, "region")
 	if region.ComputedWhenOmitted {
 		t.Error("required primary identifier component should not be computed-when-omitted")
 	}
 
-	arn := findAttribute(resource.Schema, "arn")
-	if arn == nil {
-		t.Fatal("arn attribute not found")
-	}
+	arn := mustFindAttribute(t, resource.Schema, "arn")
 	if arn.ComputedWhenOmitted || !arn.Computed {
 		t.Error("read-only fields should stay plain computed")
 	}

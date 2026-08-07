@@ -42,10 +42,7 @@ func convertPatterned(t *testing.T) *irResource {
 func TestConvertDropsRE2IncompatiblePatterns(t *testing.T) {
 	resource := convertPatterned(t)
 
-	bucketName := findAttribute(resource.Schema, "bucketName")
-	if bucketName == nil {
-		t.Fatal("bucketName attribute not found")
-	}
+	bucketName := mustFindAttribute(t, resource.Schema, "bucketName")
 	if bucketName.Pattern != "" {
 		t.Errorf("lookbehind pattern should be dropped, got %q", bucketName.Pattern)
 	}
@@ -56,10 +53,7 @@ func TestConvertDropsRE2IncompatiblePatterns(t *testing.T) {
 		t.Error("length constraints should survive a dropped pattern")
 	}
 
-	name := findAttribute(resource.Schema, "name")
-	if name == nil {
-		t.Fatal("name attribute not found")
-	}
+	name := mustFindAttribute(t, resource.Schema, "name")
 	if name.Pattern != "^[a-z]+$" {
 		t.Errorf("RE2-compatible pattern should be kept, got %q", name.Pattern)
 	}
@@ -143,4 +137,21 @@ func walkIRSchemas(schema *irSchema, visit func(*irSchema)) {
 	for _, branch := range schema.OneOf {
 		walkIRSchemas(branch, visit)
 	}
+}
+
+// Returns the named attribute or fails the test.
+//
+// Callers previously nil-checked and then dereferenced, which staticcheck reads as a
+// possible nil dereference (SA5011) because it cannot see that the check terminates.
+// Returning a value the caller can use without checking removes both the repetition and
+// the warning.
+func mustFindAttribute(t *testing.T, schema *irSchema, name string) *irSchema {
+	t.Helper()
+
+	attr := findAttribute(schema, name)
+	if attr == nil {
+		t.Fatalf("%s attribute not found", name)
+	}
+
+	return attr
 }

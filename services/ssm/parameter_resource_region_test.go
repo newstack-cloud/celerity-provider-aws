@@ -56,7 +56,7 @@ func (s *SSMParameterResourceRegionSuite) Test_create_targets_spec_region() {
 
 	s.NoError(err)
 	s.Equal(testReplicaRegion, capturedRegion)
-	service.MockCalls.AssertCalled(&s.Suite, "PutParameter")
+	service.AssertCalled(&s.Suite, "PutParameter")
 }
 
 func (s *SSMParameterResourceRegionSuite) Test_create_defaults_to_provider_region() {
@@ -102,7 +102,7 @@ func (s *SSMParameterResourceRegionSuite) Test_destroy_targets_region_recorded_i
 
 	s.NoError(err)
 	s.Equal(testReplicaRegion, capturedRegion)
-	service.MockCalls.AssertCalled(&s.Suite, "DeleteParameter")
+	service.AssertCalled(&s.Suite, "DeleteParameter")
 }
 
 func (s *SSMParameterResourceRegionSuite) Test_get_external_state_targets_and_reports_spec_region() {

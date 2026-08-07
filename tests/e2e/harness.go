@@ -10,11 +10,13 @@ package e2e
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -40,6 +42,7 @@ import (
 	"github.com/newstack-cloud/bluelink/libs/blueprint/changes"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/container"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/core"
+	bperrors "github.com/newstack-cloud/bluelink/libs/blueprint/errors"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/provider"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/state"
 	"github.com/newstack-cloud/bluelink/libs/blueprint/transform"
@@ -150,6 +153,12 @@ func Setup(t *testing.T) *Harness {
 	)
 
 	suffix := uniqueSuffix()
+	namePrefix := "bluelink-it-" + suffix
+
+	// Registered before anything is deployed, so a test that dies mid-deploy still has
+	// its scope known to the post-run sweep.
+	registerSweepScope(namePrefix)
+
 	return &Harness{
 		T:          t,
 		Ctx:        ctx,
@@ -158,7 +167,7 @@ func Setup(t *testing.T) *Harness {
 		AWSConfig:  awsConfig,
 		Account:    account,
 		Region:     region,
-		NamePrefix: "bluelink-it-" + suffix,
+		NamePrefix: namePrefix,
 		sessionID:  "it-session-" + suffix,
 	}
 }
@@ -173,7 +182,13 @@ func (h *Harness) Name(label string) string {
 // final state (resources + exports).
 type DeployedInstance struct {
 	InstanceID string
-	State      state.InstanceState
+	// InstanceName is the name the instance was deployed under, needed to stage a
+	// later change against the same instance.
+	InstanceName string
+	State        state.InstanceState
+	// DestroyNow tears the instance down immediately instead of at cleanup. Safe to
+	// call more than once; the registered cleanup skips a second destroy.
+	DestroyNow func()
 }
 
 // Deploy loads the named blueprintlang file from testdata/, stages and deploys it
@@ -190,14 +205,18 @@ func (h *Harness) Deploy(
 
 	params := h.params(vars)
 	bp, err := h.Loader.Load(h.Ctx, filepath.Join("testdata", blueprintFile), params)
-	require.NoErrorf(t, err, "load blueprint %s", blueprintFile)
+	require.NoErrorf(t, err, "load blueprint %s:\n%s", blueprintFile, renderLoadError(err))
 
 	instanceName := "it-instance-" + uniqueSuffix()
 
 	changeSet := h.stage(t, bp, instanceName, params, false)
 
 	// Register teardown before deploying so partial deployments are still cleaned up.
+	destroyed := false
 	t.Cleanup(func() {
+		if destroyed {
+			return
+		}
 		h.destroy(instanceName, bp)
 	})
 
@@ -217,7 +236,65 @@ func (h *Harness) Deploy(
 
 	instanceState, err := h.State.Instances().Get(h.Ctx, finished.InstanceID)
 	require.NoError(t, err, "read deployed instance state")
-	return &DeployedInstance{InstanceID: finished.InstanceID, State: instanceState}
+	return &DeployedInstance{
+		InstanceID:   finished.InstanceID,
+		InstanceName: instanceName,
+		State:        instanceState,
+		// Lets a test tear the instance down mid-body and assert on what teardown
+		// left behind, which the deferred cleanup cannot do because it runs after
+		// every assertion.
+		DestroyNow: func() {
+			if destroyed {
+				return
+			}
+			destroyed = true
+			h.destroy(instanceName, bp)
+		},
+	}
+}
+
+// Update stages and deploys a different blueprint against an already-deployed
+// instance, which is what drives a provider's update path rather than its create
+// path. Teardown stays with the cleanup the original Deploy registered, since a
+// destroy is staged from the instance's state rather than from a blueprint.
+func (h *Harness) Update(
+	t *testing.T,
+	deployed *DeployedInstance,
+	blueprintFile string,
+	vars map[string]*core.ScalarValue,
+) *DeployedInstance {
+	t.Helper()
+
+	params := h.params(vars)
+	bp, err := h.Loader.Load(h.Ctx, filepath.Join("testdata", blueprintFile), params)
+	require.NoErrorf(t, err, "load blueprint %s:\n%s", blueprintFile, renderLoadError(err))
+
+	changeSet := h.stage(t, bp, deployed.InstanceName, params, false)
+
+	defer acquireE2ESlot()()
+
+	deployChannels := container.CreateDeployChannels()
+	err = bp.Deploy(h.Ctx, &container.DeployInput{
+		InstanceName: deployed.InstanceName,
+		Changes:      changeSet,
+	}, deployChannels, params)
+	require.NoErrorf(t, err, "start update deploy of %s", blueprintFile)
+
+	finished := consumeDeploy(t, deployChannels)
+	// A deploy over an existing instance terminates as "updated"; it reports
+	// "deployed" only when the change set turns out to be empty.
+	require.Containsf(t,
+		[]core.InstanceStatus{core.InstanceStatusUpdated, core.InstanceStatusDeployed},
+		finished.Status,
+		"update deploy of %s did not succeed: %v", blueprintFile, finished.FailureReasons)
+
+	instanceState, err := h.State.Instances().Get(h.Ctx, finished.InstanceID)
+	require.NoError(t, err, "read updated instance state")
+	return &DeployedInstance{
+		InstanceID:   finished.InstanceID,
+		InstanceName: deployed.InstanceName,
+		State:        instanceState,
+	}
 }
 
 // ResourceSpec returns the deployed spec/external state of a resource by its
@@ -256,7 +333,63 @@ func (h *Harness) stage(
 	return consumeStage(t, channels)
 }
 
+// How long the harness keeps re-running a destroy that has not converged, and how long
+// it waits between attempts.
+//
+// Tearing down a VPC-attached workload waits on AWS releasing the network interfaces
+// that hold its security groups, measured at anywhere between 18 and 977 seconds for
+// the same operation. The provider yields a retryable error rather than blocking a
+// worker for that, and the deployment engine's own retry policy covers roughly four
+// minutes, so a destroy can legitimately return before it has finished. Re-running is
+// how the work completes; this is what an operator would do.
+const (
+	destroyConvergeTimeout  = 20 * time.Minute
+	destroyConvergeInterval = 30 * time.Second
+)
+
+// Destroys the instance, re-running until it reports success or the window closes.
+//
+// A single attempt is not a fair test of a destroy that is eventually consistent by
+// design: it fails whenever AWS happens to be slow, which says nothing about whether
+// the teardown is correct.
 func (h *Harness) destroy(instanceName string, bp container.BlueprintContainer) {
+	deadline := time.Now().Add(destroyConvergeTimeout)
+	attempt := 0
+	for {
+		attempt++
+		status, failures, err := h.destroyOnce(instanceName, bp)
+		if err == nil && status == core.InstanceStatusDestroyed {
+			if attempt > 1 {
+				h.T.Logf("destroy of %s converged on attempt %d", instanceName, attempt)
+			}
+			return
+		}
+
+		if time.Now().After(deadline) {
+			if err != nil {
+				h.T.Errorf(
+					"destroy of %s did not converge after %d attempts: %v",
+					instanceName, attempt, err,
+				)
+				return
+			}
+			h.T.Errorf(
+				"destroy of %s did not converge after %d attempts, last status %v: %v",
+				instanceName, attempt, status, failures,
+			)
+			return
+		}
+
+		time.Sleep(destroyConvergeInterval)
+	}
+}
+
+// One destroy attempt. Returns the finished status so the caller can decide whether to
+// try again, rather than reporting a failure the next attempt may clear.
+func (h *Harness) destroyOnce(
+	instanceName string,
+	bp container.BlueprintContainer,
+) (core.InstanceStatus, []string, error) {
 	// Bound concurrent destroys alongside deploys (same AWS operation limits).
 	defer acquireE2ESlot()()
 
@@ -266,13 +399,11 @@ func (h *Harness) destroy(instanceName string, bp container.BlueprintContainer) 
 		InstanceName: instanceName,
 		Destroy:      true,
 	}, channels, params); err != nil {
-		h.T.Errorf("cleanup: stage destroy for %s failed: %v", instanceName, err)
-		return
+		return 0, nil, fmt.Errorf("stage destroy: %w", err)
 	}
 	changeSet, err := consumeStageErr(channels)
 	if err != nil {
-		h.T.Errorf("cleanup: stage destroy for %s failed: %v", instanceName, err)
-		return
+		return 0, nil, fmt.Errorf("stage destroy: %w", err)
 	}
 
 	deployChannels := container.CreateDeployChannels()
@@ -282,12 +413,10 @@ func (h *Harness) destroy(instanceName string, bp container.BlueprintContainer) 
 	}, deployChannels, params)
 	finished, err := consumeDeployErr(deployChannels)
 	if err != nil {
-		h.T.Errorf("cleanup: destroy of %s failed: %v", instanceName, err)
-		return
+		return 0, nil, err
 	}
-	if finished.Status != core.InstanceStatusDestroyed {
-		h.T.Errorf("cleanup: destroy of %s ended in status %v: %v", instanceName, finished.Status, finished.FailureReasons)
-	}
+
+	return finished.Status, finished.FailureReasons, nil
 }
 
 func (h *Harness) params(vars map[string]*core.ScalarValue) core.BlueprintParams {
@@ -307,4 +436,32 @@ func (h *Harness) params(vars map[string]*core.ScalarValue) core.BlueprintParams
 
 func uniqueSuffix() string {
 	return fmt.Sprintf("%d-%d", time.Now().UnixNano(), idCounter.Add(1))
+}
+
+// Renders a blueprint load error with its nested child errors.
+//
+// A validation failure surfaces as "validation failed due to multiple errors"
+// with the actual problems held in ChildErrors, so the default message names the
+// fixture that failed and nothing about why. Every child is walked recursively,
+// since a load error's children are frequently load errors of their own.
+func renderLoadError(err error) string {
+	if err == nil {
+		return ""
+	}
+
+	lines := []string{}
+	var walk func(err error, depth int)
+	walk = func(err error, depth int) {
+		indent := strings.Repeat("  ", depth)
+		lines = append(lines, indent+"- "+err.Error())
+
+		if loadErr, ok := errors.AsType[*bperrors.LoadError](err); ok {
+			for _, child := range loadErr.ChildErrors {
+				walk(child, depth+1)
+			}
+		}
+	}
+	walk(err, 0)
+
+	return strings.Join(lines, "\n")
 }

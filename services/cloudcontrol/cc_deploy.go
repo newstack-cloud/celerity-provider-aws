@@ -222,8 +222,7 @@ func (a *ccResourceActions) waitForIdentifier(
 			case cctypes.OperationStatusFailed,
 				cctypes.OperationStatusCancelInProgress,
 				cctypes.OperationStatusCancelComplete:
-				return "", fmt.Errorf(
-					"cloud control operation for %s failed (%s): %s",
+				return "", ccOperationFailedError(
 					a.config.CFNType,
 					progress.ErrorCode,
 					aws.ToString(progress.StatusMessage),
@@ -290,8 +289,7 @@ func (a *ccResourceActions) awaitComputedState(
 			case cctypes.OperationStatusFailed,
 				cctypes.OperationStatusCancelInProgress,
 				cctypes.OperationStatusCancelComplete:
-				return nil, "", fmt.Errorf(
-					"cloud control operation for %s failed (%s): %s",
+				return nil, "", ccOperationFailedError(
 					a.config.CFNType,
 					progress.ErrorCode,
 					aws.ToString(progress.StatusMessage),
@@ -416,9 +414,11 @@ func (a *ccResourceActions) computedFieldValues(
 	}
 
 	for _, field := range a.config.Meta.ComputedFields {
-		if value, ok := pluginutils.GetValueByPath(fmt.Sprintf("$.%s", field), specState); ok {
-			specFieldKey := fmt.Sprintf("spec.%s", field)
-			computed[specFieldKey] = value
+		for _, path := range computedPathsForField(a.config.Schema, field) {
+			if value, ok := pluginutils.GetValueByPath(fmt.Sprintf("$.%s", path), specState); ok {
+				specFieldKey := fmt.Sprintf("spec.%s", path)
+				computed[specFieldKey] = value
+			}
 		}
 	}
 
@@ -497,4 +497,81 @@ func sanitiseClientToken(token string) string {
 		cleaned = cleaned[:clientTokenMaxLength]
 	}
 	return string(cleaned)
+}
+
+// The spec paths to report as computed for a field listed in a resource type's metadata.
+//
+// The metadata lists top-level field names, but CloudFormation marks read-only properties
+// at whatever depth they occur, and the generated schema follows suit. AWS::RDS::DBCluster
+// is one such case: the metadata lists "masterUserSecret" while only its "secretArn"
+// attribute is computed, the rest of the object being author-supplied.
+//
+// Reporting the parent makes the engine reject the whole deployment, since a computed
+// value it never declared comes back. So a field that is not itself computed is expanded
+// into whichever of its descendants are, and a field with no computed descendants reports
+// nothing rather than claiming the parent.
+func computedPathsForField(
+	schema *provider.ResourceDefinitionsSchema,
+	field string,
+) []string {
+	fieldSchema := schemaForFieldPath(schema, field)
+	if fieldSchema == nil || fieldSchema.Computed {
+		// Nothing known about the field is still reported under its own name, so a
+		// resource type whose schema the engine has not augmented behaves as before.
+		return []string{field}
+	}
+
+	return computedDescendantPaths(fieldSchema, field)
+}
+
+func schemaForFieldPath(
+	schema *provider.ResourceDefinitionsSchema,
+	field string,
+) *provider.ResourceDefinitionsSchema {
+	if schema == nil || schema.Attributes == nil {
+		return nil
+	}
+
+	current := schema
+	for _, segment := range strings.Split(field, ".") {
+		if current.Attributes == nil {
+			return nil
+		}
+		next, ok := current.Attributes[segment]
+		if !ok {
+			return nil
+		}
+		current = next
+	}
+
+	return current
+}
+
+// Depth-first so the returned paths are stable for a given schema.
+func computedDescendantPaths(
+	schema *provider.ResourceDefinitionsSchema,
+	prefix string,
+) []string {
+	if schema == nil || schema.Attributes == nil {
+		return nil
+	}
+
+	names := make([]string, 0, len(schema.Attributes))
+	for name := range schema.Attributes {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	paths := []string{}
+	for _, name := range names {
+		attr := schema.Attributes[name]
+		path := prefix + "." + name
+		if attr.Computed {
+			paths = append(paths, path)
+			continue
+		}
+		paths = append(paths, computedDescendantPaths(attr, path)...)
+	}
+
+	return paths
 }

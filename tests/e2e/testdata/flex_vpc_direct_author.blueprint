@@ -1,0 +1,121 @@
+version "2025-11-02"
+
+variable namePrefix: string {}
+
+variable region: string {}
+
+# The direct-author parity fixture: a network, a function, a database, and the
+# links between them. Nothing else.
+#
+# The point of this blueprint is what is absent from it. There are no security
+# group policies, no rules, no group references and no IAM statements written by
+# hand. An author says where the workload runs and what it talks to; every group,
+# rule and grant below is derived from a link. If this file ever needs a line
+# that is not placement or linkage, the abstraction has regressed and the
+# assertion to make is about this fixture rather than about the account.
+#
+# The isolated preset is chosen for cost as much as for coverage: three private
+# subnets across three availability zones satisfy the RDS subnet group's two-AZ
+# minimum, and no NAT gateway or internet gateway is provisioned. A database is
+# reached from inside the VPC, so nothing here needs a route out.
+resource appVPC: aws/flex/vpc {
+    spec {
+        name = "${variables.namePrefix}-vpc"
+        mode = "create"
+        preset = "isolated"
+        cidrBlock = "10.84.0.0/16"
+        region = variables.region
+        # The one line that makes target-side pairing exact: the VPC mints an empty
+        # group under this name, and the cluster below references it. Without a group
+        # per target, a function paired to one database on 5432 reaches every other
+        # database in the VPC on 5432.
+        securityGroups = ["db"]
+        tags = {
+            System = "Orders"
+        }
+    }
+
+    select by label {
+        network = "orders"
+    }
+}
+
+resource appRole: aws/iam/role {
+    spec {
+        roleName = "${variables.namePrefix}-app-role"
+        # Grants nothing. The placement link adds the network interface permissions a
+        # VPC-attached function cannot start without, and the database link adds
+        # whatever it needs to reach the cluster. An author who has to add a statement
+        # here is an author the links have failed.
+        assumeRolePolicyDocument = {
+            version = "2012-10-17",
+            statement = [
+                {
+                    effect = "Allow",
+                    principal = { service = "lambda.amazonaws.com" },
+                    action = "sts:AssumeRole"
+                }
+            ]
+        }
+    }
+}
+
+resource appFunction: aws/lambda/function {
+    metadata {
+        labels = {
+            network = "orders"
+        }
+    }
+
+    select by label {
+        access = "ordersDb"
+    }
+
+    spec {
+        functionName = "${variables.namePrefix}-app-fn"
+        runtime = "nodejs20.x"
+        handler = "index.handler"
+        role = "${resources.appRole.spec.arn}"
+        code = {
+            zipFile = "exports.handler = async () => ({});"
+        }
+    }
+}
+
+resource dbSubnets: aws/rds/dbSubnetGroup {
+    spec {
+        dbSubnetGroupName = "${variables.namePrefix}-db-subnets"
+        dbSubnetGroupDescription = "Private subnets for the orders database"
+        subnetIds = appVPC.spec.privateSubnetIds
+    }
+}
+
+resource ordersDb: aws/rds/dbCluster {
+    metadata {
+        labels = {
+            access = "ordersDb"
+        }
+    }
+
+    spec {
+        dbClusterIdentifier = "${variables.namePrefix}-orders-db"
+        engine = "aurora-postgresql"
+        databaseName = "orders"
+        masterUsername = "ordersadmin"
+        # Secrets Manager owns the credential rather than the blueprint. This also
+        # exercises the computed-leaf path: masterUserSecret is a computed object whose
+        # schema declares computed leaves, which change staging previously rejected.
+        manageMasterUserPassword = true
+        dbSubnetGroupName = "${resources.dbSubnets.spec.dbSubnetGroupName}"
+        # A bare reference into the VPC's computed map, which is the whole target-side
+        # mechanism: the group lands in the declared spec, so blueprint, persisted state
+        # and live AWS agree on it, and no link has to write a property it does not own.
+        vpcSecurityGroupIds = [appVPC.spec.securityGroupIdsByName["db"]]
+        serverlessV2ScalingConfiguration = {
+            minCapacity = 0.5,
+            maxCapacity = 1.0
+        }
+        # Nothing here outlives the test run.
+        deletionProtection = false
+    }
+}

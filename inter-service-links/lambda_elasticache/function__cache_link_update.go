@@ -176,7 +176,7 @@ func (l *functionCacheLinkActions) UpdateIntermediaryResources(
 	}
 
 	// Open the security-group path from the function to the cache on the cache port.
-	targetSecurityGroupID, hasTargetSG := extractCacheSecurityGroupID(input.ResourceBInfo)
+	targetSecurityGroupIDs, hasTargetSG := extractCacheSecurityGroupIDs(input.ResourceBInfo)
 	if !hasTargetSG {
 		return nil, fmt.Errorf(
 			"security group could not be retrieved from the linked to %q ElastiCache replication group resource",
@@ -189,15 +189,15 @@ func (l *functionCacheLinkActions) UpdateIntermediaryResources(
 		return nil, err
 	}
 
-	return linkutils.ActivateLinkNetworking(
+	return linkutils.ReconcileLinkNetworking(
 		ctx,
 		ec2Service,
 		input,
 		linkutils.NetworkingActivation{
-			Caller:                linkutils.CallerNetworkingFromLambdaVPCConfig(setupCtx.LambdaOutput.VpcConfig),
-			Region:                region,
-			TargetSecurityGroupID: targetSecurityGroupID,
-			TargetPort:            annotations.port,
+			Caller:                 linkutils.CallerNetworkingFromLambdaVPCConfig(setupCtx.LambdaOutput.VpcConfig),
+			Region:                 region,
+			TargetSecurityGroupIDs: targetSecurityGroupIDs,
+			TargetPort:             annotations.port,
 		},
 		output,
 	)
@@ -213,21 +213,36 @@ func extractCacheEndpoint(cacheInfo *provider.ResourceInfo) (string, bool) {
 	return "", false
 }
 
-// extractCacheSecurityGroupID reads the cache's security group id. securityGroupIds is write-only
-// on the ElastiCache replication group (not returned in external state), so it is read from the
-// resolved blueprint spec, where it is set as a reference to the flex VPC security group.
-func extractCacheSecurityGroupID(cacheInfo *provider.ResourceInfo) (string, bool) {
+// Reads the cache's security group ids. securityGroupIds is
+// write-only on the ElastiCache replication group (not returned in external state), so it
+// is read from the resolved blueprint spec, where it is set as a reference to a flex VPC
+// security group.
+//
+// Every group is returned rather than the first. Which one the link should pair against is
+// decided by matching them to the groups the flex VPC prepared, not by their order here.
+func extractCacheSecurityGroupIDs(cacheInfo *provider.ResourceInfo) ([]string, bool) {
 	specs := []*core.MappingNode{
 		resolvedSpecData(cacheInfo),
 		pluginutils.GetCurrentStateSpecDataFromResourceInfo(cacheInfo),
 	}
 	for _, spec := range specs {
 		node, has := pluginutils.GetValueByPath("$.securityGroupIds", spec)
-		if has && node != nil && len(node.Items) > 0 {
-			return core.StringValue(node.Items[0]), true
+		if !has || node == nil || len(node.Items) == 0 {
+			continue
+		}
+
+		groupIDs := make([]string, 0, len(node.Items))
+		for _, item := range node.Items {
+			if groupID := core.StringValue(item); groupID != "" {
+				groupIDs = append(groupIDs, groupID)
+			}
+		}
+		if len(groupIDs) > 0 {
+			return groupIDs, true
 		}
 	}
-	return "", false
+
+	return nil, false
 }
 
 func resolvedSpecData(resourceInfo *provider.ResourceInfo) *core.MappingNode {

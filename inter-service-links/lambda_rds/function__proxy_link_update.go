@@ -179,7 +179,7 @@ func (l *functionProxyLinkActions) UpdateIntermediaryResources(
 	}
 
 	// Open the security-group path from the function to the proxy on the database port.
-	targetSecurityGroupID, hasTargetSG := extractProxySecurityGroupID(input.ResourceBInfo)
+	targetSecurityGroupIDs, hasTargetSG := extractProxySecurityGroupIDs(input.ResourceBInfo)
 	if !hasTargetSG {
 		return nil, fmt.Errorf(
 			"security group could not be retrieved from the linked to %q RDS proxy resource",
@@ -192,15 +192,15 @@ func (l *functionProxyLinkActions) UpdateIntermediaryResources(
 		return nil, err
 	}
 
-	return linkutils.ActivateLinkNetworking(
+	return linkutils.ReconcileLinkNetworking(
 		ctx,
 		ec2Service,
 		input,
 		linkutils.NetworkingActivation{
-			Caller:                linkutils.CallerNetworkingFromLambdaVPCConfig(setupCtx.LambdaOutput.VpcConfig),
-			Region:                region,
-			TargetSecurityGroupID: targetSecurityGroupID,
-			TargetPort:            annotations.port,
+			Caller:                 linkutils.CallerNetworkingFromLambdaVPCConfig(setupCtx.LambdaOutput.VpcConfig),
+			Region:                 region,
+			TargetSecurityGroupIDs: targetSecurityGroupIDs,
+			TargetPort:             annotations.port,
 		},
 		output,
 	)
@@ -352,13 +352,24 @@ func extractProxyARN(proxyInfo *provider.ResourceInfo) (string, bool) {
 	return core.StringValue(node), true
 }
 
-func extractProxySecurityGroupID(proxyInfo *provider.ResourceInfo) (string, bool) {
+func extractProxySecurityGroupIDs(proxyInfo *provider.ResourceInfo) ([]string, bool) {
 	spec := pluginutils.GetCurrentStateSpecDataFromResourceInfo(proxyInfo)
 	node, has := pluginutils.GetValueByPath("$.vpcSecurityGroupIds", spec)
 	if !has || node == nil || len(node.Items) == 0 {
-		return "", false
+		return nil, false
 	}
-	return core.StringValue(node.Items[0]), true
+
+	// Every group is returned rather than the first. Which one the link should pair
+	// against is decided by matching them to the groups the flex VPC minted, not by
+	// their order here.
+	groupIDs := make([]string, 0, len(node.Items))
+	for _, item := range node.Items {
+		if groupID := core.StringValue(item); groupID != "" {
+			groupIDs = append(groupIDs, groupID)
+		}
+	}
+
+	return groupIDs, len(groupIDs) > 0
 }
 
 type proxyEnvVarNameSet struct {

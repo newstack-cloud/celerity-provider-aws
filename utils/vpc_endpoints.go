@@ -47,29 +47,33 @@ func HasVPCEndpointTagForLink(
 	)
 }
 
-// HasIngressWithSourceSecurityGroupName checks if the security group has an ingress rule
-// with the given source security group name.
-func HasIngressWithSourceSecurityGroupName(
+// HasIngressFromSecurityGroupID checks if the security group has an ingress rule
+// admitting the given source security group.
+//
+// Matched on GroupId rather than GroupName: a group in a non-default VPC is always
+// referenced by ID, and EC2 does not populate GroupName on such a reference, so a
+// name-based check can never match and would report every rule as absent.
+func HasIngressFromSecurityGroupID(
 	securityGroup *ec2types.SecurityGroup,
-	sourceSecurityGroupName string,
+	sourceSecurityGroupID string,
 ) bool {
 	return slices.ContainsFunc(
 		securityGroup.IpPermissions,
 		func(permission ec2types.IpPermission) bool {
 			return slices.ContainsFunc(
 				permission.UserIdGroupPairs,
-				checkSourceSecurityGroupName(sourceSecurityGroupName),
+				checkSourceSecurityGroupID(sourceSecurityGroupID),
 			)
 		},
 	)
 }
 
-func checkSourceSecurityGroupName(
-	sourceSecurityGroupName string,
+func checkSourceSecurityGroupID(
+	sourceSecurityGroupID string,
 ) func(pair ec2types.UserIdGroupPair) bool {
 	return func(pair ec2types.UserIdGroupPair) bool {
-		return pair.GroupName != nil &&
-			aws.ToString(pair.GroupName) == sourceSecurityGroupName
+		return pair.GroupId != nil &&
+			aws.ToString(pair.GroupId) == sourceSecurityGroupID
 	}
 }
 

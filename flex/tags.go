@@ -23,6 +23,9 @@ const (
 	// TagFlexVPCInternetGateway is the tag name that indicates that the resource
 	// is an internet gateway created for a flex VPC.
 	TagFlexVPCInternetGateway = "bluelink:flex-vpc:internet-gateway"
+	// TagFlexVPCEgressOnlyInternetGateway is the tag name that indicates that the
+	// resource is an egress-only internet gateway created for a flex VPC.
+	TagFlexVPCEgressOnlyInternetGateway = "bluelink:flex-vpc:egress-only-internet-gateway"
 	// TagFlexVPCNATGateway is the tag name that indicates that the resource
 	// is a NAT gateway created for a flex VPC.
 	TagFlexVPCNATGateway = "bluelink:flex-vpc:nat-gateway"
@@ -32,6 +35,31 @@ const (
 	// TagFlexVPCSecurityGroup is the tag name that indicates that the resource
 	// is a security group created for a flex VPC.
 	TagFlexVPCSecurityGroup = "bluelink:flex-vpc:security-group"
+	// TagFlexVPCSecurityGroupName holds the declared name of a group created from the
+	// VPC's securityGroups list, so the group can be found again and matched to the
+	// name a resource references it by.
+	//
+	// Kept distinct from TagFlexVPCSecurityGroup for the same reason as the workload
+	// tag below: that tag marks the VPC's own base group and drives the
+	// securityGroupIds output, which a named group must not be adopted into.
+	TagFlexVPCSecurityGroupName = "bluelink:flex-vpc:security-group-name"
+	// TagFlexVPCSecurityGroupNameOwner holds the blueprint instance that owns a named
+	// security group, so a shared VPC's named groups stay attributable to the
+	// application that declared them.
+	TagFlexVPCSecurityGroupNameOwner = "bluelink:flex-vpc:security-group-name-owner"
+	// TagFlexVPCWorkloadSecurityGroup holds the name of the workload a security
+	// group was created for by a placement link.
+	//
+	// This is deliberately not TagFlexVPCSecurityGroup as that tag marks the VPC's own base
+	// group and is what the VPC resource filters its securityGroups output on, so a
+	// workload group carrying it would be adopted into the VPC's state and handed
+	// out to unrelated callers.
+	TagFlexVPCWorkloadSecurityGroup = "bluelink:flex-vpc:workload-security-group"
+	// TagFlexVPCWorkloadOwner holds the blueprint instance that owns a workload
+	// security group, so a shared VPC's workload groups stay attributable to the
+	// application that placed them, in the same way as
+	// TagFlexVPCSecurityGroupNameOwner.
+	TagFlexVPCWorkloadOwner = "bluelink:flex-vpc:workload-owner"
 	// TagFlexVPCNetworkACL is the tag name that indicates that the resource
 	// is a network ACL created for a flex VPC.
 	TagFlexVPCNetworkACL = "bluelink:flex-vpc:network-acl"

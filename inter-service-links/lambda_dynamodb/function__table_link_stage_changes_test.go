@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	ec2mock "github.com/newstack-cloud/bluelink-provider-aws/internal/testutils/ec2_mock"
 	iammock "github.com/newstack-cloud/bluelink-provider-aws/internal/testutils/iam_mock"
 	dynamodbservice "github.com/newstack-cloud/bluelink-provider-aws/services/dynamodb/service"
 	iamservice "github.com/newstack-cloud/bluelink-provider-aws/services/iam/service"
@@ -31,6 +32,7 @@ func functionTableStageLinkFactory() func(
 		func(c *aws.Config, pc provider.Context) iamservice.Service {
 			return iammock.CreateIamServiceMock()
 		},
+		ec2mock.CreateEc2ServiceMockFactory(),
 	)
 	return func(
 		deps pluginutils.LinkServiceDeps[*aws.Config, lambdaservice.Service, *aws.Config, dynamodbservice.Service],

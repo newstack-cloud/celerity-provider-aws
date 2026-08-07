@@ -185,7 +185,7 @@ func (l *functionClusterLinkActions) UpdateIntermediaryResources(
 	}
 
 	// Open the security-group path from the function to the cluster on the database port.
-	targetSecurityGroupID, hasTargetSG := extractClusterSecurityGroupID(input.ResourceBInfo)
+	targetSecurityGroupIDs, hasTargetSG := extractClusterSecurityGroupIDs(input.ResourceBInfo)
 	if !hasTargetSG {
 		return nil, fmt.Errorf(
 			"security group could not be retrieved from the linked to %q Aurora cluster resource",
@@ -198,15 +198,15 @@ func (l *functionClusterLinkActions) UpdateIntermediaryResources(
 		return nil, err
 	}
 
-	return linkutils.ActivateLinkNetworking(
+	return linkutils.ReconcileLinkNetworking(
 		ctx,
 		ec2Service,
 		input,
 		linkutils.NetworkingActivation{
-			Caller:                linkutils.CallerNetworkingFromLambdaVPCConfig(setupCtx.LambdaOutput.VpcConfig),
-			Region:                region,
-			TargetSecurityGroupID: targetSecurityGroupID,
-			TargetPort:            annotations.port,
+			Caller:                 linkutils.CallerNetworkingFromLambdaVPCConfig(setupCtx.LambdaOutput.VpcConfig),
+			Region:                 region,
+			TargetSecurityGroupIDs: targetSecurityGroupIDs,
+			TargetPort:             annotations.port,
 		},
 		output,
 	)
@@ -346,13 +346,24 @@ func extractClusterResourceID(clusterInfo *provider.ResourceInfo) (string, bool)
 	return core.StringValue(node), true
 }
 
-func extractClusterSecurityGroupID(clusterInfo *provider.ResourceInfo) (string, bool) {
+func extractClusterSecurityGroupIDs(clusterInfo *provider.ResourceInfo) ([]string, bool) {
 	spec := pluginutils.GetCurrentStateSpecDataFromResourceInfo(clusterInfo)
 	node, has := pluginutils.GetValueByPath("$.vpcSecurityGroupIds", spec)
 	if !has || node == nil || len(node.Items) == 0 {
-		return "", false
+		return nil, false
 	}
-	return core.StringValue(node.Items[0]), true
+
+	// Every group is returned rather than the first. Which one the link should pair
+	// against is decided by matching them to the groups the flex VPC created, not by
+	// their order here.
+	groupIDs := make([]string, 0, len(node.Items))
+	for _, item := range node.Items {
+		if groupID := core.StringValue(item); groupID != "" {
+			groupIDs = append(groupIDs, groupID)
+		}
+	}
+
+	return groupIDs, len(groupIDs) > 0
 }
 
 type clusterEnvVarNameSet struct {
